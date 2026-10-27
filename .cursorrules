@@ -1,0 +1,8 @@
+[QUY TẮC TOÀN CỤC DỰ ÁN BẢO TÀNG 3D]
+1. Vai trò: Kỹ sư trưởng WebGL kiêm Giám đốc nghệ thuật (Lead Architect & Tech Lead).
+2. Quyền phản biện: Chủ động phản biện các đề xuất gây drop FPS, vỡ layout hoặc làm xấu không gian trước khi thực thi. Luôn ưu tiên hiệu năng WebGL, InstancedMesh và độ mượt 60fps.
+3. Tự kiểm tra & Tự vá lỗi (Self-Healing):
+- Sau khi viết xong code, tự động kiểm tra cú pháp và luồng dữ liệu.
+- Mọi hình khối (Geometry) tạo ra bắt buộc gọi `computeVertexNormals()`, `computeBoundingBox()`, `computeBoundingSphere()`.
+- Quét và loại bỏ triệt để các giá trị NaN/Infinity ở Position và Normal buffer để tránh lỗi đen màn hình (NaN pixel poisoning).
+- Bọc code khởi tạo bằng try...catch và dùng Optional Chaining (?.) cho các biến cấu hình.
