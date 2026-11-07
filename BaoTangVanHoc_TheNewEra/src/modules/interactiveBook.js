@@ -65,7 +65,7 @@ export class InteractiveBook {
   }
 
   getMat(name) {
-    return this.matLib?.get?.(name) ?? new THREE.MeshStandardMaterial({ color: 0x999999, side: THREE.DoubleSide });
+    return this.matLib?.get?.(name) ?? new THREE.MeshLambertMaterial({ color: 0x999999, side: THREE.DoubleSide });
   }
 
   /**
@@ -124,7 +124,7 @@ export class InteractiveBook {
     runeRingGeo.computeBoundingBox();
     runeRingGeo.computeBoundingSphere();
 
-    const runeMat = new THREE.MeshStandardMaterial({
+    const runeMat = new THREE.MeshLambertMaterial({
       color: 0xffd269,
       emissive: 0xffaa22,
       emissiveIntensity: 0.8,
@@ -141,7 +141,7 @@ export class InteractiveBook {
     // Nguồn sáng cục bộ: PointLight màu vàng hổ phách dịu (distance: 8m, intensity: 1.5)
     const pedestalLight = new THREE.PointLight(0xffb84d, 1.5, 8.0, 1.5);
     pedestalLight.position.set(0, 1.25, 0); // Cao độ Y = 11.25m
-    pedestalLight.castShadow = true;
+    pedestalLight.castShadow = false; // CRITICAL GPU SAVER: PointLight tuyệt đối không bật shadow map
     pedestalLight.shadow.bias = -0.0005;
     pedestalGroup.add(pedestalLight);
     this.pedestalLight = pedestalLight;
@@ -171,7 +171,7 @@ export class InteractiveBook {
     this.bookHolderGroup.add(this.bookTiltGroup);
 
     // Vật liệu sách: MeshStandardMaterial màu xanh ngọc bích đậm viền kim loại vàng
-    this.bookMaterial = new THREE.MeshStandardMaterial({
+    this.bookMaterial = new THREE.MeshLambertMaterial({
       color: 0x0b3d2e,                     // Xanh ngọc bích đậm sang trọng
       roughness: 0.22,
       metalness: 0.18,
@@ -181,7 +181,7 @@ export class InteractiveBook {
     });
 
     // Vật liệu ruột giấy dó ngà vàng
-    const pagesMaterial = new THREE.MeshStandardMaterial({
+    const pagesMaterial = new THREE.MeshLambertMaterial({
       color: 0xf6f0dc,
       roughness: 0.55,
       metalness: 0.04,

@@ -76,11 +76,11 @@ export const DIMENSIONS = {
     wallThickness: 0.6,
   },
 
-  // Hàng Cột tròn chịu lực khổng lồ (Colossal White Marble Pillars)
+  // Hàng Cột tròn chịu lực khổng lồ (Colossal White Marble Pillars - Lục giác Blockout)
   pillars: {
     radius: 1.35,          // Massive monolithic pillar (2.7m diameter)
     height: 32.0,          // Chạy thẳng từ tầng 1 lên sát mái
-    radialSegments: 48,
+    radialSegments: 6,     // PERFORMANCE BLOCKOUT MODE: Ép xuống 6 (cột lục giác)
     spacing: 12.0,
     basePlinthRadius: 1.9,
     basePlinthHeight: 1.2,

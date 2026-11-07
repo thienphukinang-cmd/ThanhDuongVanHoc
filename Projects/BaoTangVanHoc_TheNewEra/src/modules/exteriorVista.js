@@ -43,7 +43,7 @@ export class ExteriorVista {
   }
 
   getMat(name) {
-    return this.matLib?.get?.(name) ?? new THREE.MeshStandardMaterial({
+    return this.matLib?.get?.(name) ?? new THREE.MeshLambertMaterial({
       color: 0x60707a,
       roughness: 0.85,
       metalness: 0.05,
@@ -137,7 +137,7 @@ export class ExteriorVista {
     const geoB = this.createKarstArchetypeGeometry(175, 62, 16, 11, 9, 2.7); // Đỉnh núi hùng vĩ đồ sộ
     const geoC = this.createKarstArchetypeGeometry(110, 40, 8, 9, 7, 4.5);   // Chóp đá nhọn hiểm trở
 
-    const karstMat = new THREE.MeshStandardMaterial({
+    const karstMat = new THREE.MeshLambertMaterial({
       vertexColors: true,
       roughness: 0.88,
       metalness: 0.05,
@@ -208,7 +208,6 @@ export class ExteriorVista {
       instMesh.frustumCulled = false;
       instMesh.castShadow = false; // Tắt hoàn toàn đổ bóng núi xa (300m - 1500m) để tiết kiệm shadow passes
       instMesh.receiveShadow = false;
-      instMesh.matrixAutoUpdate = false;
 
       const dummy = new THREE.Object3D();
       items.forEach((m, idx) => {
@@ -273,7 +272,6 @@ export class ExteriorVista {
     waterMesh.position.y = -26.0;
     waterMesh.frustumCulled = false;
     waterMesh.receiveShadow = true;
-    waterMesh.matrixAutoUpdate = false;
     waterMesh.updateMatrix();
 
     this.group.add(waterMesh);

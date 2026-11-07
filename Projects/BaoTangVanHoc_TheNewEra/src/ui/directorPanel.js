@@ -309,6 +309,15 @@ export class DirectorPanel {
           <button class="cam-btn active" id="btn-room201" style="grid-column: span 2; background: linear-gradient(135deg, rgba(212, 175, 55, 0.45), rgba(150, 110, 20, 0.45)); border-color: #ffd770; font-weight: 700;">
             📖 Vào Phòng Mẫu 01 (Sách Truyện Kiều)
           </button>
+          <button class="cam-btn" id="btn-room102" style="grid-column: span 2; background: linear-gradient(135deg, rgba(56, 189, 248, 0.35), rgba(14, 116, 144, 0.45)); border-color: #38bdf8; color: #e0f2fe; font-weight: 700;">
+            🌊 Vào Phòng Sơn Tinh - Thủy Tinh (Tầng 1)
+          </button>
+          <button class="cam-btn" id="btn-room103" style="grid-column: span 2; background: linear-gradient(135deg, rgba(16, 185, 129, 0.35), rgba(5, 150, 105, 0.45)); border-color: #10b981; color: #ecfdf5; font-weight: 700;">
+            🏹 Vào Phòng Cổ Loa - An Dương Vương (Tầng 1)
+          </button>
+          <button class="cam-btn" id="btn-room304" style="grid-column: span 2; background: linear-gradient(135deg, rgba(234, 88, 12, 0.40), rgba(154, 52, 18, 0.45)); border-color: #fb923c; color: #ffedd5; font-weight: 700;">
+            🌾 Vào Phòng Vợ Nhặt - Kim Lân (Tầng 3)
+          </button>
           <button class="cam-btn" id="btn-staircase">Cầu Thang Chữ Y</button>
           <button class="cam-btn" id="btn-landing">Chiếu Nghỉ (Y=5.5m)</button>
           <button class="cam-btn" id="btn-rooms">Cửa Vòm Tầng 2</button>
@@ -319,6 +328,15 @@ export class DirectorPanel {
           </button>
           <button class="cam-btn" id="btn-enter-kieuworld" style="grid-column: span 2; background: linear-gradient(135deg, rgba(235, 140, 160, 0.45), rgba(180, 80, 110, 0.45)); border-color: #ff99bb; color: #ffe4ec; font-weight: 700;">
             🌸 Cổng Dịch Chuyển: 3 Cõi Truyện Kiều (Click Sách)
+          </button>
+          <button class="cam-btn" id="btn-enter-stttrealm" style="grid-column: span 2; background: linear-gradient(135deg, rgba(2, 132, 199, 0.45), rgba(217, 119, 6, 0.45)); border-color: #0ea5e9; color: #f0f9ff; font-weight: 700;">
+            ⚔️ Cổng Dịch Chuyển: Cõi Đại Chiến Sơn - Thủy
+          </button>
+          <button class="cam-btn" id="btn-enter-advrealm" style="grid-column: span 2; background: linear-gradient(135deg, rgba(16, 185, 129, 0.45), rgba(245, 158, 11, 0.45)); border-color: #10b981; color: #f0fdf4; font-weight: 700;">
+            🐢 Cổng Dịch Chuyển: Cõi Cổ Loa Thành
+          </button>
+          <button class="cam-btn" id="btn-enter-vnrealm" style="grid-column: span 2; background: linear-gradient(135deg, rgba(234, 88, 12, 0.55), rgba(220, 38, 38, 0.45)); border-color: #ea580c; color: #fef08a; font-weight: 700;">
+            🚩 Cổng Dịch Chuyển: Cõi Vợ Nhặt - Xóm Ngụ Cư
           </button>
           <div style="grid-column: span 2; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-top: 2px;">
             <button class="cam-btn" id="hud-zone-1" style="font-size: 9.5px; padding: 5px 2px;">🌸 Vườn Thúy</button>
@@ -331,11 +349,11 @@ export class DirectorPanel {
         <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px;">
           <div class="slider-row">
             <span>Tia Sáng God-Rays:</span>
-            <input type="range" id="slider-godrays" min="0" max="3" step="0.1" value="1.15">
+            <input type="range" id="slider-godrays" min="0" max="3" step="0.1" value="0.0">
           </div>
           <div class="slider-row">
             <span>Quầng Sáng Bloom:</span>
-            <input type="range" id="slider-bloom" min="0" max="1.2" step="0.05" value="0.40">
+            <input type="range" id="slider-bloom" min="0" max="1.2" step="0.05" value="0.0">
           </div>
         </div>
 
@@ -465,6 +483,9 @@ export class DirectorPanel {
 
     const buttons = {
       'btn-room201': PRESET_VIEWS?.ROOM_201_BOOK,
+      'btn-room102': PRESET_VIEWS?.ROOM_102_SON_TINH,
+      'btn-room103': PRESET_VIEWS?.ROOM_103_AN_DUONG_VUONG,
+      'btn-room304': PRESET_VIEWS?.ROOM_304_VO_NHAT,
       'btn-staircase': PRESET_VIEWS?.STAIRCASE_FRONT,
       'btn-landing': PRESET_VIEWS?.STAIRCASE_LANDING,
       'btn-rooms': PRESET_VIEWS?.LEVEL_2_ROOMS,
@@ -486,6 +507,18 @@ export class DirectorPanel {
             if (this.worldManager?.currentState === 'KIEU_WORLD') {
               this.worldManager?.transitionTo?.('MUSEUM_ATRIUM');
             }
+            if (this.sonTinhThuyTinhRoom?.isInsideRealm?.()) {
+              this.sonTinhThuyTinhRoom.exitRealm?.();
+            }
+            if (this.anDuongVuongRoom?.isInsideRealm?.()) {
+              this.anDuongVuongRoom.exitRealm?.();
+            }
+            if (this.voNhatRoom?.isInsideRealm?.()) {
+              this.voNhatRoom.exitRealm?.();
+            }
+            if (window.__app?.setActiveScene && window.__app.mainScene) {
+              window.__app.setActiveScene(window.__app.mainScene);
+            }
             this.camMgr?.setView?.(preset, true);
           } catch (e) {
             console.warn("[SELF-HEALING] Lỗi đặt preset góc nhìn:", e);
@@ -493,6 +526,78 @@ export class DirectorPanel {
         });
       }
     });
+
+    const enterStttBtn = document.getElementById('btn-enter-stttrealm');
+    if (enterStttBtn) {
+      enterStttBtn.addEventListener('click', () => {
+        try {
+          document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
+          enterStttBtn.classList.add('active');
+          if (this.truyenKieuStoryWorld?.isInsideWorld) {
+            this.truyenKieuStoryWorld.toggleStoryWorld();
+          }
+          if (this.anDuongVuongRoom?.isInsideRealm?.()) {
+            this.anDuongVuongRoom.exitRealm?.();
+          }
+          if (this.sonTinhThuyTinhRoom?.enterRealm) {
+            this.sonTinhThuyTinhRoom.enterRealm();
+          } else if (window.__stttExhibition?.enterRealm) {
+            window.__stttExhibition.enterRealm();
+          }
+        } catch (e) {
+          console.warn("[SELF-HEALING] Lỗi chuyển cõi Sơn Tinh - Thủy Tinh:", e);
+        }
+      });
+    }
+
+    const enterAdvBtn = document.getElementById('btn-enter-advrealm');
+    if (enterAdvBtn) {
+      enterAdvBtn.addEventListener('click', () => {
+        try {
+          document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
+          enterAdvBtn.classList.add('active');
+          if (this.truyenKieuStoryWorld?.isInsideWorld) {
+            this.truyenKieuStoryWorld.toggleStoryWorld();
+          }
+          if (this.sonTinhThuyTinhRoom?.isInsideRealm?.()) {
+            this.sonTinhThuyTinhRoom.exitRealm?.();
+          }
+          if (this.anDuongVuongRoom?.enterRealm) {
+            this.anDuongVuongRoom.enterRealm();
+          } else if (window.__anDuongVuongRoom?.enterRealm) {
+            window.__anDuongVuongRoom.enterRealm();
+          }
+        } catch (e) {
+          console.warn("[SELF-HEALING] Lỗi chuyển cõi An Dương Vương:", e);
+        }
+      });
+    }
+
+    const enterVnBtn = document.getElementById('btn-enter-vnrealm');
+    if (enterVnBtn) {
+      enterVnBtn.addEventListener('click', () => {
+        try {
+          document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
+          enterVnBtn.classList.add('active');
+          if (this.truyenKieuStoryWorld?.isInsideWorld) {
+            this.truyenKieuStoryWorld.toggleStoryWorld();
+          }
+          if (this.sonTinhThuyTinhRoom?.isInsideRealm?.()) {
+            this.sonTinhThuyTinhRoom.exitRealm?.();
+          }
+          if (this.anDuongVuongRoom?.isInsideRealm?.()) {
+            this.anDuongVuongRoom.exitRealm?.();
+          }
+          if (this.voNhatRoom?.enterRealm) {
+            this.voNhatRoom.enterRealm();
+          } else if (window.__voNhatRoom?.enterRealm) {
+            window.__voNhatRoom.enterRealm();
+          }
+        } catch (e) {
+          console.warn("[SELF-HEALING] Lỗi chuyển cõi Vợ Nhặt:", e);
+        }
+      });
+    }
 
     const enterKieuBtn = document.getElementById('btn-enter-kieuworld');
     if (enterKieuBtn) {
@@ -578,6 +683,18 @@ export class DirectorPanel {
 
   setTruyenKieuStoryWorld(world) {
     this.truyenKieuStoryWorld = world;
+  }
+
+  setSonTinhThuyTinhRoom(room) {
+    this.sonTinhThuyTinhRoom = room;
+  }
+
+  setAnDuongVuongRoom(room) {
+    this.anDuongVuongRoom = room;
+  }
+
+  setVoNhatRoom(room) {
+    this.voNhatRoom = room;
   }
 
   setPerformanceOptimizer(optimizer) {

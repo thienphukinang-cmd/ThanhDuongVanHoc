@@ -9,11 +9,59 @@ import { CameraController, CAMERA_MODES } from './CameraController.js';
  */
 
 export const PRESET_VIEWS = {
+  MAIN_ATRIUM: {
+    name: 'Đại Sảnh Chính Bảo Tàng',
+    position: new THREE.Vector3(0, 1.8, 32.0),
+    target: new THREE.Vector3(0, 6.0, 5.0),
+    description: 'Chiêm ngưỡng toàn cảnh Đại Sảnh Bảo Tàng Văn Học, Cầu Thang Chữ Y và Giếng Trời Hoàng Kim'
+  },
   ROOM_201_BOOK: {
     name: 'Phòng Mẫu 01 (Sách Truyện Kiều)',
     position: new THREE.Vector3(-44.5, 11.8, 19.0),
     target: new THREE.Vector3(-48.0, 11.2, 19.0),
     description: 'Chiêm ngưỡng trọn vẹn Bục Sách Truyện Kiều 1:1, Án Thư và Đàn Tỳ Bà'
+  },
+  ROOM_202_BOOK: {
+    name: 'Phòng 02 (Nam Quốc Sơn Hà)',
+    position: new THREE.Vector3(-44.5, 11.8, -19.0),
+    target: new THREE.Vector3(-48.0, 11.2, -19.0),
+    description: 'Chiêm ngưỡng Bục Chiếu Thư Hoàng Kim, Bia Đá Định Phận và Bảo Kiếm Triều Lý'
+  },
+  ROOM_102_SON_TINH: {
+    name: 'Phòng Trưng Bày Sơn Tinh - Thủy Tinh (Tầng 1)',
+    position: new THREE.Vector3(-44.5, 1.8, -19.0),
+    target: new THREE.Vector3(-48.0, 1.25, -19.0),
+    description: 'Chiêm ngưỡng Bệ Đá Cổ, Cuốn Sách Thần Dịch Chuyển và Tam Sinh Lễ Vật mạ vàng'
+  },
+  REALM_SON_TINH_BATTLE: {
+    name: 'Cõi Đại Chiến Sơn Tinh - Thủy Tinh (Gojo vs Sukuna)',
+    position: new THREE.Vector3(0, 468.0, -392.0),
+    target: new THREE.Vector3(0, 444.0, -466.0),
+    description: 'Đài Quan Sát Hư Vô: Chiêm ngưỡng Đại Chiến Sơn Tinh vs Thủy Tinh phong cách Gojo vs Sukuna'
+  },
+  ROOM_103_AN_DUONG_VUONG: {
+    name: 'Phòng Trưng Bày An Dương Vương & Cổ Loa Thành (Tầng 1)',
+    position: new THREE.Vector3(0.0, 2.0, -42.0),
+    target: new THREE.Vector3(0.0, 2.6, -52.0),
+    description: 'Chiêm ngưỡng toàn cảnh Đại Gian Cổ Loa Thành, Nỏ Thần Cao Lỗ và Thần Kim Quy'
+  },
+  ROOM_304_VO_NHAT: {
+    name: 'Phòng Trưng Bày Vợ Nhặt - Kim Lân (Tầng 3)',
+    position: new THREE.Vector3(42.5, 21.8, -19.0),
+    target: new THREE.Vector3(48.0, 21.3, -19.0),
+    description: 'Chiêm ngưỡng Bục Sách Vợ Nhặt, Nồi chè khoán, Đèn dầu tân hôn, Xe bò thóc và Cờ đỏ'
+  },
+  REALM_VO_NHAT: {
+    name: 'Cõi Văn Học Vợ Nhặt (Xóm Ngụ Cư 1945)',
+    position: new THREE.Vector3(-260.0, 424.0, -418.0),
+    target: new THREE.Vector3(-260.0, 429.5, -474.0),
+    description: 'Đài Quan Sát: Chiêm ngưỡng Xóm Ngụ Cư, Mái Nhà Tranh Bà Cụ Tứ và Đoàn Người Phá Kho Thóc'
+  },
+  REALM_AN_DUONG_VUONG: {
+    name: 'Cõi Cổ Loa Thành & Biển Đông (An Dương Vương)',
+    position: new THREE.Vector3(260.0, 424.0, -418.0),
+    target: new THREE.Vector3(260.0, 428.0, -446.0),
+    description: 'Đài Quan Sát: Chiêm ngưỡng Thành Ốc Cổ Loa 3 tầng và Thần Kim Quy rẽ sóng Biển Đông'
   },
   STAIRCASE_FRONT: {
     name: 'Chân Cầu Thang Chữ Y (1.8m)',
@@ -85,7 +133,7 @@ export class CameraManager {
       this.controls.enabled = true;
     });
 
-    this.setView(PRESET_VIEWS.ROOM_201_BOOK, false);
+    this.setView(PRESET_VIEWS.MAIN_ATRIUM, false);
   }
 
   setAudioManager(audioManager) {
@@ -93,6 +141,11 @@ export class CameraManager {
     if (this.cameraController) {
       this.cameraController.audioManager = audioManager;
     }
+  }
+
+  setHitboxManager(hitboxManager) {
+    this.hitboxManager = hitboxManager;
+    this.cameraController?.setHitboxManager(hitboxManager);
   }
 
   setCollisionObjects(collisionObjects, stairObjects) {

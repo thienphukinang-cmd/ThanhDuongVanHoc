@@ -39,6 +39,7 @@ export class WorldManager {
     this.raycaster = new THREE.Raycaster();
     this.raycaster.far = 25.0; // Tầm tương tác 25m với cuốn thư
     this.mouse = new THREE.Vector2(0, 0);
+    this._centerMouse = new THREE.Vector2(0, 0); // CACHED: Tránh allocate mới mỗi frame khi PointerLock
 
     try {
       this.createFadeOverlayUI();
@@ -195,6 +196,19 @@ export class WorldManager {
       this.mouseMoved = true;
     });
 
+
+    window.addEventListener('keydown', (e) => {
+      if ((e.code === 'Escape' || e.key === 'Escape') && this.currentState === WORLD_STATES.KIEU_WORLD && !this.isTransitioning) {
+        this.transitionTo(WORLD_STATES.MUSEUM_ATRIUM);
+      }
+    });
+
+    document.addEventListener('pointerlockchange', () => {
+      if (!document.pointerLockElement && this.currentState === WORLD_STATES.KIEU_WORLD && !this.isTransitioning) {
+        this.transitionTo(WORLD_STATES.MUSEUM_ATRIUM);
+      }
+    });
+
     window.addEventListener('click', (e) => {
       if (this.currentState !== WORLD_STATES.KIEU_WORLD || this.isTransitioning) return;
 
@@ -241,36 +255,42 @@ export class WorldManager {
     setTimeout(() => {
       try {
         if (targetWorld === WORLD_STATES.KIEU_WORLD) {
-          // Ưu tiên Thế giới Truyện Kiều trên cao (TruyenKieuStoryWorld Y = 150m)
-          if (this.truyenKieuStoryWorld) {
-            if (!this.truyenKieuStoryWorld.isInsideWorld) {
-              this.truyenKieuStoryWorld.toggleStoryWorld();
-            }
-            if (this.kieuWorld) this.kieuWorld.setVisible(false);
-            this.directoryHUD?.hideToggle?.(true);
-            this.currentState = WORLD_STATES.KIEU_WORLD;
-          } else {
-            // Fallback không gian cỏ thủ công cũ
-            if (this.atriumGroup) this.atriumGroup.visible = false;
-            if (this.kieuWorld) this.kieuWorld.setVisible(true);
-            this.scene.fog = new THREE.FogExp2(0xe8c5b0, 0.008);
-            this.scene.background = new THREE.Color(0xf5cb98);
-            this.camera.position.set(0, 1.8, 15.0);
-            this.camera.lookAt(0, 2.2, 0);
-            if (this.cameraManager?.controls) {
-              this.cameraManager.controls.target.set(0, 2.2, 0);
-              this.cameraManager.controls.update();
-            }
-            if (this.cameraManager?.cameraController) {
-              this.cameraManager.cameraController.floorHeightProvider = (x, z) => {
-                return this.kieuWorld?.getTerrainHeight?.(x, z) ?? 0;
-              };
-            }
-            this.directoryHUD?.hideToggle?.(true);
-            this.currentState = WORLD_STATES.KIEU_WORLD;
+          // KÍCH HOẠT THẾ GIỚI TỰ SỰ TRUYỆN KIỀU CHÍNH GỐC: TIẾT THANH MINH (KIEUWORLD)
+          if (this.atriumGroup) this.atriumGroup.visible = false;
+          const targetScene = this.app?.truyenKieuScene || window.__truyenKieuScene || this.scene;
+          if (this.app?.setActiveScene) {
+            this.app.setActiveScene(targetScene);
+          } else if (window.__truyenKieuScene) {
+            window.__activeScene = window.__truyenKieuScene;
           }
+          if (this.kieuWorld) this.kieuWorld.setVisible(true);
+          if (this.truyenKieuStoryWorld) {
+            if (this.truyenKieuStoryWorld.worldGroup) this.truyenKieuStoryWorld.worldGroup.visible = false;
+            this.truyenKieuStoryWorld.isInsideWorld = false;
+          }
+
+          targetScene.fog = new THREE.FogExp2(0xe8c5b0, 0.008);
+          targetScene.background = new THREE.Color(0xf5cb98);
+
+          this.camera.position.set(0, 1.8, 15.0);
+          this.camera.lookAt(0, 2.2, 0);
+          if (this.cameraManager?.controls) {
+            this.cameraManager.controls.target.set(0, 2.2, 0);
+            this.cameraManager.controls.update();
+          }
+          if (this.cameraManager?.cameraController) {
+            this.cameraManager.cameraController.floorHeightProvider = (x, z) => {
+              return this.kieuWorld?.getTerrainHeight?.(x, z) ?? 0;
+            };
+            this.cameraManager.cameraController.velocity?.set?.(0, 0, 0);
+          }
+          this.directoryHUD?.hideToggle?.(true);
+          this.currentState = WORLD_STATES.KIEU_WORLD;
         } else if (targetWorld === WORLD_STATES.MUSEUM_ATRIUM) {
           // --- QUAY TRỞ LẠI BẢO TÀNG VĂN HỌC ---
+          if (window.__scene) {
+            window.__activeScene = window.__scene;
+          }
           if (this.truyenKieuStoryWorld && this.truyenKieuStoryWorld.isInsideWorld) {
             this.truyenKieuStoryWorld.toggleStoryWorld();
           }
@@ -281,9 +301,9 @@ export class WorldManager {
             this.atriumGroup.visible = true;
           }
 
-          // C. Khôi phục sương khói sáng sớm bảo tàng (#d6e5f0, 0.0015)
-          this.scene.fog = new THREE.FogExp2(0xd6e5f0, 0.0015);
-          this.scene.background = new THREE.Color(0xd6e5f0);
+          // C. Khôi phục sương khói chiều sâu bảo tàng hoàng hôn ấm áp (#dca878, 0.00075)
+          this.scene.fog = new THREE.FogExp2(0xdca878, 0.00075);
+          this.scene.background = new THREE.Color(0xdca878);
 
           // Gỡ bỏ floor provider của KieuWorld
           if (this.cameraManager?.cameraController) {
@@ -360,7 +380,7 @@ export class WorldManager {
 
     const isLocked = this.cameraManager?.cameraController?.controls?.isLocked ?? false;
     if (isLocked) {
-      this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+      this.raycaster.setFromCamera(this._centerMouse, this.camera);
     } else {
       this.raycaster.setFromCamera(this.mouse, this.camera);
     }

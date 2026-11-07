@@ -67,7 +67,7 @@ export const LITERATURE_REGISTRY = [
     roomIndex: 1, // Cánh Tây-Bắc
     themeColor: 0x2980b9, // Lam ngọc bão tố
     quote: 'Nước dâng cao bao nhiêu, núi cao lên bấy nhiêu – Bản hùng ca bất diệt chinh phục thiên nhiên của người Việt cổ.',
-    portalReady: false,
+    portalReady: true,
     atmosphere: {
       primaryColor: 0x2980b9,
       secondaryColor: 0x16a085,
@@ -106,9 +106,9 @@ export const LITERATURE_REGISTRY = [
     era: 'Truyền thuyết Lịch sử',
     floor: 1,
     roomIndex: 2, // Cánh Bắc - Đại Gian
-    themeColor: 0xd35400, // Đỏ đồng bi tráng
+    themeColor: 0x10b981, // Xanh Ngọc Bích Cổ Loa & Vàng Kim Quy
     quote: 'Nỏ thần vô ý trao tay giặc – Bi kịch dựng nước và bài học cảnh giác muôn đời vọng lại từ ngàn xưa nơi Cổ Loa thành.',
-    portalReady: false,
+    portalReady: true,
     atmosphere: {
       primaryColor: 0xd35400,
       secondaryColor: 0x8e44ad,
@@ -285,7 +285,7 @@ export const LITERATURE_REGISTRY = [
     roomIndex: 1, // Cánh Tây-Bắc
     themeColor: 0xf1c40f, // Hoàng kim đế vương
     quote: 'Nam quốc sơn hà Nam đế cư, tiệt nhiên định phận tại thiên thư – Bản tuyên ngôn độc lập đầu tiên khẳng định chủ quyền sông núi.',
-    portalReady: false,
+    portalReady: true,
     atmosphere: {
       primaryColor: 0xf1c40f,
       secondaryColor: 0xbdc3c7,

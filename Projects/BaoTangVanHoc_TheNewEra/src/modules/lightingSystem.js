@@ -138,8 +138,8 @@ export function createSkylightEmitter(options = {}) {
     angle = Math.PI / 4.2,
     penumbra = 0.45,
     decay = 1.1,
-    castShadow = true,
-    shadowMapSize = 2048
+    castShadow = false,
+    shadowMapSize = 1024
   } = options;
 
   const target = new THREE.Object3D();
@@ -152,7 +152,7 @@ export function createSkylightEmitter(options = {}) {
   spotLight.target = target;
 
   if (castShadow) {
-    spotLight.castShadow = true;
+    spotLight.castShadow = false;
     spotLight.shadow.bias = -0.0015;
     spotLight.shadow.normalBias = 0.025;
     spotLight.shadow.mapSize.width = shadowMapSize;

@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "fetch-model": "node scripts/fetch3DAsset.js",
+    "fetch-lobby": "node scripts/fetchLobbyModels.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"

@@ -1,3 +1,4 @@
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as THREE from 'three';
 import { NarrativeTrigger } from './NarrativeTrigger.js';
 import { SpatialAudio } from './SpatialAudio.js';
@@ -53,6 +54,8 @@ function createRiverFlowTexture(size = 512) {
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
   texture.repeat.set(4, 2);
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.LinearFilter;
   return texture;
 }
 
@@ -77,6 +80,8 @@ function createPetalTexture(size = 64) {
   ctx.fill();
 
   const texture = new THREE.CanvasTexture(canvas);
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.LinearFilter;
   return texture;
 }
 
@@ -94,6 +99,8 @@ function createSmokePuffTexture(size = 64) {
   ctx.fillRect(0, 0, size, size);
 
   const texture = new THREE.CanvasTexture(canvas);
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.LinearFilter;
   return texture;
 }
 
@@ -132,6 +139,8 @@ function createSteleTexture(size = 256) {
   ctx.fillText('CHI MỘ', canvas.width / 2, canvas.height * 0.52);
 
   const texture = new THREE.CanvasTexture(canvas);
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.LinearFilter;
   return texture;
 }
 
@@ -162,6 +171,7 @@ export class KieuWorld {
       this.initWeepingWillowsAndBlossoms();
       this.initBlossomParticles();
       this.initReturnScrollWaypoint();
+      this.initObservationOverlook();
       this.initNarrativeAndAudioSystems();
 
       if (this.scene?.add) {
@@ -285,9 +295,9 @@ export class KieuWorld {
     this.lightingGroup.add(sunLight);
     this.lightingGroup.add(sunLight.target);
 
-    sunLight.castShadow = true;
-    sunLight.shadow.mapSize.width = 2048;
-    sunLight.shadow.mapSize.height = 2048;
+    sunLight.castShadow = false;
+    sunLight.shadow.mapSize.width = 1024;
+    sunLight.shadow.mapSize.height = 1024;
     sunLight.shadow.camera.near = 5;
     sunLight.shadow.camera.far = 120;
     const sBox = 55;
@@ -922,6 +932,347 @@ export class KieuWorld {
   /**
    * 7. KHỞI TẠO NARRATIVE TRIGGER & SPATIAL AUDIO
    */
+
+  /**
+   * 8. ĐÀI QUAN SÁT THẢO NGUYÊN HOÀNG HÔN VỚI 4 BẢNG HOLOGRAM KHỔNG LỒ (1536x900) & BỘ 3 TƯỢNG NHÂN VẬT
+   */
+  initObservationOverlook() {
+    const overlookGroup = new THREE.Group();
+    overlookGroup.name = "KieuWorld_Scenic_Overlook";
+    overlookGroup.position.set(0, 0.2, 18.5);
+    this.group.add(overlookGroup);
+
+    // Nền sàn đĩa cẩm thạch trầm tĩnh của đài quan sát
+    const stonePlatMat = new THREE.MeshBasicMaterial({ color: 0x142018 });
+    const platDisc = new THREE.Mesh(new THREE.CylinderGeometry(8.5, 9.2, 0.4, 32), stonePlatMat);
+    platDisc.position.y = -0.2;
+    overlookGroup.add(platDisc);
+
+    // Vành neon viền đài ngắm cảnh
+    const platBorder = new THREE.Mesh(
+      new THREE.TorusGeometry(8.5, 0.08, 8, 36),
+      new THREE.MeshBasicMaterial({ color: 0x39e58c, transparent: true, opacity: 0.65 })
+    );
+    platBorder.rotation.x = Math.PI / 2;
+    platBorder.position.y = 0.05;
+    overlookGroup.add(platBorder);
+
+    // Tinh thể Cổng trở về trên đài quan sát
+    const returnPortalGroup = new THREE.Group();
+    returnPortalGroup.name = 'Return_Crystal_Portal';
+    returnPortalGroup.position.set(0, 0.2, 5.0);
+    overlookGroup.add(returnPortalGroup);
+
+    const crystalMesh = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.55, 0),
+      new THREE.MeshBasicMaterial({ color: 0x39e58c, fog: false })
+    );
+    crystalMesh.position.y = 1.25;
+    crystalMesh.userData = { isReturnPortal: true, action: 'RETURN_TO_MUSEUM' };
+    returnPortalGroup.add(crystalMesh);
+    this.returnPortalGroup = returnPortalGroup;
+
+    if (typeof document !== 'undefined') {
+      const cv = document.createElement('canvas');
+      cv.width = 512;
+      cv.height = 180;
+      const ctx = cv.getContext('2d');
+      ctx.fillStyle = 'rgba(15, 28, 22, 0.94)';
+      ctx.fillRect(0, 0, 512, 180);
+      ctx.strokeStyle = '#39e58c';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(6, 6, 500, 168);
+      ctx.fillStyle = '#39e58c';
+      ctx.font = 'bold 20px "Segoe UI", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('❖ CỔNG TRỞ VỀ ❖', 256, 38);
+      ctx.fillStyle = '#fde047';
+      ctx.font = 'bold 24px "Segoe UI", sans-serif';
+      ctx.fillText('↩ QUAY VỀ BẢO TÀNG', 256, 82);
+      ctx.fillStyle = '#f1f5f9';
+      ctx.font = '18px "Segoe UI", sans-serif';
+      ctx.fillText('(Nhấn phím ESC)', 256, 126);
+
+      const bannerTex = new THREE.CanvasTexture(cv);
+      const banner = new THREE.Mesh(
+        new THREE.PlaneGeometry(3.6, 1.3),
+        new THREE.MeshBasicMaterial({ map: bannerTex, transparent: true, side: THREE.DoubleSide })
+      );
+      banner.position.set(0, 2.5, 0);
+      returnPortalGroup.add(banner);
+    }
+
+    // 4 BẢNG THÔNG TIN HOLOGRAM KHỔNG LỒ (1536 x 900 pixels)
+    const titles = [
+      'ĐẠI THI HÀO NGUYỄN DU & THỜI ĐẠI SÁNG TÁC',
+      'BI KỊCH TÀI MỆNH TƯƠNG ĐỐ & BÁN MÌNH CỨU CHA',
+      'MƯỜI NĂM LƯU LẠC & KHÁT VỌNG TỰ DO CÙNG TỪ HẢI',
+      'ĐOÀN VIÊN TÁI HỢP & GIÁ TRỊ NHÂN ĐẠO BẤT HỦ'
+    ];
+
+    const screenLines = [
+      [
+        'TÊN TÁC PHẨM: ĐOẠN TRƯỜNG TÂN THANH (TRUYỆN KIỀU)',
+        'TÁC GIẢ: Đại thi hào Nguyễn Du (1765 – 1820) • Danh nhân Văn hóa Thế giới',
+        'THỂ LOẠI: Truyện thơ Nôm Lục bát (Gồm 3.254 câu thơ lục bát mẫu mực)',
+        'NGUỒN GỐC: Tiếp thu cốt truyện "Kim Vân Kiều truyện" của Thanh Tâm Tài Nhân',
+        'SÁNG TẠO ĐỘT PHÁ: Việt hóa toàn diện, nâng tầm tư tưởng nhân đạo và triết lý tài mệnh',
+        'ĐỈNH CAO NGÔN NGỮ: Mẫu mực tuyệt đỉnh của thi ca cổ điển và tiếng Việt trung đại'
+      ],
+      [
+        'TÀI SẮC VẸN TOÀN: Thúy Kiều mang vẻ đẹp "Hoa ghen thua thắm, liễu hờn kém xanh"',
+        'MỐI TÌNH KIM - KIỀU: Lời thề đính ước dưới trăng thanh "Vầng trăng vằng vặc giữa trời"',
+        'GIA BIẾN KINH HOÀNG: Bị thằng bán tơ vu oan, cha và em trai bị bắt giam khảo đả',
+        'HIẾU NGHĨA VẸN TOÀN: Dứt tình duyên trao lại cho em gái Thúy Vân để bán mình chuộc cha',
+        'BƯỚC VÀO TRẦN AI: Bị lừa gạt bởi Mã Giám Sinh và Tú Bà, đày đọa chốn lầu xanh',
+        'KHÚC CA BI TRÁNG: Tiếng đàn bạc mệnh ngân vang số phận người phụ nữ thời phong kiến'
+      ],
+      [
+        'LẦU NGƯNG BÍCH: Nỗi buồn cô đơn khóa xuân, hoài niệm quê hương và cha mẹ già',
+        'BẪY RẬP TRẦN GIAN: Trải qua bàn tay Hoạn Thư, Thúc Sinh, Sở Khanh, Bạc Bà',
+        'TRI KỶ TỪ HẢI: "Râu hùm, hàm én, mày ngài / Vai năm tấc rộng, thân mười thước cao"',
+        'ANH HÙNG XUẤT THẾ: Từ Hải chuộc Kiều, giúp nàng lập đàn ân oán phân minh',
+        'MẮC LỪA HỒ TÔN HIẾN: Khuyên hàng bất thành, Từ Hải chết đứng giữa bãi chiến trường',
+        'TRẦM MÌNH TIỀN ĐƯỜNG: Tuyệt vọng gieo mình xuống dòng sông định mệnh Tiền Đường'
+      ],
+      [
+        'CỨU VỚT TÂM LINH: Sư Giác Duyên lập bè cứu sống Kiều sau mười lăm năm chìm nổi',
+        'CHÂU VỀ HỢP PHỐ: Kim Trọng đỗ đạt, không nguôi thương nhớ tìm lại người xưa',
+        'ĐOÀN TỤ GIA ĐÌNH: Đêm đoàn viên thấu hiểu, "Đổi duyên cầm sắt đổi ra duyên bạn bầy"',
+        'GIÁ TRỊ HIỆN THỰC: Tố cáo xã hội phong kiến đồng tiền đen tối chà đạp con người',
+        'GIÁ TRỊ NHÂN ĐẠO: Đề cao tự do luyến ái, phẩm giá con người và quyền mưu cầu hạnh phúc',
+        'SỐNG MÃI MUÔN ĐỜI: "Truyện Kiều còn, tiếng ta còn; tiếng ta còn, nước ta còn"'
+      ]
+    ];
+
+    const screenAngles = [-1.08, -0.58, 0.58, 1.08];
+    const screenRadius = 18.5;
+
+    for (let sIdx = 0; sIdx < 4; sIdx++) {
+      const angle = screenAngles[sIdx];
+      let cv = null;
+      if (typeof document !== 'undefined') {
+        cv = document.createElement('canvas');
+        cv.width = 1536;
+        cv.height = 900;
+        const ctx = cv.getContext('2d');
+        const w = 1536, h = 900;
+
+        const bgG = ctx.createLinearGradient(0, 0, w, h);
+        bgG.addColorStop(0.0, 'rgba(18, 32, 26, 0.95)');
+        bgG.addColorStop(0.5, 'rgba(28, 48, 38, 0.92)');
+        bgG.addColorStop(1.0, 'rgba(12, 22, 18, 0.97)');
+        ctx.fillStyle = bgG;
+        ctx.fillRect(0, 0, w, h);
+
+        ctx.strokeStyle = '#39e58c';
+        ctx.lineWidth = 7;
+        ctx.strokeRect(16, 16, w - 32, h - 32);
+
+        ctx.strokeStyle = '#fde047';
+        ctx.lineWidth = 10;
+        const corner = 60;
+        ctx.beginPath(); ctx.moveTo(16, 16 + corner); ctx.lineTo(16, 16); ctx.lineTo(16 + corner, 16); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(w - 16 - corner, 16); ctx.lineTo(w - 16, 16); ctx.lineTo(w - 16, 16 + corner); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(16, h - 16 - corner); ctx.lineTo(16, h - 16); ctx.lineTo(16 + corner, h - 16); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(w - 16 - corner, h - 16); ctx.lineTo(w - 16, h - 16); ctx.lineTo(w - 16, h - 16 - corner); ctx.stroke();
+
+        ctx.strokeStyle = 'rgba(57, 229, 140, 0.65)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(120, 115);
+        ctx.lineTo(w - 120, 115);
+        ctx.stroke();
+
+        ctx.fillStyle = '#fde047';
+        ctx.font = 'bold 44px "Segoe UI", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(`❖ BẢNG 0${sIdx + 1}: ${titles[sIdx]} ❖`, w / 2, 45);
+
+        ctx.textAlign = 'left';
+        const lines = screenLines[sIdx];
+        const startY = 175;
+        const lineSpacing = 102;
+
+        lines.forEach((line, i) => {
+          const parts = line.split(':');
+          const label = parts[0] + ':';
+          const desc = parts.slice(1).join(':');
+
+          ctx.fillStyle = '#39e58c';
+          ctx.beginPath();
+          ctx.arc(80, startY + i * lineSpacing + 16, 7, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#fde047';
+          ctx.font = 'bold 30px "Segoe UI", sans-serif';
+          ctx.fillText(label, 110, startY + i * lineSpacing);
+
+          const labelW = ctx.measureText(label).width;
+          ctx.fillStyle = '#f1f5f9';
+          ctx.font = '28px "Segoe UI", sans-serif';
+          ctx.fillText(desc, 110 + labelW + 14, startY + i * lineSpacing);
+        });
+      }
+
+      const tex = cv ? new THREE.CanvasTexture(cv) : null;
+      const mat = new THREE.MeshBasicMaterial({
+        map: tex,
+        color: tex ? 0xffffff : 0x112218,
+        transparent: true,
+        opacity: 0.94,
+        side: THREE.DoubleSide,
+        depthWrite: false
+      });
+
+      const screenMesh = new THREE.Mesh(new THREE.PlaneGeometry(11.2, 6.5), mat);
+      const frameGeo = new THREE.BoxGeometry(11.32, 6.62, 0.08);
+      const frameMat = new THREE.MeshBasicMaterial({ color: 0x39e58c, wireframe: true });
+      screenMesh.add(new THREE.Mesh(frameGeo, frameMat));
+
+      screenMesh.position.set(Math.sin(angle) * screenRadius, 3.8, -Math.cos(angle) * screenRadius);
+      screenMesh.lookAt(0, 3.5, 0);
+      overlookGroup.add(screenMesh);
+    }
+
+    // BỘ 3 TƯỢNG NHÂN VẬT: KIM TRỌNG, THÚY KIỀU & THÚY VÂN
+    const goldMat = new THREE.MeshPhongMaterial({ color: 0xfbbf24, emissive: 0x452804, shininess: 90 });
+    const createStatueBase = (name, poem1, poem2, colorHex) => {
+      const g = new THREE.Group();
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.4, 0.6, 16), goldMat);
+      g.add(base);
+
+      if (typeof document !== 'undefined') {
+        const cv = document.createElement('canvas');
+        cv.width = 512;
+        cv.height = 170;
+        const ctx = cv.getContext('2d');
+        ctx.fillStyle = 'rgba(15, 28, 22, 0.94)';
+        ctx.fillRect(0, 0, 512, 170);
+        ctx.strokeStyle = colorHex;
+        ctx.lineWidth = 4;
+        ctx.strokeRect(6, 6, 500, 158);
+        ctx.fillStyle = colorHex;
+        ctx.font = 'bold 22px "Segoe UI", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(name, 256, 40);
+        ctx.fillStyle = '#f1f5f9';
+        ctx.font = 'italic 16px "Segoe UI", sans-serif';
+        ctx.fillText(`"${poem1}"`, 256, 85);
+        ctx.fillText(`"${poem2}"`, 256, 122);
+
+        const plateTex = new THREE.CanvasTexture(cv);
+        const plate = new THREE.Mesh(
+          new THREE.PlaneGeometry(2.4, 0.8),
+          new THREE.MeshBasicMaterial({ map: plateTex, transparent: true, side: THREE.DoubleSide })
+        );
+        plate.position.set(0, 0.95, 1.15);
+        plate.rotation.x = -0.22;
+        g.add(plate);
+      }
+      return g;
+    };
+
+    const kimPed = createStatueBase('CHÀNG KIM TRỌNG', 'Văn chương nết đất, thông minh tính trời', 'Phong tư tài mạo tót vời, vào trong phong nhã', '#38bdf8');
+    kimPed.position.set(-5.5, 0.0, -1.5);
+    overlookGroup.add(kimPed);
+
+    const kieuPed = createStatueBase('NÀNG THÚY KIỀU', 'Làn thu thủy nét xuân sơn', 'Hoa ghen thua thắm liễu hờn kém xanh', '#f472b6');
+    kieuPed.position.set(3.5, 0.0, -1.5);
+    overlookGroup.add(kieuPed);
+
+    const vanPed = createStatueBase('NÀNG THÚY VÂN', 'Vân xem trang trọng khác vời', 'Khuôn trăng đầy đặn nét ngài nở nang', '#fde047');
+    vanPed.position.set(7.5, 0.0, -1.5);
+    overlookGroup.add(vanPed);
+
+    const gltfLoader = new GLTFLoader();
+    gltfLoader.load(
+      '/model/kimtrongthuykieu.glb',
+      (gltf) => {
+        const raw = gltf.scene;
+        raw.traverse((c) => {
+          if (c.isMesh) {
+            c.castShadow = false;
+            c.receiveShadow = false;
+            if (c.material) {
+              const orig = c.material;
+              c.material = new THREE.MeshBasicMaterial({
+                map: orig.map || null,
+                color: orig.color ? orig.color.clone() : new THREE.Color(0xffffff)
+              });
+            }
+          }
+        });
+        const box = new THREE.Box3().setFromObject(raw);
+        const size = new THREE.Vector3(); box.getSize(size);
+        const scale = 2.85 / Math.max(size.y, 0.001);
+        raw.scale.multiplyScalar(scale);
+        raw.position.y = 0.32;
+        kimPed.add(raw);
+      },
+      undefined,
+      () => {}
+    );
+
+    gltfLoader.load(
+      '/model/thuykieu.glb',
+      (gltf) => {
+        const raw = gltf.scene;
+        raw.traverse((c) => {
+          if (c.isMesh) {
+            c.castShadow = false;
+            c.receiveShadow = false;
+            if (c.material) {
+              const orig = c.material;
+              c.material = new THREE.MeshBasicMaterial({
+                map: orig.map || null,
+                color: orig.color ? orig.color.clone() : new THREE.Color(0xffffff)
+              });
+            }
+          }
+        });
+        const box = new THREE.Box3().setFromObject(raw);
+        const size = new THREE.Vector3(); box.getSize(size);
+        const scale = 2.85 / Math.max(size.y, 0.001);
+        raw.scale.multiplyScalar(scale);
+        raw.position.y = 0.32;
+        kieuPed.add(raw);
+      },
+      undefined,
+      () => {}
+    );
+
+    gltfLoader.load(
+      '/model/thuykieu.glb',
+      (gltf) => {
+        const raw = gltf.scene;
+        raw.traverse((c) => {
+          if (c.isMesh) {
+            c.castShadow = false;
+            c.receiveShadow = false;
+            if (c.material) {
+              const orig = c.material;
+              const mat = new THREE.MeshBasicMaterial({
+                map: orig.map || null,
+                color: orig.color ? orig.color.clone().multiply(new THREE.Color(0xffe680)) : new THREE.Color(0xffe680)
+              });
+              c.material = mat;
+            }
+          }
+        });
+        const box = new THREE.Box3().setFromObject(raw);
+        const size = new THREE.Vector3(); box.getSize(size);
+        const scale = 2.75 / Math.max(size.y, 0.001);
+        raw.scale.multiplyScalar(scale);
+        raw.position.y = 0.32;
+        vanPed.add(raw);
+      },
+      undefined,
+      () => {}
+    );
+  }
+
   initNarrativeAndAudioSystems() {
     try {
       this.narrativeTrigger = new NarrativeTrigger(this.camera);
@@ -1033,7 +1384,12 @@ export class KieuWorld {
     // 4. Khói hương nấm mồ Đạm Tiên lững lờ bay lên
     this.updateIncenseSmoke(delta, elapsedTime);
 
-    // 5. Kiểm tra Proximity Poetry Trigger (Chỉ dùng distanceToSquared, không căn bậc hai)
+    // 5. Tinh thể trở về xoay nhẹ
+    if (this.returnPortalGroup?.children?.[0]) {
+      this.returnPortalGroup.children[0].rotation.y += delta * 1.5;
+    }
+
+    // 6. Kiểm tra Proximity Poetry Trigger (Chỉ dùng distanceToSquared, không căn bậc hai)
     this.narrativeTrigger?.update();
   }
 

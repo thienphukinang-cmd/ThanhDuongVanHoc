@@ -31,7 +31,7 @@ export class IndochineBalustrades {
   }
 
   getMat(name) {
-    return this.matLib?.get?.(name) ?? new THREE.MeshStandardMaterial({
+    return this.matLib?.get?.(name) ?? new THREE.MeshLambertMaterial({
       color: 0xf5f3ee,
       roughness: 0.25,
       metalness: 0.05,
@@ -85,7 +85,7 @@ export class IndochineBalustrades {
       new THREE.Vector2(0.065, 0.78)
     ];
 
-    const geo = new THREE.LatheGeometry(points, 10);
+    const geo = new THREE.LatheGeometry(points, 6); // Cắt giảm con tiện xuống 6 mặt
     this.prepareGeometry(geo);
     return geo;
   }
@@ -196,10 +196,10 @@ export class IndochineBalustrades {
         const baseGeo = new THREE.BoxGeometry(len, 0.16, 0.26);
         this.prepareGeometry(baseGeo);
         const baseMesh = new THREE.Mesh(baseGeo, marbleMat);
-        baseMesh.frustumCulled = false;
+        baseMesh.frustumCulled = true;
         baseMesh.position.set((x1 + x2) / 2, y + 0.08, (z1 + z2) / 2);
         baseMesh.rotation.y = -angle;
-        baseMesh.receiveShadow = true;
+        baseMesh.receiveShadow = false;
         baseMesh.castShadow = false;
         railsGroup.add(baseMesh);
 
@@ -207,10 +207,10 @@ export class IndochineBalustrades {
         const railGeo = new THREE.BoxGeometry(len, 0.14, 0.24);
         this.prepareGeometry(railGeo);
         const railMesh = new THREE.Mesh(railGeo, woodMat);
-        railMesh.frustumCulled = false;
+        railMesh.frustumCulled = true;
         railMesh.position.set((x1 + x2) / 2, y + 1.10 - 0.07, (z1 + z2) / 2);
         railMesh.rotation.y = -angle;
-        railMesh.receiveShadow = true;
+        railMesh.receiveShadow = false;
         railMesh.castShadow = false;
         railsGroup.add(railMesh);
 
@@ -218,7 +218,7 @@ export class IndochineBalustrades {
         const goldTrimGeo = new THREE.BoxGeometry(len, 0.03, 0.25);
         this.prepareGeometry(goldTrimGeo);
         const goldTrimMesh = new THREE.Mesh(goldTrimGeo, goldMat);
-        goldTrimMesh.frustumCulled = false;
+        goldTrimMesh.frustumCulled = true;
         goldTrimMesh.position.set((x1 + x2) / 2, y + 1.10 - 0.15, (z1 + z2) / 2);
         goldTrimMesh.rotation.y = -angle;
         railsGroup.add(goldTrimMesh);
@@ -279,10 +279,9 @@ export class IndochineBalustrades {
 
       const balusterInstanced = new THREE.InstancedMesh(balusterGeo, marbleMat, totalBalusters);
       balusterInstanced.name = "Instanced_Indochine_Balusters";
-      balusterInstanced.frustumCulled = false;
+      balusterInstanced.frustumCulled = true;
       balusterInstanced.castShadow = false; // Tắt hoàn toàn shadow pass cho hàng ngàn con tiện nhỏ
-      balusterInstanced.receiveShadow = true;
-      balusterInstanced.matrixAutoUpdate = false;
+      balusterInstanced.receiveShadow = false;
 
       for (let i = 0; i < totalBalusters; i++) {
         balusterInstanced.setMatrixAt(i, balusterTransforms[i]);
@@ -298,10 +297,9 @@ export class IndochineBalustrades {
       const totalPosts = postTransforms.length;
       const postInstanced = new THREE.InstancedMesh(masterPostGeo, marbleMat, totalPosts);
       postInstanced.name = "Instanced_Balustrade_MasterPosts";
-      postInstanced.frustumCulled = false;
+      postInstanced.frustumCulled = true;
       postInstanced.castShadow = false;
-      postInstanced.receiveShadow = true;
-      postInstanced.matrixAutoUpdate = false;
+      postInstanced.receiveShadow = false;
 
       for (let i = 0; i < totalPosts; i++) {
         postInstanced.setMatrixAt(i, postTransforms[i]);

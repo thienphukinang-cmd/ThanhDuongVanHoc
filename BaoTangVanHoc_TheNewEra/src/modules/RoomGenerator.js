@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { LITERATURE_REGISTRY } from '../config/literatureRegistry.js';
 import { registerInteractiveBook } from './PortalInteraction.js';
-import { mergeGroupMeshesByMaterial } from '../utils/geometryMerger.js';
+import { 
+  getFakeShadowMaterial, 
+  getFakeGlowSpriteMaterial, 
+  getLightBeamMaterial, 
+  getFloorLightPoolMaterial 
+} from './proceduralMaterials.js';
 
 /**
  * ROOM GENERATOR MODULE: KIẾN TRÚC TIỂU CẢNH VĂN HỌC (THEMATIC DIORAMA ENGINE)
@@ -20,6 +25,17 @@ import { mergeGroupMeshesByMaterial } from '../utils/geometryMerger.js';
  */
 
 // Tọa độ tâm 5 gian hiên mở trên mỗi tầng (Tây-Nam, Tây-Bắc, Bắc-Đại Gian, Đông-Bắc, Đông-Nam)
+
+// Danh sách các phòng đã được thiết kế kiến trúc và vách ngăn độc lập hoàn toàn
+export const CUSTOM_ROOM_IDS = new Set([
+  'truyen_kieu',
+  'thanh_giong',
+  'son_tinh_thuy_tinh',
+  'nam_quoc_son_ha',
+  'an_duong_vuong',
+  'vo_nhat'
+]);
+
 export const ALCOVE_CENTERS = [
   { x: -48.0, z: 19.0,  name: 'Tây-Nam',       rotY: Math.PI * 0.5 },
   { x: -48.0, z: -19.0, name: 'Tây-Bắc',       rotY: Math.PI * 0.5 },
@@ -52,10 +68,8 @@ export class RoomGenerator {
   }
 
   getMat(name) {
-    return this.matLib?.get?.(name) ?? new THREE.MeshStandardMaterial({
-      color: 0xf5f3ee,
-      roughness: 0.25,
-      metalness: 0.05,
+    return this.matLib?.get?.(name) ?? new THREE.MeshBasicMaterial({
+      color: 0xffffff,
       side: THREE.DoubleSide
     });
   }
@@ -125,25 +139,14 @@ export class RoomGenerator {
     const goldTrimGeo = new THREE.BoxGeometry(0.91, 0.08, 20.0);
     this.prepareGeometry(goldTrimGeo);
 
-    const plasterMat = new THREE.MeshStandardMaterial({
-      color: 0xdfd8ca, // Vữa xám / vàng kem cổ điển
-      roughness: 0.85,
-      metalness: 0.05
-    });
+    const plasterMat = new THREE.MeshLambertMaterial({ color: 0xf5f2eb, side: THREE.DoubleSide });
 
-    const woodMat = new THREE.MeshStandardMaterial({
-      color: 0x2e190e,
-      roughness: 0.4,
-      metalness: 0.05
-    });
+    const woodMat = new THREE.MeshLambertMaterial({ color: 0x2b1810, side: THREE.DoubleSide });
 
-    const goldMat = new THREE.MeshStandardMaterial({
-      color: 0xd4af37,
-      roughness: 0.3,
-      metalness: 0.85
-    });
+    const goldMat = new THREE.MeshPhongMaterial({ color: 0xd4af37, emissive: 0x332200, shininess: 80, specular: 0xffeba8, side: THREE.DoubleSide });
 
     LITERATURE_REGISTRY.forEach((item) => {
+      if (CUSTOM_ROOM_IDS.has(item.id)) return; // Bỏ qua hoàn toàn vách thạch cao trùng lặp cho phòng đã có decorator riêng
       const pos = this.calculateItemPosition(item);
       const alcoveGroup = new THREE.Group();
       alcoveGroup.name = `Massive_Alcove_Walls_${item.id}`;
@@ -213,7 +216,7 @@ export class RoomGenerator {
       alcoveGroup.add(rightWallGroup);
 
       // Phòng 01 Truyện Kiều kích hoạt thêm Layer 1 để đón nhận ánh sáng cô lập
-      if (item.id === 'truyen_kieu') {
+      if (CUSTOM_ROOM_IDS.has(item.id)) {
         leftWallGroup.traverse(c => c.layers.enable(1));
         rightWallGroup.traverse(c => c.layers.enable(1));
       }
@@ -238,14 +241,10 @@ export class RoomGenerator {
       }
     });
 
-    // 2. Gộp 90 mesh vách ngăn thành ~2 mesh duy nhất bằng BufferGeometryUtils
-    mergeGroupMeshesByMaterial(wallsMasterGroup);
-
+    // Giữ nguyên các mesh vách ngăn và vật liệu tường gốc
     wallsMasterGroup.traverse((c) => {
       if (c.isMesh) {
         c.frustumCulled = true;
-        c.matrixAutoUpdate = false;
-        c.updateMatrix();
       }
     });
 
@@ -263,10 +262,9 @@ export class RoomGenerator {
     const totalPedestals = LITERATURE_REGISTRY.length;
     const instancedPedestals = new THREE.InstancedMesh(pedestalGeo, marbleMat, totalPedestals);
     instancedPedestals.name = "Instanced_Marble_Pedestals_15Rooms";
-    instancedPedestals.frustumCulled = false;
+    instancedPedestals.frustumCulled = true;
     instancedPedestals.castShadow = false; // Tối ưu hóa: Không đổ bóng bệ sách
     instancedPedestals.receiveShadow = true;
-    instancedPedestals.matrixAutoUpdate = false;
 
     const dummy = new THREE.Object3D();
 
@@ -277,7 +275,7 @@ export class RoomGenerator {
       dummy.rotation.set(0, 0, 0);
 
       // Phòng 01 Truyện Kiều sử dụng Án thư cổ làm bàn trưng bày thay cho bệ đá
-      if (item.id === 'truyen_kieu') {
+      if (CUSTOM_ROOM_IDS.has(item.id)) {
         dummy.scale.set(0, 0, 0);
       } else {
         dummy.scale.set(1, 1, 1);
@@ -292,6 +290,39 @@ export class RoomGenerator {
     instancedPedestals.computeBoundingSphere();
 
     this.group.add(instancedPedestals);
+
+    // BÓNG ĐỔ GIẢ LẬP DƯỚI CHÂN 15 BỆ TRƯNG BÀY (FAKE CONTACT SHADOW)
+    const pedestalShadowGeo = new THREE.PlaneGeometry(2.6, 2.6);
+    this.prepareGeometry(pedestalShadowGeo);
+    const shadowMat = this.matLib?.get?.('fakeShadow') ?? getFakeShadowMaterial();
+
+    // VỆT SÁNG IN TRÊN SÀN DƯỚI 15 BỆ TRƯNG BÀY (FLOOR LIGHT POOL)
+    const pedestalLightPoolGeo = new THREE.PlaneGeometry(3.6, 3.6);
+    this.prepareGeometry(pedestalLightPoolGeo);
+    const poolMat = this.matLib?.get?.('floorLightPool') ?? getFloorLightPoolMaterial();
+
+    LITERATURE_REGISTRY.forEach((item) => {
+      if (CUSTOM_ROOM_IDS.has(item.id)) return; // Phòng 01 có án thư riêng
+      const pos = this.calculateItemPosition(item);
+      const pShadow = new THREE.Mesh(pedestalShadowGeo, shadowMat);
+      pShadow.name = `Pedestal_Shadow_${item.id}`;
+      pShadow.rotation.x = -Math.PI / 2;
+      pShadow.position.set(pos.x, pos.y + 0.012, pos.z);
+      pShadow.frustumCulled = true;
+      pShadow.renderOrder = 1;
+
+      // Vệt sáng sàn bệ trưng bày (Floor Light Pool)
+      const pPool = new THREE.Mesh(pedestalLightPoolGeo, poolMat);
+      pPool.name = `Pedestal_LightPool_${item.id}`;
+      pPool.rotation.x = -Math.PI / 2;
+      pPool.position.set(pos.x, pos.y + 0.015, pos.z);
+      pPool.frustumCulled = true;
+      pPool.renderOrder = 2;
+      this.group.add(pPool);
+
+      // (ĐÃ XÓA BỎ HÌNH NÓN ÁNH SÁNG THÔ LƠ LỬNG Ở HÀNH LANG THEO YÊU CẦU)
+      this.group.add(pShadow);
+    });
   }
 
   /**
@@ -304,19 +335,14 @@ export class RoomGenerator {
     const bookPagesGeo = new THREE.BoxGeometry(0.74, 0.12, 1.02);
     this.prepareGeometry(bookPagesGeo);
 
-    const pagesMat = new THREE.MeshStandardMaterial({
-      color: 0xfbf6ea,
-      roughness: 0.85,
-      metalness: 0.05,
-      side: THREE.DoubleSide
-    });
+    const pagesMat = new THREE.MeshLambertMaterial({ color: 0xf5f2eb, side: THREE.DoubleSide });
 
     const goldRibMat = this.getMat('royalGold');
 
     LITERATURE_REGISTRY.forEach((item, idx) => {
       // BỎ HOÀN TOÀN MÔ HÌNH NHÁP (THANH XANH LÁ) CHO PHÒNG 01 TRUYỆN KIỀU
       // Phòng 01 được quản lý 100% bằng RoomDecorator với model .glb thật 1:1
-      if (item.id === 'truyen_kieu') {
+      if (CUSTOM_ROOM_IDS.has(item.id)) {
         return;
       }
 
@@ -328,31 +354,38 @@ export class RoomGenerator {
       const baseHoverY = pos.y + 1.55;
       bookGroup.position.set(pos.x, baseHoverY, pos.z);
 
-      const coverMat = new THREE.MeshStandardMaterial({
-        color: item.themeColor,
-        emissive: item.themeColor,
-        emissiveIntensity: item.portalReady ? 0.35 : 0.22,
-        roughness: 0.32,
-        metalness: 0.25,
-        side: THREE.DoubleSide
-      });
+      const coverMat = new THREE.MeshLambertMaterial({ color: item.themeColor, side: THREE.DoubleSide });
 
       const coverMesh = new THREE.Mesh(bookCoverGeo, coverMat);
       coverMesh.castShadow = false; // Tối ưu hóa: Không đổ bóng bìa sách
-      coverMesh.receiveShadow = true;
+      coverMesh.receiveShadow = false;
+      coverMesh.frustumCulled = true;
       bookGroup.add(coverMesh);
 
       const pagesMesh = new THREE.Mesh(bookPagesGeo, pagesMat);
       pagesMesh.position.x = 0.02;
+      pagesMesh.frustumCulled = true;
+      pagesMesh.castShadow = false;
       bookGroup.add(pagesMesh);
 
       const ribGeo = new THREE.BoxGeometry(0.04, 0.18, 1.14);
       this.prepareGeometry(ribGeo);
       const ribMesh = new THREE.Mesh(ribGeo, goldRibMat);
       ribMesh.position.x = -0.41;
+      ribMesh.frustumCulled = true;
+      ribMesh.castShadow = false;
       bookGroup.add(ribMesh);
 
       bookGroup.rotation.x = Math.PI / 7.2;
+
+      // Quầng sáng giả lập siêu nhẹ quanh sách ma thuật (Fake Glow Sprite)
+      const glowMat = this.matLib?.get?.('fakeGlowSprite') ?? getFakeGlowSpriteMaterial();
+      const bookGlow = new THREE.Sprite(glowMat);
+      bookGlow.name = `MagicBook_Glow_${item.id}`;
+      bookGlow.position.set(0, 0, 0);
+      bookGlow.scale.set(1.8, 1.8, 1.0);
+      bookGlow.frustumCulled = true;
+      bookGroup.add(bookGlow);
 
       // Dữ liệu tương tác raycasting
       coverMesh.userData.literatureData = item;
@@ -370,7 +403,7 @@ export class RoomGenerator {
 
       this.interactiveBookMeshes.push(coverMesh);
 
-      if (item.id === 'truyen_kieu') {
+      if (CUSTOM_ROOM_IDS.has(item.id)) {
         bookGroup.traverse(c => {
           c.layers.enable(1);
         });
@@ -399,7 +432,7 @@ export class RoomGenerator {
 
     LITERATURE_REGISTRY.forEach((item) => {
       // Bỏ qua Phòng 01 vì RoomDecorator đã quản lý hệ sinh thái ánh sáng cô lập Layer 1
-      if (item.id === 'truyen_kieu') return;
+      if (CUSTOM_ROOM_IDS.has(item.id)) return;
 
       const pos = this.calculateItemPosition(item);
       const atmos = item.atmosphere || {};
@@ -562,7 +595,7 @@ export class RoomGenerator {
 
     // Thêm 14 bệ đá cẩm thạch độc lập cho 14 phòng còn lại (ôm sát kích thước bệ bán kính 0.95m, cao 0.95m)
     LITERATURE_REGISTRY.forEach((item) => {
-      if (item.id === 'truyen_kieu') return;
+      if (CUSTOM_ROOM_IDS.has(item.id)) return;
       const pos = this.calculateItemPosition(item);
       const pedestalBox = new THREE.Box3(
         new THREE.Vector3(pos.x - 0.95, pos.y, pos.z - 0.95),
@@ -583,6 +616,17 @@ export class RoomGenerator {
   }
 
   getGroup() {
+    this.group.traverse((child) => {
+      if (child.isMesh) {
+        child.frustumCulled = true;
+        child.castShadow = false;
+        child.receiveShadow = false;
+        if (child.geometry) {
+          if (!child.geometry.boundingBox) child.geometry.computeBoundingBox();
+          if (!child.geometry.boundingSphere) child.geometry.computeBoundingSphere();
+        }
+      }
+    });
     return this.group;
   }
 }

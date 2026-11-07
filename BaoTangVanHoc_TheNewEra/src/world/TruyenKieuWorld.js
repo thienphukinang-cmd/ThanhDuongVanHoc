@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { mergeGroupMeshesByMaterial, mergeAllMeshesIntoSingleUnifiedMesh, disposeHierarchy } from '../utils/geometryMerger.js';
 
-// Tọa độ biệt lập trên cao của toàn cõi Thế giới Truyện Kiều (cách biệt 120m trên nóc bảo tàng)
-export const KIEU_WORLD_ORIGIN = new THREE.Vector3(0, 150, 0);
+// Tọa độ gốc độc lập của Thế giới Truyện Kiều trong Scene riêng biệt (truyenKieuScene - Multi-Scene Architecture)
+export const KIEU_WORLD_ORIGIN = new THREE.Vector3(0, 0, 0);
 
 // Tọa độ 3 Phân Cảnh (cách nhau 140m, hoàn toàn không chồng lấn tầm nhìn)
 export const REALM_ZONES = {
@@ -14,34 +14,34 @@ export const REALM_ZONES = {
     offset: new THREE.Vector3(0, 0, 0),
     cameraPos: new THREE.Vector3(0, 1.8, 5.5),
     targetPos: new THREE.Vector3(0.5, 1.6, -0.5),
-    fogColor: 0x142032,
-    fogDensity: 0.005,
-    skyColor: 0x142032,
-    floorHeight: 150.0
+    fogColor: 0xc4e2fa,
+    fogDensity: 0.0022,
+    skyColor: 0x87ceeb,
+    floorHeight: 0.0
   },
   ZONE_2: {
     id: 2,
     name: 'Lầu Ngưng Bích Cửa Bể',
     poem: 'Buồn trông cửa bể chiều hôm / Thuyền ai thấp thoáng cánh buồm xa xa',
     offset: new THREE.Vector3(-140, 0, 0),
-    cameraPos: new THREE.Vector3(-140, 5.8, 4.2), // Trên vọng lâu tầng 2 nhìn ra biển
-    targetPos: new THREE.Vector3(-140, 5.2, -18.0),
-    fogColor: 0x1c1a2e,
-    fogDensity: 0.006,
-    skyColor: 0x181628,
-    floorHeight: 154.5 // Cao độ sàn vọng lâu
+    cameraPos: new THREE.Vector3(0, 5.8, 4.2), // Trên vọng lâu tầng 2 nhìn ra biển
+    targetPos: new THREE.Vector3(0, 5.2, -18.0),
+    fogColor: 0x4f4068,
+    fogDensity: 0.0028,
+    skyColor: 0x5a4a75,
+    floorHeight: 4.5 // Cao độ sàn vọng lâu (tọa độ gốc Y=0)
   },
   ZONE_3: {
     id: 3,
     name: 'Doanh Trại Từ Hải',
     poem: 'Trướng hùm mở giữa phù vân / Triệu binh nghiêm ngặt muôn phần uy linh',
     offset: new THREE.Vector3(140, 0, 0),
-    cameraPos: new THREE.Vector3(140, 2.2, 9.5), // Trước bệ soái trướng ngắm lửa trại & cờ xí
-    targetPos: new THREE.Vector3(140, 2.0, -1.0),
-    fogColor: 0x241408,
-    fogDensity: 0.005,
-    skyColor: 0x221208,
-    floorHeight: 150.0
+    cameraPos: new THREE.Vector3(0, 2.2, 9.5), // Trước bệ soái trướng ngắm lửa trại & cờ xí
+    targetPos: new THREE.Vector3(0, 2.0, -1.0),
+    fogColor: 0x351f10,
+    fogDensity: 0.0028,
+    skyColor: 0x3d2716,
+    floorHeight: 0.0
   }
 };
 
@@ -49,54 +49,39 @@ export const REALM_ZONES = {
  * THƯ VIỆN VẬT LIỆU PBR CHUẨN THREE.JS CHO CẢNH TIẾT THANH MINH (PHÂN CẢNH 1)
  */
 export const ThanhMinhMaterials = {
-  ground: new THREE.MeshStandardMaterial({
+  ground: new THREE.MeshLambertMaterial({
     color: 0x2b4c22,
-    roughness: 0.85,
-    metalness: 0.05,
     name: 'TM_Mat_Ground'
   }),
-  bark: new THREE.MeshStandardMaterial({
+  bark: new THREE.MeshLambertMaterial({
     color: 0x3d2314,
-    roughness: 0.88,
-    metalness: 0.08,
     name: 'TM_Mat_Bark'
   }),
-  pearBlossom: new THREE.MeshStandardMaterial({
+  pearBlossom: new THREE.MeshLambertMaterial({
     color: 0xf5e1e5,
-    roughness: 0.55,
-    metalness: 0.02,
     name: 'TM_Mat_PearBlossom'
   }),
-  peachBlossom: new THREE.MeshStandardMaterial({
+  peachBlossom: new THREE.MeshLambertMaterial({
     color: 0xffb7c5,
-    roughness: 0.55,
-    metalness: 0.02,
     name: 'TM_Mat_PeachBlossom'
   }),
-  leaf: new THREE.MeshStandardMaterial({
+  leaf: new THREE.MeshLambertMaterial({
     color: 0x345c22,
-    roughness: 0.65,
-    metalness: 0.05,
     name: 'TM_Mat_Leaf'
   }),
-  water: new THREE.MeshStandardMaterial({
+  water: new THREE.MeshLambertMaterial({
     color: 0x114444,
-    roughness: 0.10,
-    metalness: 0.35,
     transparent: true,
     opacity: 0.88,
+    depthWrite: false, // CHỐNG OVERDRAW: Tắt depthWrite cho vật liệu trong suốt
     name: 'TM_Mat_Water'
   }),
-  stone: new THREE.MeshStandardMaterial({
+  stone: new THREE.MeshLambertMaterial({
     color: 0x5a6358,
-    roughness: 0.82,
-    metalness: 0.10,
     name: 'TM_Mat_Stone'
   }),
-  woodRed: new THREE.MeshStandardMaterial({
+  woodRed: new THREE.MeshLambertMaterial({
     color: 0x5c1d18,
-    roughness: 0.65,
-    metalness: 0.10,
     name: 'TM_Mat_WoodRed'
   })
 };
@@ -118,15 +103,10 @@ export function applyThanhMinhMaterials(model) {
     const origMat = child.material;
     const matName = (origMat && origMat.name ? origMat.name : '').toLowerCase();
 
-    // TỐI ƯU HÓA ĐỔ BÓNG: Chỉ thân cây, mộ Đạm Tiên, cầu gỗ và khối đá lớn mới castShadow
-    // Tán hoa lê/đào, lá, mặt nước và địa hình chỉ receiveShadow để cắt giảm 80% shadow passes
-    const isMajorShadowCaster =
-      matName.includes('vocay') || meshName.includes('trunk') || meshName.includes('root') ||
-      meshName.includes('bridge') || meshName.includes('plank') || meshName.includes('tomb') ||
-      (matName.includes('daco') && !meshName.includes('pebble'));
-
-    child.castShadow = isMajorShadowCaster;
-    child.receiveShadow = true;
+    // GIẢM TẢI ĐỒ HỌA: Tắt castShadow/receiveShadow cho mọi vật thể phức tạp, chỉ giữ receiveShadow cho mặt đất
+    const isGround = meshName.includes('ground') || meshName.includes('diahinh') || matName.includes('datco');
+    child.castShadow = false;
+    child.receiveShadow = isGround;
 
     if (
       matName.includes('datco') ||
@@ -186,34 +166,36 @@ export function applyThanhMinhMaterials(model) {
 
 function createPoeticSignboard(title, poemLine1, poemLine2, subTitle = '— Thế Giới Trong Truyện Kiều • Nguyễn Du —') {
   const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 512;
+  canvas.width = 512;
+  canvas.height = 256;
   const ctx = canvas.getContext('2d');
 
   ctx.fillStyle = 'rgba(22, 12, 8, 0.90)';
-  ctx.fillRect(16, 16, 992, 480);
+  ctx.fillRect(8, 8, 496, 240);
   ctx.strokeStyle = '#dfb746';
-  ctx.lineWidth = 10;
-  ctx.strokeRect(24, 24, 976, 464);
+  ctx.lineWidth = 5;
+  ctx.strokeRect(12, 12, 488, 232);
 
   ctx.fillStyle = '#ffd97d';
-  ctx.font = 'bold 44px "Georgia", serif';
+  ctx.font = 'bold 22px "Georgia", serif';
   ctx.textAlign = 'center';
-  ctx.fillText(title, 512, 130);
+  ctx.fillText(title, 256, 65);
 
   ctx.fillStyle = '#fff5e4';
-  ctx.font = 'italic 34px "Georgia", serif';
-  ctx.fillText(`"${poemLine1}"`, 512, 255);
-  ctx.fillText(`"${poemLine2}"`, 512, 325);
+  ctx.font = 'italic 17px "Georgia", serif';
+  ctx.fillText(`"${poemLine1}"`, 256, 128);
+  ctx.fillText(`"${poemLine2}"`, 256, 163);
 
   ctx.fillStyle = '#c99738';
-  ctx.font = '24px sans-serif';
-  ctx.fillText(subTitle, 512, 425);
+  ctx.font = '12px sans-serif';
+  ctx.fillText(subTitle, 256, 212);
 
   const tex = new THREE.CanvasTexture(canvas);
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
   const mesh = new THREE.Mesh(
     new THREE.PlaneGeometry(4.2, 2.1),
-    new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide })
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.95, depthWrite: false, side: THREE.DoubleSide })
   );
   mesh.userData.excludeFromCollision = true;
   return mesh;
@@ -225,17 +207,15 @@ function createPortalWaypoint(targetZoneId, title, subText) {
 
   const baseMesh = new THREE.Mesh(
     new THREE.CylinderGeometry(1.2, 1.4, 0.35, 8),
-    new THREE.MeshStandardMaterial({ color: 0x3d3830, roughness: 0.85 })
+    new THREE.MeshLambertMaterial({ color: 0x3d3830 })
   );
   baseMesh.position.y = 0.17;
   baseMesh.userData.excludeFromCollision = true;
   group.add(baseMesh);
 
   const steleGeo = new THREE.BoxGeometry(1.1, 2.2, 0.18);
-  const steleMat = new THREE.MeshStandardMaterial({
-    color: 0x484236,
-    roughness: 0.75,
-    metalness: 0.1
+  const steleMat = new THREE.MeshLambertMaterial({
+    color: 0x484236
   });
   const steleMesh = new THREE.Mesh(steleGeo, steleMat);
   steleMesh.position.y = 1.35;
@@ -266,6 +246,8 @@ function createPortalWaypoint(targetZoneId, title, subText) {
   ctx.fillText('[CLICK CHUỘT ĐỂ ĐẾN]', 256, 420);
 
   const signTex = new THREE.CanvasTexture(canvas);
+  signTex.generateMipmaps = false;
+  signTex.minFilter = THREE.LinearFilter;
   const signMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(0.95, 1.8),
     new THREE.MeshBasicMaterial({ map: signTex })
@@ -294,9 +276,11 @@ function createPortalWaypoint(targetZoneId, title, subText) {
   rctx.stroke();
 
   const runeTex = new THREE.CanvasTexture(runeCanvas);
+  runeTex.generateMipmaps = false;
+  runeTex.minFilter = THREE.LinearFilter;
   const runeMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(2.6, 2.6),
-    new THREE.MeshBasicMaterial({ map: runeTex, transparent: true, opacity: 0.85, side: THREE.DoubleSide })
+    new THREE.MeshBasicMaterial({ map: runeTex, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide })
   );
   runeMesh.rotation.x = -Math.PI / 2;
   runeMesh.position.y = 0.36;
@@ -305,6 +289,7 @@ function createPortalWaypoint(targetZoneId, title, subText) {
 
   const light = new THREE.PointLight(0xffdf80, 2.0, 6.0);
   light.position.set(0, 1.5, 0.5);
+  light.castShadow = false; // GPU SAVER: PointLight shadow = 6 render passes
   group.add(light);
 
   group.userData.isRealmPortal = true;
@@ -320,7 +305,7 @@ function createReturnMuseumPortalStele() {
   // 1. Chân đế đá cẩm thạch đen viền đồng
   const base = new THREE.Mesh(
     new THREE.CylinderGeometry(0.85, 1.05, 0.45, 16),
-    new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.35, metalness: 0.25 })
+    new THREE.MeshLambertMaterial({ color: 0x1a1a1a })
   );
   base.position.y = 0.22;
   base.userData.excludeFromCollision = true;
@@ -329,7 +314,7 @@ function createReturnMuseumPortalStele() {
   // 2. Vành gương cổ bằng đồng vàng
   const mirrorRim = new THREE.Mesh(
     new THREE.TorusGeometry(0.75, 0.08, 16, 32),
-    new THREE.MeshStandardMaterial({ color: 0xd4af37, roughness: 0.25, metalness: 0.85 })
+    new THREE.MeshLambertMaterial({ color: 0xd4af37 })
   );
   mirrorRim.position.y = 1.45;
   mirrorRim.userData.excludeFromCollision = true;
@@ -376,14 +361,14 @@ function createReturnMuseumPortalStele() {
   ctx.fillText('[CLICK ĐỂ QUAY VỀ]', 256, 400);
 
   const mirrorTex = new THREE.CanvasTexture(canvas);
+  mirrorTex.generateMipmaps = false;
+  mirrorTex.minFilter = THREE.LinearFilter;
   const mirrorMesh = new THREE.Mesh(
     mirrorGeo,
-    new THREE.MeshStandardMaterial({
+    new THREE.MeshLambertMaterial({
       map: mirrorTex,
       emissive: new THREE.Color(0x1b6ca8),
       emissiveIntensity: 0.65,
-      roughness: 0.1,
-      metalness: 0.4,
       side: THREE.DoubleSide
     })
   );
@@ -411,6 +396,7 @@ function createReturnMuseumPortalStele() {
       map: new THREE.CanvasTexture(runeCanvas),
       transparent: true,
       opacity: 0.85,
+      depthWrite: false,
       side: THREE.DoubleSide
     })
   );
@@ -422,6 +408,7 @@ function createReturnMuseumPortalStele() {
   // 5. Nguồn sáng lung linh
   const light = new THREE.PointLight(0x7df9ff, 2.5, 7.0);
   light.position.set(0, 1.6, 0.4);
+  light.castShadow = false; // GPU SAVER: PointLight shadow = 6 render passes
   group.add(light);
 
   group.userData.isReturnPortal = true;
@@ -436,11 +423,19 @@ function createReturnMuseumPortalStele() {
 }
 
 export class TruyenKieuStoryWorld {
-  constructor(scene, camera, cameraController, atriumGroup = null) {
-    this.scene = scene;
+  constructor(scene, camera, cameraController, atriumGroup = null, options = {}) {
+    // KIẾN TRÚC ĐA VŨ TRỤ (MULTI-SCENE ARCHITECTURE):
+    // Tách biệt hoàn toàn Thế giới Truyện Kiều sang Scene riêng biệt để giải phóng VRAM (GTX 1050 2GB)
+    this.truyenKieuScene = options.truyenKieuScene || (scene?.name === 'TruyenKieu_Universe' ? scene : new THREE.Scene());
+    this.truyenKieuScene.name = 'TruyenKieu_Universe';
+    this.scene = this.truyenKieuScene; // Scene nội bộ của TruyenKieuStoryWorld
+    this.mainScene = options.mainScene || null;
+    this.app = options.app || null;
+
     this.camera = camera;
     this.cameraManager = cameraController?.controls ? cameraController : (cameraController?.cameraManager || null);
     this.cameraController = cameraController?.cameraController || cameraController;
+    this.renderer = options.renderer || this.cameraController?.renderer || null;
     this.atriumGroup = atriumGroup || scene?.getObjectByName?.('Museum_Atrium_Root') || null;
 
     // Phân cảnh hiện tại (Mặc định: 1 - Vườn Thúy & Thanh Minh)
@@ -448,16 +443,17 @@ export class TruyenKieuStoryWorld {
     this.isInsideWorld = false;
     this.isWarping = false; // Khóa chống spam click / phím trong khi hiệu ứng bay đang diễn ra
 
-    // 1. ROOT WORLD GROUP BIỆT LẬP TRÊN CAO (Y = 150m)
+    // 1. ROOT WORLD GROUP ĐẶT TẠI TỌA ĐỘ GỐC (0, 0, 0) CỦA TRUYENKIEUSCENE
     this.worldGroup = new THREE.Group();
     this.worldGroup.name = 'TruyenKieu_Three_Realms';
     this.worldGroup.position.copy(KIEU_WORLD_ORIGIN);
-    this.worldGroup.visible = false;
+    this.worldGroup.visible = true; // Luôn visible bên trong truyenKieuScene, việc ẩn hiện do renderer.render(activeScene) quản lý!
 
     this.savedPos = new THREE.Vector3(-44.5, 11.8, 19.0);
     this.savedTarget = new THREE.Vector3(-48.0, 11.2, 19.0);
     this.savedFog = null;
     this.savedBackground = null;
+    this.savedExposure = 1.0;
 
     // 3 Nhóm không gian
     this.zone1Group = new THREE.Group();
@@ -474,6 +470,11 @@ export class TruyenKieuStoryWorld {
 
     this.worldGroup.add(this.zone1Group, this.zone2Group, this.zone3Group);
 
+    // Cài đặt Fog & Background mặc định cho truyenKieuScene
+    const z1 = REALM_ZONES.ZONE_1;
+    this.truyenKieuScene.fog = new THREE.FogExp2(z1.fogColor, z1.fogDensity);
+    this.truyenKieuScene.background = new THREE.Color(z1.skyColor);
+
     this.initGlobalSkyAndWater();
     this.initZone1VuonThuy();
     this.initZone2LauNgungBich();
@@ -482,11 +483,97 @@ export class TruyenKieuStoryWorld {
     this.createWarpOverlayUI();
     this.initSpatialSoundSynth();
     this.bindControlsAndEvents();
+    this.initTruyenKieuHitboxes();
 
+    // TỐI ƯU HÓA HIỂN THỊ, FRUSTUM CULLING & SHADOW CHO THẾ GIỚI KIỀU
+    let meshCount = 0;
     this.worldGroup.traverse((c) => {
       c.userData.excludeFromCollision = true;
+      
+      if (c.isMesh) {
+        c.frustumCulled = true;
+        if (c.geometry && !c.geometry.boundingSphere) {
+          c.geometry.computeBoundingSphere();
+        }
+
+        // TẮT ĐỔ BÓNG ĐỘNG CHO CÁC VẬT THỂ PHỨC TẠP, CHỈ GIỮ RECEIVESHADOW CHO MẶT ĐẤT CHÍNH
+        const meshName = (c.name || '').toLowerCase();
+        const isMainGround = meshName.includes('ground') || meshName.includes('diahinh') ||
+          meshName.includes('terrain') || meshName.includes('sand');
+        c.castShadow = false;
+        c.receiveShadow = isMainGround;
+        meshCount++;
+      }
+      
+      // Ép FrontSide cho khối kiến trúc đặc, chỉ giữ DoubleSide cho lá, cờ, mặt nước, biển hiệu
+      if (c.isMesh && c.material) {
+        const meshName = (c.name || '').toLowerCase();
+        const isThinSurface = meshName.includes('flag') || meshName.includes('banner') ||
+          meshName.includes('sail') || meshName.includes('sign') || meshName.includes('scroll') ||
+          meshName.includes('rune') || meshName.includes('portal') || meshName.includes('mirror') ||
+          meshName.includes('canvas') || meshName.includes('leaf') || meshName.includes('petal');
+        
+        const mats = Array.isArray(c.material) ? c.material : [c.material];
+        mats.forEach(mat => {
+          if (mat && !isThinSurface && mat.side === THREE.DoubleSide) {
+            mat.side = THREE.FrontSide;
+            mat.needsUpdate = true;
+          }
+        });
+      }
     });
-    this.scene.add(this.worldGroup);
+    console.log(`%c[MULTI-SCENE TRUYEN KIEU] Đã khởi tạo và tối ưu frustumCulled & shadow cho ${meshCount} meshes trong truyenKieuScene!`, "color: #39e58c; font-weight: bold;");
+    this.truyenKieuScene.add(this.worldGroup);
+  }
+
+  /**
+   * ĐĂNG KÝ HỘP VA CHẠM THỰC TẾ (SPATIAL COLLISION GRID O(1)) CHO THẾ GIỚI TRUYỆN KIỀU
+   * Tọa độ gốc (0, 0, 0) bên trong truyenKieuScene độc lập
+   */
+  initTruyenKieuHitboxes() {
+    const hitboxes = [
+      // ZONE 1: VƯỜN THÚY & LỄ THANH MINH (Origin: 0, 0, 0)
+      { name: 'Mộ Đạm Tiên cổ kính', isWorld: true, box: new THREE.Box3(new THREE.Vector3(5.2, -0.5, -6.2), new THREE.Vector3(7.8, 3.0, -3.8)) },
+      { name: 'Cầu gỗ qua suối (Bao quát)', isWorld: true, box: new THREE.Box3(new THREE.Vector3(-4.0, -0.2, -1.5), new THREE.Vector3(5.0, 2.2, 1.5)) },
+      { name: 'Cổ thụ Hoa Lê Tây-Bắc Z1', isWorld: true, box: new THREE.Box3(new THREE.Vector3(-10.5, -0.5, -9.0), new THREE.Vector3(-8.5, 10.0, -7.0)) },
+      { name: 'Cổ thụ Hoa Đào Tây-Nam Z1', isWorld: true, box: new THREE.Box3(new THREE.Vector3(-12.0, -0.5, 8.0), new THREE.Vector3(-10.0, 10.0, 10.0)) },
+      { name: 'Cổ thụ Hoa Đào Đông-Bắc Z1', isWorld: true, box: new THREE.Box3(new THREE.Vector3(9.5, -0.5, -11.0), new THREE.Vector3(11.5, 10.0, -9.0)) },
+      { name: 'Cổ thụ Hoa Lê Đông-Nam Z1', isWorld: true, box: new THREE.Box3(new THREE.Vector3(11.0, -0.5, 6.5), new THREE.Vector3(13.0, 10.0, 8.5)) },
+      { name: 'Cổ thụ Hoa Lê Tây Z1', isWorld: true, box: new THREE.Box3(new THREE.Vector3(-15.0, -0.5, -0.5), new THREE.Vector3(-13.0, 10.0, 1.5)) },
+      { name: 'Bia đá thơ Thanh Minh', isWorld: true, box: new THREE.Box3(new THREE.Vector3(-4.2, -0.5, 2.2), new THREE.Vector3(-2.8, 3.5, 3.4)) },
+      { name: 'Cổng quy hồi sảnh P01 (Z1)', isWorld: true, box: new THREE.Box3(new THREE.Vector3(5.4, -0.5, 7.4), new THREE.Vector3(6.6, 3.5, 8.6)) },
+      { name: 'Trụ dịch chuyển sang Zone 2', isWorld: true, box: new THREE.Box3(new THREE.Vector3(-16.8, -0.5, -0.8), new THREE.Vector3(-15.2, 3.5, 0.8)) },
+      { name: 'Trụ dịch chuyển sang Zone 3', isWorld: true, box: new THREE.Box3(new THREE.Vector3(15.2, -0.5, -0.8), new THREE.Vector3(16.8, 3.5, 0.8)) },
+
+      // ZONE 2: LẦU NGƯNG BÍCH (Origin: -140, 0, 0)
+      { name: 'Khối đình đài Vọng Lầu Ngưng Bích (Bao quát)', isWorld: true, box: new THREE.Box3(new THREE.Vector3(-144.5, 0.0, -4.5), new THREE.Vector3(-135.5, 12.0, 4.5)) },
+      { name: 'Bia đá thơ Lầu Ngưng Bích', isWorld: true, box: new THREE.Box3(new THREE.Vector3(-147.2, 4.5, 1.4), new THREE.Vector3(-145.8, 7.5, 2.6)) },
+      { name: 'Cổng quy hồi sảnh P01 (Z2)', isWorld: true, box: new THREE.Box3(new THREE.Vector3(-136.6, 4.5, 3.4), new THREE.Vector3(-135.4, 7.5, 4.6)) },
+
+      // ZONE 3: DOANH TRẠI TỪ HẢI (Origin: 140, 0, 0)
+      { name: 'Vách Soái trướng Từ Hải', isWorld: true, box: new THREE.Box3(new THREE.Vector3(133.5, 0.0, -12.5), new THREE.Vector3(146.5, 7.0, -4.5)) },
+      { name: 'Hàng rào chông phòng thủ Bắc', isWorld: true, box: new THREE.Box3(new THREE.Vector3(122.0, 0.0, -23.0), new THREE.Vector3(158.0, 3.5, -19.0)) },
+      { name: 'Hàng rào chông phòng thủ Đông', isWorld: true, box: new THREE.Box3(new THREE.Vector3(158.0, 0.0, -18.0), new THREE.Vector3(163.0, 3.5, 18.0)) },
+      { name: 'Hàng rào chông phòng thủ Tây', isWorld: true, box: new THREE.Box3(new THREE.Vector3(117.0, 0.0, -18.0), new THREE.Vector3(122.0, 3.5, 18.0)) },
+      { name: 'Đống lửa trại quân doanh', isWorld: true, box: new THREE.Box3(new THREE.Vector3(138.8, 0.0, 3.0), new THREE.Vector3(141.2, 3.0, 5.0)) },
+      { name: 'Bia đá thơ Doanh Trại Từ Hải', isWorld: true, box: new THREE.Box3(new THREE.Vector3(133.0, 0.0, 6.0), new THREE.Vector3(134.6, 3.5, 7.4)) },
+      { name: 'Cổng quy hồi sảnh P01 (Z3)', isWorld: true, box: new THREE.Box3(new THREE.Vector3(144.4, 0.0, 7.4), new THREE.Vector3(145.6, 3.5, 8.6)) }
+    ];
+
+    if (this.cameraController?.registerHitboxes) {
+      this.cameraController.registerHitboxes(hitboxes);
+    } else if (this.cameraController?.spatialGrid) {
+      hitboxes.forEach(hb => {
+        if (!hb.center) {
+          hb.center = new THREE.Vector3();
+          hb.box.getCenter(hb.center);
+        }
+        this.cameraController.customHitboxes = this.cameraController.customHitboxes || [];
+        const exists = this.cameraController.customHitboxes.some(h => h.name === hb.name);
+        if (!exists) this.cameraController.customHitboxes.push(hb);
+        this.cameraController.spatialGrid.insert(hb);
+      });
+    }
   }
 
   // =========================================================================
@@ -504,11 +591,9 @@ export class TruyenKieuStoryWorld {
     this.worldGroup.add(this.skyDome);
 
     const oceanGeo = new THREE.PlaneGeometry(360, 180, 32, 32);
-    const oceanMat = new THREE.MeshStandardMaterial({
+    const oceanMat = new THREE.MeshLambertMaterial({
       color: 0x091c28,
-      emissive: 0x030f18,
-      roughness: 0.14,
-      metalness: 0.82
+      emissive: 0x030f18
     });
     this.oceanMesh = new THREE.Mesh(oceanGeo, oceanMat);
     this.oceanMesh.rotation.x = -Math.PI / 2;
@@ -552,8 +637,6 @@ export class TruyenKieuStoryWorld {
 
     const groundMesh = new THREE.Mesh(groundGeo, ThanhMinhMaterials.ground);
     groundMesh.receiveShadow = true;
-    groundMesh.matrixAutoUpdate = false;
-    groundMesh.updateMatrix();
     group.add(groundMesh);
 
     // 2. MẶT NƯỚC SUỐI TRONG NGỌC BÍCH
@@ -561,9 +644,7 @@ export class TruyenKieuStoryWorld {
     riverGeo.rotateX(-Math.PI / 2);
     const riverMesh = new THREE.Mesh(riverGeo, ThanhMinhMaterials.water);
     riverMesh.position.y = -0.32;
-    riverMesh.receiveShadow = true;
-    riverMesh.matrixAutoUpdate = false;
-    riverMesh.updateMatrix();
+    riverMesh.receiveShadow = false;
     group.add(riverMesh);
 
     // 3. CẦU GỖ UỐN CONG BẮC NGANG SUỐI
@@ -574,7 +655,7 @@ export class TruyenKieuStoryWorld {
       ThanhMinhMaterials.woodRed
     );
     bridgeDeck.position.y = 0.45;
-    bridgeDeck.castShadow = true;
+    bridgeDeck.castShadow = false;
     bridgeGroup.add(bridgeDeck);
 
     const railMat = ThanhMinhMaterials.woodRed;
@@ -583,8 +664,6 @@ export class TruyenKieuStoryWorld {
     const rightRail = new THREE.Mesh(new THREE.BoxGeometry(9.0, 0.14, 0.14), railMat);
     rightRail.position.set(0, 1.15, 1.2);
     bridgeGroup.add(leftRail, rightRail);
-    bridgeGroup.matrixAutoUpdate = false;
-    bridgeGroup.updateMatrix();
     group.add(bridgeGroup);
 
     // 4. MỘ ĐẠM TIÊN CỔ KÍNH ("Sè sè nấm đất bên đường")
@@ -600,10 +679,8 @@ export class TruyenKieuStoryWorld {
       ThanhMinhMaterials.stone
     );
     stele.position.set(0, 0.6, 1.2);
-    stele.castShadow = true;
+    stele.castShadow = false;
     tombGroup.add(mound, stele);
-    tombGroup.matrixAutoUpdate = false;
-    tombGroup.updateMatrix();
     group.add(tombGroup);
 
     // 5. CÂY CỔ THỤ HOA LÊ & ĐÀO HỒNG (5 Cây cách điệu Low-poly ~200 vertices)
@@ -625,33 +702,33 @@ export class TruyenKieuStoryWorld {
 
       const trunk = new THREE.Mesh(trunkGeo, ThanhMinhMaterials.bark);
       trunk.position.y = 2.1;
-      trunk.castShadow = true;
+      trunk.castShadow = false;
 
       const canopy = new THREE.Mesh(canopyGeo, tp.mat);
       canopy.position.y = 4.5;
       canopy.scale.set(1.3, 0.9, 1.3);
 
       tree.add(trunk, canopy);
-      tree.matrixAutoUpdate = false;
-      tree.updateMatrix();
       group.add(tree);
     });
 
-    // 6. ĐÁ CUỘI SUỐI (12 hòn đá low-poly)
+    // 6. ĐÁ CUỘI SUỐI (12 hòn đá low-poly) - OPTIMIZED: InstancedMesh (1 Draw Call thay vì 12)
     const rockGeo = new THREE.DodecahedronGeometry(0.55, 0);
     const rockMat = ThanhMinhMaterials.stone;
+    const rockInstanced = new THREE.InstancedMesh(rockGeo, rockMat, 12);
+    const dummyRock = new THREE.Object3D();
     for (let r = 0; r < 12; r++) {
-      const rock = new THREE.Mesh(rockGeo, rockMat);
       const rz = (r - 6) * 4.5;
       const rx = Math.sin(rz * 0.15) * 4.0 + (r % 2 === 0 ? 2.2 : -2.2);
-      rock.position.set(rx, -0.2, rz);
-      rock.matrixAutoUpdate = false;
-      rock.updateMatrix();
-      group.add(rock);
+      dummyRock.position.set(rx, -0.2, rz);
+      dummyRock.updateMatrix();
+      rockInstanced.setMatrixAt(r, dummyRock.matrix);
     }
+    rockInstanced.instanceMatrix.needsUpdate = true;
+    rockInstanced.computeBoundingSphere();
+    rockInstanced.frustumCulled = true;
+    group.add(rockInstanced);
 
-    group.matrixAutoUpdate = false;
-    group.updateMatrix();
     return group;
   }
 
@@ -660,7 +737,7 @@ export class TruyenKieuStoryWorld {
     const ambient1 = new THREE.AmbientLight(0xfff6ec, 1.8);
     const sun1 = new THREE.DirectionalLight(0xffecd0, 2.6);
     sun1.position.set(18, 35, 14);
-    sun1.castShadow = true;
+    sun1.castShadow = false;
     sun1.shadow.mapSize.width = 1024;
     sun1.shadow.mapSize.height = 1024;
     sun1.shadow.bias = -0.0005;
@@ -668,12 +745,15 @@ export class TruyenKieuStoryWorld {
 
     const fill1 = new THREE.DirectionalLight(0xb0d8ff, 1.2);
     fill1.position.set(-16, 25, -14);
+    fill1.castShadow = false; // Chỉ sun1 được phép castShadow
 
     const bridgeLight = new THREE.PointLight(0xffd580, 2.5, 18);
     bridgeLight.position.set(0.5, 3.2, 0.0);
+    bridgeLight.castShadow = false; // GPU SAVER: PointLight shadow = 6 render passes
 
     const tombLight = new THREE.PointLight(0xd0e8ff, 2.8, 18);
     tombLight.position.set(5.2, 2.5, -4.5);
+    tombLight.castShadow = false; // GPU SAVER: PointLight shadow = 6 render passes
 
     this.zone1Lights.add(ambient1, sun1, fill1, bridgeLight, tombLight);
     this.zone1Group.add(this.zone1Lights);
@@ -708,7 +788,7 @@ export class TruyenKieuStoryWorld {
     returnPortalZone1.rotation.y = -Math.PI / 4;
     this.zone1Group.add(returnPortalZone1);
 
-    const pCount = 180;
+    const pCount = 90; // PERFORMANCE: Giảm 50% số hạt hoa rơi (180 -> 90)
     const pGeo = new THREE.BufferGeometry();
     const pPos = new Float32Array(pCount * 3);
     for (let i = 0; i < pCount; i++) {
@@ -730,7 +810,7 @@ export class TruyenKieuStoryWorld {
     );
     this.zone1Group.add(this.particlesZone1);
 
-    const sCount = 20;
+    const sCount = 10; // PERFORMANCE: Giảm 50% hạt khói (20 -> 10)
     const sGeo = new THREE.BufferGeometry();
     const sPos = new Float32Array(sCount * 3);
     this.smokeData = [];
@@ -747,11 +827,314 @@ export class TruyenKieuStoryWorld {
       new THREE.PointsMaterial({ color: 0xd6c4b2, size: 0.22, transparent: true, opacity: 0.5, depthWrite: false })
     );
     this.zone1Group.add(this.smokeZone1);
+
+    // BỔ SUNG 4 BẢNG THÔNG TIN HOLOGRAM KHỔNG LỒ (1536x900) TRÊN ĐÀI QUAN SÁT VƯỜN THÚY
+    this.initZone1HologramOverlook();
   }
 
   // =========================================================================
   // 2. KHÔNG GIAN 2: LẦU NGƯNG BÍCH (CÔ ĐỘC, TIÊU ĐIỀU, SÓNG GIÓ CỬA BỂ)
   // =========================================================================
+
+  initZone1HologramOverlook() {
+    const overlookGroup = new THREE.Group();
+    overlookGroup.name = "Zone1_Hologram_Observation_Overlook";
+    overlookGroup.position.set(0, 0.05, 5.5);
+    this.zone1Group.add(overlookGroup);
+
+    // Bục đài quan sát bằng đá cẩm thạch tím thẫm
+    const platMat = new THREE.MeshBasicMaterial({ color: 0x1e1525, fog: false });
+    const platDisc = new THREE.Mesh(new THREE.CylinderGeometry(7.2, 8.4, 0.4, 16), platMat);
+    platDisc.position.y = -0.2;
+    overlookGroup.add(platDisc);
+
+    // Vành neon viền đài quan sát hồng đào
+    const platBorder = new THREE.Mesh(
+      new THREE.TorusGeometry(7.25, 0.08, 8, 32),
+      new THREE.MeshBasicMaterial({ color: 0xf472b6, fog: false })
+    );
+    platBorder.rotation.x = Math.PI / 2;
+    platBorder.position.y = 0.02;
+    overlookGroup.add(platBorder);
+
+    // 4 BẢNG THÔNG TIN HOLOGRAM ĐIỆN TỬ KHỔNG LỒ (1536 x 900 pixels)
+    const titles = [
+      'ĐẠI THI HÀO NGUYỄN DU & THỜI ĐẠI SÁNG TÁC',
+      'BI KỊCH TÀI MỆNH TƯƠNG ĐỐ & BÁN MÌNH CỨU CHA',
+      'MƯỜI NĂM LƯU LẠC & KHÁT VỌNG TỰ DO CÙNG TỪ HẢI',
+      'ĐOÀN VIÊN TÁI HỢP & GIÁ TRỊ NHÂN ĐẠO BẤT HỦ'
+    ];
+
+    const screenLines = [
+      [
+        'TÊN TÁC PHẨM: ĐOẠN TRƯỜNG TÂN THANH (TRUYỆN KIỀU)',
+        'TÁC GIẢ: Đại thi hào Nguyễn Du (1765 – 1820) • Danh nhân Văn hóa Thế giới',
+        'THỂ LOẠI: Truyện thơ Nôm Lục bát (Gồm 3.254 câu thơ lục bát mẫu mực)',
+        'NGUỒN GỐC: Tiếp thu cốt truyện "Kim Vân Kiều truyện" của Thanh Tâm Tài Nhân',
+        'SÁNG TẠO ĐỘT PHÁ: Việt hóa toàn diện, nâng tầm tư tưởng nhân đạo và triết lý tài mệnh',
+        'ĐỈNH CAO NGÔN NGỮ: Mẫu mực tuyệt đỉnh của thi ca cổ điển và tiếng Việt trung đại'
+      ],
+      [
+        'TÀI SẮC VẸN TOÀN: Thúy Kiều mang vẻ đẹp "Hoa ghen thua thắm, liễu hờn kém xanh"',
+        'MỐI TÌNH KIM - KIỀU: Lời thề đính ước dưới trăng thanh "Vầng trăng vằng vặc giữa trời"',
+        'GIA BIẾN KINH HOÀNG: Bị thằng bán tơ vu oan, cha và em trai bị bắt giam khảo đả',
+        'HIẾU NGHĨA VẸN TOÀN: Dứt tình duyên trao lại cho em gái Thúy Vân để bán mình chuộc cha',
+        'BƯỚC VÀO TRẦN AI: Bị lừa gạt bởi Mã Giám Sinh và Tú Bà, đày đọa chốn lầu xanh',
+        'KHÚC CA BI TRÁNG: Tiếng đàn bạc mệnh ngân vang số phận người phụ nữ thời phong kiến'
+      ],
+      [
+        'LẦU NGƯNG BÍCH: Nỗi buồn cô đơn khóa xuân, hoài niệm quê hương và cha mẹ già',
+        'BẪY RẬP TRẦN GIAN: Trải qua bàn tay Hoạn Thư, Thúc Sinh, Sở Khanh, Bạc Bà',
+        'TRI KỶ TỪ HẢI: "Râu hùm, hàm én, mày ngài / Vai năm tấc rộng, thân mười thước cao"',
+        'ANH HÙNG XUẤT THẾ: Từ Hải chuộc Kiều, giúp nàng lập đàn ân oán phân minh',
+        'MẮC LỪA HỒ TÔN HIẾN: Khuyên hàng bất thành, Từ Hải chết đứng giữa bãi chiến trường',
+        'TRẦM MÌNH TIỀN ĐƯỜNG: Tuyệt vọng gieo mình xuống dòng sông định mệnh Tiền Đường'
+      ],
+      [
+        'CỨU VỚT TÂM LINH: Sư Giác Duyên lập bè cứu sống Kiều sau mười lăm năm chìm nổi',
+        'CHÂU VỀ HỢP PHỐ: Kim Trọng đỗ đạt, không nguôi thương nhớ tìm lại người xưa',
+        'ĐOÀN TỤ GIA ĐÌNH: Đêm đoàn viên thấu hiểu, "Đổi duyên cầm sắt đổi ra duyên bạn bầy"',
+        'GIÁ TRỊ HIỆN THỰC: Tố cáo xã hội phong kiến đồng tiền đen tối chà đạp con người',
+        'GIÁ TRỊ NHÂN ĐẠO: Đề cao tự do luyến ái, phẩm giá con người và quyền mưu cầu hạnh phúc',
+        'SỐNG MÃI MUÔN ĐỜI: "Truyện Kiều còn, tiếng ta còn; tiếng ta còn, nước ta còn"'
+      ]
+    ];
+
+    const screenAngles = [-1.08, -0.58, 0.58, 1.08];
+    const screenRadius = 18.5;
+
+    for (let sIdx = 0; sIdx < 4; sIdx++) {
+      const angle = screenAngles[sIdx];
+      let cv = null;
+      if (typeof document !== 'undefined') {
+        cv = document.createElement('canvas');
+        cv.width = 1536;
+        cv.height = 900;
+        const ctx = cv.getContext('2d');
+        const w = 1536, h = 900;
+
+        const bgG = ctx.createLinearGradient(0, 0, w, h);
+        bgG.addColorStop(0.0, 'rgba(28, 12, 38, 0.95)');
+        bgG.addColorStop(0.5, 'rgba(42, 16, 52, 0.92)');
+        bgG.addColorStop(1.0, 'rgba(20, 8, 28, 0.97)');
+        ctx.fillStyle = bgG;
+        ctx.fillRect(0, 0, w, h);
+
+        ctx.strokeStyle = '#f472b6';
+        ctx.lineWidth = 7;
+        ctx.strokeRect(16, 16, w - 32, h - 32);
+
+        ctx.strokeStyle = '#fde047';
+        ctx.lineWidth = 10;
+        const corner = 60;
+        ctx.beginPath(); ctx.moveTo(16, 16 + corner); ctx.lineTo(16, 16); ctx.lineTo(16 + corner, 16); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(w - 16 - corner, 16); ctx.lineTo(w - 16, 16); ctx.lineTo(w - 16, 16 + corner); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(16, h - 16 - corner); ctx.lineTo(16, h - 16); ctx.lineTo(16 + corner, h - 16); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(w - 16 - corner, h - 16); ctx.lineTo(w - 16, h - 16); ctx.lineTo(w - 16, h - 16 - corner); ctx.stroke();
+
+        ctx.strokeStyle = 'rgba(244, 114, 182, 0.65)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(120, 115);
+        ctx.lineTo(w - 120, 115);
+        ctx.stroke();
+
+        ctx.fillStyle = '#fde047';
+        ctx.font = 'bold 44px "Segoe UI", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(`❖ BẢNG 0${sIdx + 1}: ${titles[sIdx]} ❖`, w / 2, 45);
+
+        ctx.textAlign = 'left';
+        const lines = screenLines[sIdx];
+        const startY = 175;
+        const lineSpacing = 102;
+
+        lines.forEach((line, i) => {
+          const parts = line.split(':');
+          const label = parts[0] + ':';
+          const desc = parts.slice(1).join(':');
+
+          ctx.fillStyle = '#f472b6';
+          ctx.beginPath();
+          ctx.arc(80, startY + i * lineSpacing + 16, 7, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#fde047';
+          ctx.font = 'bold 30px "Segoe UI", sans-serif';
+          ctx.fillText(label, 110, startY + i * lineSpacing);
+
+          const labelW = ctx.measureText(label).width;
+          ctx.fillStyle = '#f1f5f9';
+          ctx.font = '28px "Segoe UI", sans-serif';
+          ctx.fillText(desc, 110 + labelW + 14, startY + i * lineSpacing);
+        });
+      }
+
+      const tex = cv ? new THREE.CanvasTexture(cv) : null;
+      const mat = new THREE.MeshBasicMaterial({
+        map: tex,
+        color: tex ? 0xffffff : 0x221133,
+        transparent: true,
+        opacity: 0.94,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        fog: false
+      });
+
+      const screenMesh = new THREE.Mesh(new THREE.PlaneGeometry(11.2, 6.5), mat);
+      const frameGeo = new THREE.BoxGeometry(11.32, 6.62, 0.08);
+      const frameMat = new THREE.MeshBasicMaterial({ color: 0xf472b6, wireframe: true, fog: false });
+      screenMesh.add(new THREE.Mesh(frameGeo, frameMat));
+
+      screenMesh.position.set(Math.sin(angle) * screenRadius, 3.8, -Math.cos(angle) * screenRadius);
+      screenMesh.lookAt(0, 3.5, 0);
+      overlookGroup.add(screenMesh);
+    }
+
+    // =========================================================================
+    // BỘ 3 TƯỢNG NHÂN VẬT TRUYỆN KIỀU TRONG VƯỜN THÚY: KIM TRỌNG, THÚY KIỀU & THÚY VÂN
+    // =========================================================================
+    const goldMat = new THREE.MeshPhongMaterial({ color: 0xfbbf24, emissive: 0x452804, shininess: 90 });
+
+    const createPedestal = (name, poem1, poem2, colorHex) => {
+      const g = new THREE.Group();
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.4, 0.6, 16), goldMat);
+      g.add(base);
+
+      if (typeof document !== 'undefined') {
+        const cv = document.createElement('canvas');
+        cv.width = 512;
+        cv.height = 170;
+        const ctx = cv.getContext('2d');
+        ctx.fillStyle = 'rgba(20, 8, 30, 0.94)';
+        ctx.fillRect(0, 0, 512, 170);
+        ctx.strokeStyle = colorHex;
+        ctx.lineWidth = 4;
+        ctx.strokeRect(6, 6, 500, 158);
+        ctx.fillStyle = colorHex;
+        ctx.font = 'bold 22px "Segoe UI", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(name, 256, 40);
+        ctx.fillStyle = '#f1f5f9';
+        ctx.font = 'italic 16px "Segoe UI", sans-serif';
+        ctx.fillText(`"${poem1}"`, 256, 85);
+        ctx.fillText(`"${poem2}"`, 256, 122);
+
+        const plateTex = new THREE.CanvasTexture(cv);
+        const plate = new THREE.Mesh(
+          new THREE.PlaneGeometry(2.4, 0.8),
+          new THREE.MeshBasicMaterial({ map: plateTex, transparent: true, side: THREE.DoubleSide, fog: false })
+        );
+        plate.position.set(0, 0.95, 1.15);
+        plate.rotation.x = -0.22;
+        g.add(plate);
+      }
+      return g;
+    };
+
+    // 1. Tượng Kim Trọng (bên trái đài quan sát)
+    const kimPed = createPedestal('CHÀNG KIM TRỌNG', 'Văn chương nết đất, thông minh tính trời', 'Phong tư tài mạo tót vời, vào trong phong nhã', '#38bdf8');
+    kimPed.position.set(-6.5, 0.0, -1.0);
+    overlookGroup.add(kimPed);
+
+    // 2. Tượng Nàng Thúy Kiều (bên phải đài quan sát)
+    const kieuPed = createPedestal('NÀNG THÚY KIỀU', 'Làn thu thủy nét xuân sơn', 'Hoa ghen thua thắm liễu hờn kém xanh', '#f472b6');
+    kieuPed.position.set(4.0, 0.0, -1.0);
+    overlookGroup.add(kieuPed);
+
+    // 3. Tượng Nàng Thúy Vân (kế bên Thúy Kiều)
+    const vanPed = createPedestal('NÀNG THÚY VÂN', 'Vân xem trang trọng khác vời', 'Khuôn trăng đầy đặn nét ngài nở nang', '#fde047');
+    vanPed.position.set(8.5, 0.0, -1.0);
+    overlookGroup.add(vanPed);
+
+    const gltfLoader = new GLTFLoader();
+    gltfLoader.load(
+      '/model/kimtrongthuykieu.glb',
+      (gltf) => {
+        const raw = gltf.scene;
+        raw.traverse((c) => {
+          if (c.isMesh) {
+            c.castShadow = false;
+            c.receiveShadow = false;
+            if (c.material) {
+              const orig = c.material;
+              c.material = new THREE.MeshBasicMaterial({
+                map: orig.map || null,
+                color: orig.color ? orig.color.clone() : new THREE.Color(0xffffff)
+              });
+            }
+          }
+        });
+        const box = new THREE.Box3().setFromObject(raw);
+        const size = new THREE.Vector3(); box.getSize(size);
+        const scale = 2.85 / Math.max(size.y, 0.001);
+        raw.scale.multiplyScalar(scale);
+        raw.position.y = 0.32;
+        kimPed.add(raw);
+      },
+      undefined,
+      () => {}
+    );
+
+    gltfLoader.load(
+      '/model/thuykieu.glb',
+      (gltf) => {
+        const raw = gltf.scene;
+        raw.traverse((c) => {
+          if (c.isMesh) {
+            c.castShadow = false;
+            c.receiveShadow = false;
+            if (c.material) {
+              const orig = c.material;
+              c.material = new THREE.MeshBasicMaterial({
+                map: orig.map || null,
+                color: orig.color ? orig.color.clone() : new THREE.Color(0xffffff)
+              });
+            }
+          }
+        });
+        const box = new THREE.Box3().setFromObject(raw);
+        const size = new THREE.Vector3(); box.getSize(size);
+        const scale = 2.85 / Math.max(size.y, 0.001);
+        raw.scale.multiplyScalar(scale);
+        raw.position.y = 0.32;
+        kieuPed.add(raw);
+      },
+      undefined,
+      () => {}
+    );
+
+    gltfLoader.load(
+      '/model/thuykieu.glb',
+      (gltf) => {
+        const raw = gltf.scene;
+        raw.traverse((c) => {
+          if (c.isMesh) {
+            c.castShadow = false;
+            c.receiveShadow = false;
+            if (c.material) {
+              const orig = c.material;
+              const mat = new THREE.MeshBasicMaterial({
+                map: orig.map || null,
+                color: orig.color ? orig.color.clone().multiply(new THREE.Color(0xffe680)) : new THREE.Color(0xffe680)
+              });
+              c.material = mat;
+            }
+          }
+        });
+        const box = new THREE.Box3().setFromObject(raw);
+        const size = new THREE.Vector3(); box.getSize(size);
+        const scale = 2.75 / Math.max(size.y, 0.001);
+        raw.scale.multiplyScalar(scale);
+        raw.position.y = 0.32;
+        vanPed.add(raw);
+      },
+      undefined,
+      () => {}
+    );
+  }
+
   initZone2LauNgungBich() {
     this.zone2Lights = new THREE.Group();
     const ambient2 = new THREE.AmbientLight(0xd4c0e6, 1.4);
@@ -761,18 +1144,18 @@ export class TruyenKieuStoryWorld {
 
     const lanternLight1 = new THREE.PointLight(0xffa542, 2.8, 14);
     lanternLight1.position.set(0, 5.2, 0);
+    lanternLight1.castShadow = false; // GPU SAVER: PointLight shadow = 6 render passes
 
     const oceanRimLight = new THREE.DirectionalLight(0x4a75a0, 1.5);
     oceanRimLight.position.set(25, 15, 20);
+    oceanRimLight.castShadow = false; // Chỉ sun1 (Zone 1) được phép castShadow
 
     this.zone2Lights.add(ambient2, sun2, lanternLight1, oceanRimLight);
     this.zone2Group.add(this.zone2Lights);
 
     const cliffGeo = new THREE.CylinderGeometry(14, 18, 4.0, 16);
-    const cliffMat = new THREE.MeshStandardMaterial({
-      color: 0x363a38,
-      roughness: 0.92,
-      metalness: 0.12
+    const cliffMat = new THREE.MeshLambertMaterial({
+      color: 0x363a38
     });
     const cliffMesh = new THREE.Mesh(cliffGeo, cliffMat);
     cliffMesh.position.y = 1.9;
@@ -780,10 +1163,8 @@ export class TruyenKieuStoryWorld {
     this.zone2Group.add(cliffMesh);
 
     const sandGeo = new THREE.RingGeometry(14, 28, 32);
-    const sandMat = new THREE.MeshStandardMaterial({
+    const sandMat = new THREE.MeshLambertMaterial({
       color: 0xbaa16e,
-      roughness: 0.95,
-      metalness: 0.05,
       side: THREE.DoubleSide
     });
     const sandMesh = new THREE.Mesh(sandGeo, sandMat);
@@ -796,25 +1177,33 @@ export class TruyenKieuStoryWorld {
     pavilionGroup.position.set(0, 3.9, 0);
 
     const baseGeo = new THREE.BoxGeometry(9.0, 0.6, 9.0);
-    const baseMat = new THREE.MeshStandardMaterial({ color: 0x4a4740, roughness: 0.85 });
+    const baseMat = new THREE.MeshLambertMaterial({ color: 0x4a4740 });
     const baseMesh = new THREE.Mesh(baseGeo, baseMat);
     baseMesh.position.y = 0.3;
     pavilionGroup.add(baseMesh);
 
-    const colMat = new THREE.MeshStandardMaterial({ color: 0x342922, roughness: 0.85 });
+    const colMat = new THREE.MeshLambertMaterial({ color: 0x342922 });
     const colCoords = [
       [-3.6, -3.6], [0, -3.6], [3.6, -3.6],
       [-3.6, 3.6], [0, 3.6], [3.6, 3.6],
       [-3.6, 0], [3.6, 0]
     ];
-    colCoords.forEach(([cx, cz]) => {
-      const col = new THREE.Mesh(new THREE.CylinderGeometry(0.20, 0.22, 3.2, 12), colMat);
-      col.position.set(cx, 2.2, cz);
-      pavilionGroup.add(col);
+    // OPTIMIZED: InstancedMesh cho 8 cột tầng 1 (1 Draw Call thay vì 8)
+    const col1Geo = new THREE.CylinderGeometry(0.20, 0.22, 3.2, 12);
+    const col1Instanced = new THREE.InstancedMesh(col1Geo, colMat, colCoords.length);
+    const dummyCol = new THREE.Object3D();
+    colCoords.forEach(([cx, cz], i) => {
+      dummyCol.position.set(cx, 2.2, cz);
+      dummyCol.updateMatrix();
+      col1Instanced.setMatrixAt(i, dummyCol.matrix);
     });
+    col1Instanced.instanceMatrix.needsUpdate = true;
+    col1Instanced.computeBoundingSphere();
+    col1Instanced.frustumCulled = true;
+    pavilionGroup.add(col1Instanced);
 
     const roof1Geo = new THREE.ConeGeometry(7.2, 1.8, 4);
-    const roofMat = new THREE.MeshStandardMaterial({ color: 0x3b3d3c, roughness: 0.78 });
+    const roofMat = new THREE.MeshLambertMaterial({ color: 0x3b3d3c });
     const roof1 = new THREE.Mesh(roof1Geo, roofMat);
     roof1.rotation.y = Math.PI / 4;
     roof1.position.y = 4.4;
@@ -825,13 +1214,21 @@ export class TruyenKieuStoryWorld {
     floor2.position.y = 4.6;
     pavilionGroup.add(floor2);
 
-    [[-2.4, -2.4], [2.4, -2.4], [-2.4, 2.4], [2.4, 2.4]].forEach(([cx, cz]) => {
-      const col2 = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 2.6, 12), colMat);
-      col2.position.set(cx, 5.9, cz);
-      pavilionGroup.add(col2);
+    // OPTIMIZED: InstancedMesh cho 4 cột tầng 2 (1 Draw Call thay vì 4)
+    const upperColCoords = [[-2.4, -2.4], [2.4, -2.4], [-2.4, 2.4], [2.4, 2.4]];
+    const col2Geo = new THREE.CylinderGeometry(0.16, 0.18, 2.6, 12);
+    const col2Instanced = new THREE.InstancedMesh(col2Geo, colMat, upperColCoords.length);
+    upperColCoords.forEach(([cx, cz], i) => {
+      dummyCol.position.set(cx, 5.9, cz);
+      dummyCol.updateMatrix();
+      col2Instanced.setMatrixAt(i, dummyCol.matrix);
     });
+    col2Instanced.instanceMatrix.needsUpdate = true;
+    col2Instanced.computeBoundingSphere();
+    col2Instanced.frustumCulled = true;
+    pavilionGroup.add(col2Instanced);
 
-    const railMat = new THREE.MeshStandardMaterial({ color: 0x5a231b, roughness: 0.65 });
+    const railMat = new THREE.MeshLambertMaterial({ color: 0x5a231b });
     const railGeo = new THREE.BoxGeometry(5.8, 0.75, 0.1);
     [[-2.8, 0, Math.PI / 2], [2.8, 0, Math.PI / 2], [0, -2.8, 0], [0, 2.8, 0]].forEach(([rx, rz, ry]) => {
       const rail = new THREE.Mesh(railGeo, railMat);
@@ -847,12 +1244,12 @@ export class TruyenKieuStoryWorld {
 
     const gourdTop = new THREE.Mesh(
       new THREE.SphereGeometry(0.35, 16, 16),
-      new THREE.MeshStandardMaterial({ color: 0xd4af37, roughness: 0.3, metalness: 0.8 })
+      new THREE.MeshLambertMaterial({ color: 0xd4af37 })
     );
     gourdTop.position.y = 8.9;
     pavilionGroup.add(gourdTop);
 
-    const chairMat = new THREE.MeshStandardMaterial({ color: 0x42261a, roughness: 0.75 });
+    const chairMat = new THREE.MeshLambertMaterial({ color: 0x42261a });
     const kieuChair = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.6), chairMat);
     kieuChair.position.set(0, 5.0, 0.6);
     pavilionGroup.add(kieuChair);
@@ -863,20 +1260,28 @@ export class TruyenKieuStoryWorld {
 
     const luteBody = new THREE.Mesh(
       new THREE.CylinderGeometry(0.18, 0.32, 0.8, 12),
-      new THREE.MeshStandardMaterial({ color: 0xb57842, roughness: 0.45 })
+      new THREE.MeshLambertMaterial({ color: 0xb57842 })
     );
     luteBody.scale.set(1.0, 1.0, 0.35);
     luteBody.position.set(0.45, 5.25, -0.3);
     luteBody.rotation.z = 0.45;
     pavilionGroup.add(luteBody);
 
-    const lanternMat = new THREE.MeshStandardMaterial({ color: 0xffaa33, emissive: 0xff8811, emissiveIntensity: 1.2 });
-    [[-2.4, 7.0, -2.4], [2.4, 7.0, -2.4], [-2.4, 7.0, 2.4], [2.4, 7.0, 2.4]].forEach(([lx, ly, lz]) => {
-      const lantern = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 12), lanternMat);
-      lantern.scale.set(0.9, 1.3, 0.9);
-      lantern.position.set(lx, ly, lz);
-      pavilionGroup.add(lantern);
+    const lanternMat = new THREE.MeshLambertMaterial({ color: 0xffaa33, emissive: 0xff8811, emissiveIntensity: 1.2 });
+    const lanternCoords = [[-2.4, 7.0, -2.4], [2.4, 7.0, -2.4], [-2.4, 7.0, 2.4], [2.4, 7.0, 2.4]];
+    const lanternGeo = new THREE.SphereGeometry(0.24, 12, 12);
+    const lanternInstanced = new THREE.InstancedMesh(lanternGeo, lanternMat, lanternCoords.length);
+    const dummyLantern = new THREE.Object3D();
+    lanternCoords.forEach(([lx, ly, lz], i) => {
+      dummyLantern.position.set(lx, ly, lz);
+      dummyLantern.scale.set(0.9, 1.3, 0.9);
+      dummyLantern.updateMatrix();
+      lanternInstanced.setMatrixAt(i, dummyLantern.matrix);
     });
+    lanternInstanced.instanceMatrix.needsUpdate = true;
+    lanternInstanced.computeBoundingSphere();
+    lanternInstanced.frustumCulled = true;
+    pavilionGroup.add(lanternInstanced);
 
     this.zone2Group.add(pavilionGroup);
 
@@ -887,7 +1292,7 @@ export class TruyenKieuStoryWorld {
       boatGroup.rotation.y = rotY;
 
       const hullGeo = new THREE.BoxGeometry(1.6 * scale, 0.5 * scale, 4.2 * scale);
-      const hull = new THREE.Mesh(hullGeo, new THREE.MeshStandardMaterial({ color: 0x3d2b1f, roughness: 0.8 }));
+      const hull = new THREE.Mesh(hullGeo, new THREE.MeshLambertMaterial({ color: 0x3d2b1f }));
       boatGroup.add(hull);
 
       const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.06 * scale, 0.08 * scale, 3.2 * scale, 8), colMat);
@@ -895,9 +1300,8 @@ export class TruyenKieuStoryWorld {
       boatGroup.add(mast);
 
       const sailGeo = new THREE.PlaneGeometry(1.8 * scale, 2.4 * scale);
-      const sailMat = new THREE.MeshStandardMaterial({
+      const sailMat = new THREE.MeshLambertMaterial({
         color: 0xdfd4be,
-        roughness: 0.85,
         side: THREE.DoubleSide
       });
       const sail = new THREE.Mesh(sailGeo, sailMat);
@@ -915,7 +1319,7 @@ export class TruyenKieuStoryWorld {
     createSailboat(18, 0.1, -65, 1.2, -0.6);
     createSailboat(-35, 0.1, -85, 2.0, 0.8);
 
-    const sandPCount = 120;
+    const sandPCount = 60; // PERFORMANCE: Giảm 50% số hạt cát vàng (120 -> 60)
     const sandPGeo = new THREE.BufferGeometry();
     const sandPPos = new Float32Array(sandPCount * 3);
     for (let i = 0; i < sandPCount; i++) {
@@ -975,51 +1379,59 @@ export class TruyenKieuStoryWorld {
 
     this.fireLight = new THREE.PointLight(0xff5500, 3.8, 22);
     this.fireLight.position.set(0, 2.5, 4.0);
+    this.fireLight.castShadow = false; // GPU SAVER: PointLight shadow = 6 render passes
 
     const fill3 = new THREE.DirectionalLight(0xffcc88, 1.2);
     fill3.position.set(-18, 20, -15);
+    fill3.castShadow = false; // Chỉ sun1 (Zone 1) được phép castShadow
 
     this.zone3Lights.add(ambient3, sun3, this.fireLight, fill3);
     this.zone3Group.add(this.zone3Lights);
 
     const groundGeo = new THREE.CylinderGeometry(24, 25, 0.5, 24);
-    const groundMat = new THREE.MeshStandardMaterial({
-      color: 0x3d3224,
-      roughness: 0.95,
-      metalness: 0.05
+    const groundMat = new THREE.MeshLambertMaterial({
+      color: 0x3d3224
     });
     const groundMesh = new THREE.Mesh(groundGeo, groundMat);
     groundMesh.position.y = 0.25;
     this.zone3Group.add(groundMesh);
 
-    const fenceMat = new THREE.MeshStandardMaterial({ color: 0x453123, roughness: 0.9 });
+    const fenceMat = new THREE.MeshLambertMaterial({ color: 0x453123 });
+    const stakeGeo = new THREE.ConeGeometry(0.18, 2.4, 8);
+    const stakePositions = [];
     for (let i = 0; i < 38; i++) {
       const ang = (i * Math.PI * 2) / 38;
       if (ang > 0.85 * Math.PI && ang < 1.15 * Math.PI) continue;
 
       const px = Math.cos(ang) * 22;
       const pz = Math.sin(ang) * 22;
-      const stake = new THREE.Mesh(new THREE.ConeGeometry(0.18, 2.4, 8), fenceMat);
-      stake.position.set(px, 1.6, pz);
-      stake.rotation.x = (Math.random() - 0.5) * 0.12;
-      stake.rotation.z = (Math.random() - 0.5) * 0.12;
-      this.zone3Group.add(stake);
+      stakePositions.push({ x: px, y: 1.6, z: pz, rx: (Math.sin(i * 1.7) * 0.06), rz: (Math.cos(i * 2.3) * 0.06) });
     }
+    const fenceInstanced = new THREE.InstancedMesh(stakeGeo, fenceMat, stakePositions.length);
+    const dummyStake = new THREE.Object3D();
+    stakePositions.forEach((sp, idx) => {
+      dummyStake.position.set(sp.x, sp.y, sp.z);
+      dummyStake.rotation.set(sp.rx, 0, sp.rz);
+      dummyStake.updateMatrix();
+      fenceInstanced.setMatrixAt(idx, dummyStake.matrix);
+    });
+    fenceInstanced.instanceMatrix.needsUpdate = true;
+    fenceInstanced.computeBoundingSphere();
+    fenceInstanced.frustumCulled = true;
+    this.zone3Group.add(fenceInstanced);
 
     const tentGroup = new THREE.Group();
     tentGroup.position.set(0, 0.5, -6.5);
 
     const platGeo = new THREE.BoxGeometry(14, 0.6, 11);
-    const platMat = new THREE.MeshStandardMaterial({ color: 0x4d3928, roughness: 0.85 });
+    const platMat = new THREE.MeshLambertMaterial({ color: 0x4d3928 });
     const plat = new THREE.Mesh(platGeo, platMat);
     plat.position.y = 0.3;
     tentGroup.add(plat);
 
     const tentRoofGeo = new THREE.ConeGeometry(8.2, 5.8, 6);
-    const tentRoofMat = new THREE.MeshStandardMaterial({
-      color: 0x6e1616,
-      roughness: 0.72,
-      metalness: 0.15
+    const tentRoofMat = new THREE.MeshLambertMaterial({
+      color: 0x6e1616
     });
     const tentRoof = new THREE.Mesh(tentRoofGeo, tentRoofMat);
     tentRoof.rotation.y = Math.PI / 6;
@@ -1028,14 +1440,14 @@ export class TruyenKieuStoryWorld {
 
     const goldTrim = new THREE.Mesh(
       new THREE.CylinderGeometry(6.6, 6.7, 0.25, 6),
-      new THREE.MeshStandardMaterial({ color: 0xd4af37, roughness: 0.35, metalness: 0.85 })
+      new THREE.MeshLambertMaterial({ color: 0xd4af37 })
     );
     goldTrim.rotation.y = Math.PI / 6;
     goldTrim.position.y = 2.4;
     tentGroup.add(goldTrim);
 
     const wallGeo = new THREE.CylinderGeometry(6.4, 6.4, 2.2, 6, 1, true);
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0x581212, roughness: 0.8, side: THREE.DoubleSide });
+    const wallMat = new THREE.MeshLambertMaterial({ color: 0x581212, side: THREE.DoubleSide });
     const wallMesh = new THREE.Mesh(wallGeo, wallMat);
     wallMesh.rotation.y = Math.PI / 6;
     wallMesh.position.y = 1.35;
@@ -1055,19 +1467,21 @@ export class TruyenKieuStoryWorld {
       tctx.fill();
     }
     const tigerTex = new THREE.CanvasTexture(tigerCanvas);
-    const tigerMat = new THREE.MeshStandardMaterial({ map: tigerTex, roughness: 0.8 });
+  tigerTex.generateMipmaps = false;
+  tigerTex.minFilter = THREE.LinearFilter;
+    const tigerMat = new THREE.MeshLambertMaterial({ map: tigerTex });
     const tigerCouch = new THREE.Mesh(couchGeo, tigerMat);
     tigerCouch.position.set(0, 0.95, -1.8);
     tentGroup.add(tigerCouch);
 
     const deskGeo = new THREE.BoxGeometry(3.2, 0.65, 1.2);
-    const deskMat = new THREE.MeshStandardMaterial({ color: 0x2e1d14, roughness: 0.65 });
+    const deskMat = new THREE.MeshLambertMaterial({ color: 0x2e1d14 });
     const desk = new THREE.Mesh(deskGeo, deskMat);
     desk.position.set(0, 0.92, 0.4);
     tentGroup.add(desk);
 
     const scrollGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.2, 8);
-    const scrollMat = new THREE.MeshStandardMaterial({ color: 0xe5d8be, roughness: 0.9 });
+    const scrollMat = new THREE.MeshLambertMaterial({ color: 0xe5d8be });
     const mapScroll = new THREE.Mesh(scrollGeo, scrollMat);
     mapScroll.rotation.z = Math.PI / 2;
     mapScroll.position.set(0, 1.3, 0.4);
@@ -1080,20 +1494,20 @@ export class TruyenKieuStoryWorld {
 
     const bladePole = new THREE.Mesh(
       new THREE.CylinderGeometry(0.06, 0.07, 3.8, 10),
-      new THREE.MeshStandardMaterial({ color: 0x3d2b1f, roughness: 0.7 })
+      new THREE.MeshLambertMaterial({ color: 0x3d2b1f })
     );
     bladePole.position.y = 1.9;
     daoGroup.add(bladePole);
 
     const bladeGeo = new THREE.BoxGeometry(0.04, 1.6, 0.42);
-    const bladeMat = new THREE.MeshStandardMaterial({ color: 0xd8e0e8, metalness: 0.92, roughness: 0.18 });
+    const bladeMat = new THREE.MeshLambertMaterial({ color: 0xd8e0e8 });
     const blade = new THREE.Mesh(bladeGeo, bladeMat);
     blade.position.set(0, 3.4, 0.12);
     daoGroup.add(blade);
     this.zone3Group.add(daoGroup);
 
-    const drumMat = new THREE.MeshStandardMaterial({ color: 0x8a241c, roughness: 0.7 });
-    const drumHeadMat = new THREE.MeshStandardMaterial({ color: 0xe5ceaa, roughness: 0.85 });
+    const drumMat = new THREE.MeshLambertMaterial({ color: 0x8a241c });
+    const drumHeadMat = new THREE.MeshLambertMaterial({ color: 0xe5ceaa });
     [-5.5, 5.5].forEach((dx) => {
       const drumGroup = new THREE.Group();
       drumGroup.position.set(dx, 0.5, -1.0);
@@ -1140,9 +1554,11 @@ export class TruyenKieuStoryWorld {
         fctx.textAlign = 'center';
         fctx.fillText(flagText, 256, 235);
         const ftex = new THREE.CanvasTexture(fcanvas);
-        flagMat = new THREE.MeshStandardMaterial({ map: ftex, roughness: 0.85, side: THREE.DoubleSide });
+        ftex.generateMipmaps = false;
+        ftex.minFilter = THREE.LinearFilter;
+        flagMat = new THREE.MeshLambertMaterial({ map: ftex, side: THREE.DoubleSide });
       } else {
-        flagMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.85, side: THREE.DoubleSide });
+        flagMat = new THREE.MeshLambertMaterial({ color: colorHex, side: THREE.DoubleSide });
       }
 
       const flagMesh = new THREE.Mesh(flagGeo, flagMat);
@@ -1164,14 +1580,21 @@ export class TruyenKieuStoryWorld {
     const fireGroup = new THREE.Group();
     fireGroup.position.set(0, 0.5, 4.0);
 
+    // OPTIMIZED: InstancedMesh cho 10 khúc củi lửa trại (1 Draw Call thay vì 10)
+    const logGeo = new THREE.CylinderGeometry(0.12, 0.14, 1.8, 8);
+    const logsInstanced = new THREE.InstancedMesh(logGeo, fenceMat, 10);
+    const dummyLog = new THREE.Object3D();
     for (let i = 0; i < 10; i++) {
       const a = (i * Math.PI * 2) / 10;
-      const log = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 1.8, 8), fenceMat);
-      log.position.set(Math.cos(a) * 0.45, 0.55, Math.sin(a) * 0.45);
-      log.rotation.x = Math.sin(a) * 0.45;
-      log.rotation.z = -Math.cos(a) * 0.45;
-      fireGroup.add(log);
+      dummyLog.position.set(Math.cos(a) * 0.45, 0.55, Math.sin(a) * 0.45);
+      dummyLog.rotation.set(Math.sin(a) * 0.45, 0, -Math.cos(a) * 0.45);
+      dummyLog.updateMatrix();
+      logsInstanced.setMatrixAt(i, dummyLog.matrix);
     }
+    logsInstanced.instanceMatrix.needsUpdate = true;
+    logsInstanced.computeBoundingSphere();
+    logsInstanced.frustumCulled = true;
+    fireGroup.add(logsInstanced);
 
     const emberMat = new THREE.MeshBasicMaterial({ color: 0xff3300 });
     const ember = new THREE.Mesh(new THREE.DodecahedronGeometry(0.65), emberMat);
@@ -1179,36 +1602,58 @@ export class TruyenKieuStoryWorld {
     fireGroup.add(ember);
     this.zone3Group.add(fireGroup);
 
-    [[-3.8, 2.0], [3.8, 2.0], [-3.8, 8.0], [3.8, 8.0]].forEach(([tx, tz]) => {
-      const bGroup = new THREE.Group();
-      bGroup.position.set(tx, 0.5, tz);
+    // OPTIMIZED: InstancedMesh cho 4 chậu đuốc chiến doanh (3 Draw Calls thay vì 12)
+    const bzCoords = [[-3.8, 2.0], [3.8, 2.0], [-3.8, 8.0], [3.8, 8.0]];
+    const bzStandGeo = new THREE.CylinderGeometry(0.06, 0.08, 1.8, 8);
+    const bzBowlGeo = new THREE.CylinderGeometry(0.4, 0.15, 0.35, 10);
+    const bzBowlMat = new THREE.MeshLambertMaterial({ color: 0x1f1f1f });
+    const bzFlameGeo = new THREE.ConeGeometry(0.22, 0.55, 8);
+    const bzFlameMat = new THREE.MeshBasicMaterial({ color: 0xff7700 });
 
-      const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 1.8, 8), fenceMat);
-      stand.position.y = 0.9;
-      bGroup.add(stand);
+    const standsInstanced = new THREE.InstancedMesh(bzStandGeo, fenceMat, 4);
+    const bowlsInstanced = new THREE.InstancedMesh(bzBowlGeo, bzBowlMat, 4);
+    const flamesInstanced = new THREE.InstancedMesh(bzFlameGeo, bzFlameMat, 4);
+    const dummyBz = new THREE.Object3D();
 
-      const bowl = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.4, 0.15, 0.35, 10),
-        new THREE.MeshStandardMaterial({ color: 0x1f1f1f, metalness: 0.8, roughness: 0.3 })
-      );
-      bowl.position.y = 1.95;
-      bGroup.add(bowl);
+    bzCoords.forEach(([tx, tz], i) => {
+      // Chân đỡ đuốc
+      dummyBz.position.set(tx, 0.5 + 0.9, tz);
+      dummyBz.rotation.set(0, 0, 0);
+      dummyBz.updateMatrix();
+      standsInstanced.setMatrixAt(i, dummyBz.matrix);
 
-      const flame = new THREE.Mesh(
-        new THREE.ConeGeometry(0.22, 0.55, 8),
-        new THREE.MeshBasicMaterial({ color: 0xff7700 })
-      );
-      flame.position.y = 2.3;
-      bGroup.add(flame);
+      // Chậu đồng
+      dummyBz.position.set(tx, 0.5 + 1.95, tz);
+      dummyBz.updateMatrix();
+      bowlsInstanced.setMatrixAt(i, dummyBz.matrix);
 
+      // Ngọn lửa
+      dummyBz.position.set(tx, 0.5 + 2.3, tz);
+      dummyBz.updateMatrix();
+      flamesInstanced.setMatrixAt(i, dummyBz.matrix);
+
+      // Nguồn sáng PointLight không bóng đổ
       const bLight = new THREE.PointLight(0xff7711, 2.0, 10);
-      bLight.position.set(0, 2.4, 0);
-      bGroup.add(bLight);
-
-      this.zone3Group.add(bGroup);
+      bLight.position.set(tx, 2.9, tz);
+      bLight.castShadow = false; // GPU SAVER: PointLight shadow = 6 render passes
+      this.zone3Group.add(bLight);
     });
 
-    const sparkCount = 80;
+    standsInstanced.instanceMatrix.needsUpdate = true;
+    standsInstanced.computeBoundingSphere();
+    standsInstanced.frustumCulled = true;
+
+    bowlsInstanced.instanceMatrix.needsUpdate = true;
+    bowlsInstanced.computeBoundingSphere();
+    bowlsInstanced.frustumCulled = true;
+
+    flamesInstanced.instanceMatrix.needsUpdate = true;
+    flamesInstanced.computeBoundingSphere();
+    flamesInstanced.frustumCulled = true;
+
+    this.zone3Group.add(standsInstanced, bowlsInstanced, flamesInstanced);
+
+    const sparkCount = 40; // PERFORMANCE: Giảm 50% tàn lửa (80 -> 40)
     const sparkGeo = new THREE.BufferGeometry();
     const sparkPos = new Float32Array(sparkCount * 3);
     this.sparkData = [];
@@ -1308,7 +1753,7 @@ export class TruyenKieuStoryWorld {
         </button>
         <div style="width: 1px; height: 24px; background: rgba(255,255,255,0.2); margin: 0 4px;"></div>
         <button class="kieu-realm-btn exit-realm-btn" id="btn-realm-exit">
-          🏛️ Về Bảo Tàng
+          ↩ QUAY VỀ BẢO TÀNG (Nhấn phím ESC)
         </button>
       `;
 
@@ -1317,7 +1762,7 @@ export class TruyenKieuStoryWorld {
       if (!topExit) {
         topExit = document.createElement('button');
         topExit.id = 'btn-realm-exit-top';
-        topExit.innerHTML = '🏛️ VỀ BẢO TÀNG';
+        topExit.innerHTML = '↩ QUAY VỀ BẢO TÀNG (Nhấn phím ESC)';
         topExit.style.cssText = `
           position: fixed;
           top: 24px;
@@ -1558,19 +2003,50 @@ export class TruyenKieuStoryWorld {
 
   /**
    * CÚ BAY "WARP INTO BOOK": LAO VÚT VÀO CUỐN SÁCH PHÒNG 01 -> LÓE SÁNG -> DỊCH CHUYỂN
+   * KÍCH HOẠT SCENE SWAPPING SANG TRUYENKIEUSCENE ĐỘC LẬP
    */
-  enterStoryWorldWithWarp(targetZoneId = 1) {
+  enterStoryWorldWithWarp(targetZoneId = 1, skipDive = false) {
     if (this.isWarping) return;
     this.isWarping = true;
     this.currentZoneId = targetZoneId;
+
+    if (skipDive) {
+      this.isInsideWorld = true;
+      this.isWarping = false;
+      if (this.worldGroup) this.worldGroup.visible = true;
+
+      const targetMainScene = this.truyenKieuScene;
+      if (this.app?.setActiveScene) {
+        this.app.setActiveScene(targetMainScene);
+      } else if (this.app) {
+        this.app.activeScene = targetMainScene;
+      }
+      window.__activeScene = targetMainScene;
+
+      this.switchZone(targetZoneId);
+      this.initTruyenKieuHitboxes();
+
+      if (this.realmHudElement) this.realmHudElement.style.display = 'flex';
+      if (this.topExitElement) this.topExitElement.style.display = 'block';
+
+      this.adaptSoundscapeToZone(targetZoneId);
+
+      if (this.cameraManager?.controls) this.cameraManager.controls.enabled = true;
+      if (this.cameraController) this.cameraController.isEnabled = true;
+      return;
+    }
 
     // 1. Lưu lại vị trí và góc nhìn hiện tại trong bảo tàng
     this.savedPos = this.camera.position.clone();
     if (this.cameraManager?.controls) {
       this.savedTarget = this.cameraManager.controls.target.clone();
     }
-    this.savedFog = this.scene.fog;
-    this.savedBackground = this.scene.background;
+    this.savedFog = this.mainScene?.fog || this.scene.fog;
+    this.savedBackground = this.mainScene?.background || this.scene.background;
+    if (this.renderer) {
+      this.savedExposure = this.renderer.toneMappingExposure ?? 1.0;
+      this.renderer.toneMappingExposure = 1.30;
+    }
 
     // Vị trí tâm cuốn sách mở ở Phòng 01 trong world space
     const bookCenter = new THREE.Vector3(-48.0, 11.20, 19.0);
@@ -1591,7 +2067,7 @@ export class TruyenKieuStoryWorld {
     const startPos = this.camera.position.clone();
     this.playWarpDiveSound();
 
-    // Kích hoạt overlay chớp sáng vàng kim
+    // Kích hoạt overlay chớp sáng vàng kim (Loading mờ)
     const zoneName = REALM_ZONES[`ZONE_${targetZoneId}`]?.name || 'TIẾT THANH MINH';
     this.showWarpOverlay(
       'active',
@@ -1621,16 +2097,22 @@ export class TruyenKieuStoryWorld {
         this.warpAnimId = requestAnimationFrame(animateDive);
       } else {
         this.warpAnimId = null;
-        // TẠI ĐỈNH CHỚP SÁNG (PEAK FLASH): ÂM THẦM DỊCH CHUYỂN LÊN KHÔNG GIAN TRUYỆN KIỀU TRÊN CAO
+
+        // TẠI ĐỈNH CHỚP SÁNG: HOÁN ĐỔI SANG TRUYEN KIEU SCENE (SCENE SWAPPING)
         this.isInsideWorld = true;
 
-        // Ẩn bảo tàng & hiện cõi Kiều (Giải phóng Draw Calls sảnh bảo tàng)
-        if (this.atriumGroup) this.atriumGroup.visible = false;
-        this.worldGroup.visible = true;
-        this.performanceOptimizer?.isolateWorldState?.(true);
+        if (this.app?.setActiveScene) {
+          this.app.setActiveScene(this.truyenKieuScene);
+        } else if (this.app) {
+          this.app.activeScene = this.truyenKieuScene;
+        }
+        window.__activeScene = this.truyenKieuScene;
 
-        // Đặt camera vào phân cảnh tương ứng
+        // Đặt camera vào phân cảnh tương ứng bên trong truyenKieuScene (Tọa độ gốc 0,0,0)
         this.switchZone(targetZoneId);
+
+        // Đảm bảo nạp đầy đủ hitbox va chạm cho Thế giới Kiều
+        this.initTruyenKieuHitboxes();
 
         if (this.realmHudElement) this.realmHudElement.style.display = 'flex';
         if (this.topExitElement) this.topExitElement.style.display = 'block';
@@ -1641,7 +2123,7 @@ export class TruyenKieuStoryWorld {
           enterBtn.style.borderColor = '#39e58c';
         }
 
-        // FADE-IN MÀN HÌNH MỞ RA CHÂN TRỜI THIÊN NHIÊN
+        // FADE-IN MÀN HÌNH MỞ RA CHÂN TRỜI THIÊN NHIÊN CÕI KIỀU
         setTimeout(() => {
           this.hideWarpOverlay();
           setTimeout(() => {
@@ -1649,10 +2131,9 @@ export class TruyenKieuStoryWorld {
             if (this.cameraController) this.cameraController.isEnabled = true;
             this.isWarping = false;
 
-            // TỰ ĐỘNG THEO DÕI & ÉP FPS >= 60 KHI BƯỚC VÀO THẾ GIỚI TRUYỆN KIỀU (5 GIÂY LIÊN TỤC)
             const perf = this.performanceOptimizer || window.performanceOptimizer;
             perf?.startBenchmark?.(`THẾ GIỚI KIỀU (${zoneName})`);
-          }, 650);
+          }, 450);
         }, 150);
       }
       this.warpAnimId = this.warpAnimId || null;
@@ -1661,7 +2142,7 @@ export class TruyenKieuStoryWorld {
   }
 
   /**
-   * CÚ BAY NGƯỢC LẠI (QUAY VỀ BẢO TÀNG): THU NHỎ -> DỊCH CHUYỂN SÁT SÁCH -> BAY LÙI RA
+   * CÚ BAY NGƯỢC LẠI (QUAY VỀ BẢO TÀNG): HOÁN ĐỔI ACTIVE SCENE TRỞ LẠI SẢNH CHÍNH
    */
   exitStoryWorldWithWarp() {
     if (this.isWarping) return;
@@ -1673,31 +2154,35 @@ export class TruyenKieuStoryWorld {
 
     this.playWarpReturnSound();
 
+    // Bật màn hình Loading mờ
     this.showWarpOverlay(
       'active',
       '🏛️ ĐANG TRỞ VỀ BẢO TÀNG VĂN HỌC... 🏛️',
       'PHÒNG TRƯNG BÀY 01 • BỤC SÁCH NGUYỄN DU'
     );
 
-    const bookCenter = new THREE.Vector3(-48.0, 11.20, 19.0);
-    const bookReturnNear = new THREE.Vector3(-47.15, 11.35, 19.0);
-    const idealMuseumView = (this.savedPos && this.savedPos.y < 35.0) 
-      ? this.savedPos 
-      : new THREE.Vector3(-44.5, 11.8, 19.0);
+    const bookCenter = new THREE.Vector3(-48.0, 11.45, 19.40);
+    const bookReturnNear = new THREE.Vector3(-48.0, 11.70, 22.80);
+    const idealMuseumView = new THREE.Vector3(-48.0, 11.70, 22.80);
 
     setTimeout(() => {
       this.isInsideWorld = false;
 
-      // Ẩn thế giới Kiều & hiện lại bảo tàng (Giải phóng Draw Calls cõi Kiều)
-      this.worldGroup.visible = false;
-      if (this.atriumGroup) this.atriumGroup.visible = true;
-      this.performanceOptimizer?.isolateWorldState?.(false);
+      // HOÁN ĐỔI SCENE TRỞ LẠI SẢNH BẢO TÀNG (SCENE SWAPPING)
+      const targetMainScene = this.mainScene || this.app?.mainScene || this.app?.scene;
+      if (this.app?.setActiveScene) {
+        this.app.setActiveScene(targetMainScene);
+      } else if (this.app) {
+        this.app.activeScene = targetMainScene;
+      }
+      window.__activeScene = targetMainScene;
 
       if (this.realmHudElement) this.realmHudElement.style.display = 'none';
       if (this.topExitElement) this.topExitElement.style.display = 'none';
 
-      this.scene.fog = this.savedFog || new THREE.FogExp2(0xd6e5f0, 0.0015);
-      this.scene.background = this.savedBackground || new THREE.Color(0xd6e5f0);
+      if (this.renderer) {
+        this.renderer.toneMappingExposure = this.savedExposure || 1.0;
+      }
 
       if (this.cameraController) {
         this.cameraController.setFloorHeightProvider?.(null);
@@ -1705,7 +2190,7 @@ export class TruyenKieuStoryWorld {
         this.cameraController.velocity?.set?.(0, 0, 0);
       }
 
-      // Đặt camera sát mặt cuốn sách
+      // Đặt camera sát mặt cuốn sách Phòng 01
       this.camera.position.copy(bookReturnNear);
       this.camera.lookAt(bookCenter);
 
@@ -1715,6 +2200,7 @@ export class TruyenKieuStoryWorld {
         enterBtn.style.borderColor = '#ff99bb';
       }
 
+      // Tắt màn hình Loading mờ
       this.hideWarpOverlay();
 
       // CÚ BAY LÙI (SMOOTH PULL-BACK / ZOOM-OUT) TRONG 0.85 GIÂY TỪ SÁCH VỀ PHÒNG
@@ -1746,9 +2232,8 @@ export class TruyenKieuStoryWorld {
           }
           if (this.cameraController) this.cameraController.isEnabled = true;
           this.isWarping = false;
-          console.log('%c🏛️ Đã trở về Không gian Bảo tàng Văn học!', 'color: #39e58c; font-weight: bold;');
+          console.log('%c🏛️ [MULTI-SCENE] Đã trở về Sảnh Bảo tàng Văn học!', 'color: #39e58c; font-weight: bold;');
 
-          // TỰ ĐỘNG THEO DÕI & ÉP FPS >= 60 KHI QUAY VỀ SẢNH BẢO TÀNG (5 GIÂY LIÊN TỤC)
           const perf = this.performanceOptimizer || window.performanceOptimizer;
           perf?.startBenchmark?.('SẢNH BẢO TÀNG (HẬU WARP)');
         }
@@ -1788,17 +2273,22 @@ export class TruyenKieuStoryWorld {
     }
 
     if (this.cameraController) {
-      this.cameraController.setFloorHeightProvider?.((x, z) => {
-        if (Math.abs(x - (-140)) < 5.0 && Math.abs(z) < 5.0) {
-          return 154.5;
+      const floorProvider = (x, z) => {
+        if (targetZoneId === 2) {
+          if (Math.abs(x - (-140)) <= 6.5 && Math.abs(z) <= 6.5) {
+            return 4.5; // Cao độ sàn vọng lâu tầng 2
+          }
         }
-        return 150.0;
-      });
+        return 0.0;
+      };
+      this.cameraController.setFloorHeightProvider?.(floorProvider);
+      this.cameraController.floorHeightProvider = floorProvider;
       this.cameraController.velocity?.set?.(0, 0, 0);
     }
 
-    this.scene.fog = new THREE.FogExp2(zoneData.fogColor, zoneData.fogDensity);
-    this.scene.background = new THREE.Color(zoneData.skyColor);
+    // Áp dụng Fog và Background riêng biệt cho truyenKieuScene (không ảnh hưởng sảnh chính)
+    this.truyenKieuScene.fog = new THREE.FogExp2(zoneData.fogColor, zoneData.fogDensity);
+    this.truyenKieuScene.background = new THREE.Color(zoneData.skyColor);
 
     if (this.realmHudElement) {
       this.realmHudElement.querySelectorAll('[data-zone]').forEach((btn) => {
@@ -1812,7 +2302,7 @@ export class TruyenKieuStoryWorld {
     }
 
     this.adaptSoundscapeToZone(targetZoneId);
-    console.log(`%c✓ Đã dịch chuyển sang [${zoneData.name}]!`, 'color: #ffd770; font-weight: bold; font-size: 14px;');
+    console.log(`%c✓ [TRUYEN KIEU] Đã dịch chuyển sang [${zoneData.name}]!`, 'color: #ffd770; font-weight: bold; font-size: 14px;');
 
     // TỰ ĐỘNG THEO DÕI & ÉP FPS >= 60 KHI ĐỔI PHÂN CẢNH (5 GIÂY LIÊN TỤC)
     const perf = this.performanceOptimizer || window.performanceOptimizer;
@@ -1957,9 +2447,16 @@ export class TruyenKieuStoryWorld {
   // 8. BINDING CONTROLS, RAYCASTING & PHÍM TẮT
   // =========================================================================
   bindControlsAndEvents() {
+    // Bắt ESC nhả khóa chuột để thoát cõi Kiều
+    document.addEventListener('pointerlockchange', () => {
+      if (!document.pointerLockElement && this.isInsideWorld && !this.isWarping) {
+        this.exitStoryWorldWithWarp();
+      }
+    });
+
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'KeyG') {
-        this.toggleStoryWorld();
+      if ((e.code === 'Escape' || e.key === 'Escape') && this.isInsideWorld && !this.isWarping) {
+        this.exitStoryWorldWithWarp();
       } else if (this.isInsideWorld && !this.isWarping) {
         if (e.code === 'Digit1') this.switchZone(1);
         if (e.code === 'Digit2') this.switchZone(2);
@@ -1973,6 +2470,9 @@ export class TruyenKieuStoryWorld {
     window.addEventListener('click', (e) => {
       if (!this.isInsideWorld || this.isWarping) return;
       if (e.target.closest('#kieuworld-realm-hud') || e.target.closest('#director-hud') || e.target.closest('#btn-realm-exit-top')) return;
+
+      // Chặn nổi bọt sự kiện click khi ở trong cõi để không ảnh hưởng camera bên ngoài
+      e.stopPropagation();
 
       mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
       mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
@@ -2054,17 +2554,22 @@ export class TruyenKieuStoryWorld {
   }
 
   // =========================================================================
-  // 9. UPDATE VÒNG LẶP RENDER & HIỆU ỨNG ĐỘNG
+  // 9. UPDATE VÒNG LẶP RENDER & HIỆU ỨNG ĐỘNG (THROTTLED 2-FRAME)
   // =========================================================================
   update(delta, elapsedTime) {
     if (!this.isInsideWorld || !this.worldGroup.visible) return;
+
+    this.particleFrameCounter = (this.particleFrameCounter || 0) + 1;
+    if (this.particleFrameCounter % 2 !== 0) return;
+
+    const twoFrameDelta = delta * 2.0;
 
     // 1. Chuyển động hoa rơi ở Zone 1
     if (this.particlesZone1) {
       const pos = this.particlesZone1.geometry.attributes.position;
       for (let i = 0; i < pos.count; i++) {
-        let y = pos.getY(i) - 0.55 * delta;
-        let x = pos.getX(i) + Math.sin(elapsedTime + i) * 0.25 * delta;
+        let y = pos.getY(i) - 0.55 * twoFrameDelta;
+        let x = pos.getX(i) + Math.sin(elapsedTime + i) * 0.25 * twoFrameDelta;
         if (y < 0.2) y = 12.0;
         pos.setXY(i, x, y);
       }
@@ -2076,7 +2581,7 @@ export class TruyenKieuStoryWorld {
       const pos = this.smokeZone1.geometry.attributes.position;
       for (let i = 0; i < this.smokeData.length; i++) {
         const s = this.smokeData[i];
-        s.y += s.speed * delta;
+        s.y += s.speed * twoFrameDelta;
         if (s.y > 3.2) s.y = 0.5;
         const driftX = Math.sin(elapsedTime * 2.0 + s.phase) * 0.15 * ((s.y - 0.5) / 2.7);
         const driftZ = Math.cos(elapsedTime * 1.5 + s.phase) * 0.12 * ((s.y - 0.5) / 2.7);
@@ -2090,6 +2595,7 @@ export class TruyenKieuStoryWorld {
       this.sailboats.forEach((b) => {
         b.position.y = (b.userData.baseY || 0.1) + Math.sin(elapsedTime * 1.2 + b.userData.bobPhase) * 0.12;
         b.rotation.z = Math.sin(elapsedTime * 0.9 + b.userData.bobPhase) * 0.04;
+        b.updateMatrix();
       });
     }
 
@@ -2142,9 +2648,9 @@ export class TruyenKieuStoryWorld {
       pos.needsUpdate = true;
     }
 
-    // 8. Đảm bảo cao độ an toàn cho Walker
+    // 8. Đảm bảo cao độ an toàn cho Walker (Multi-Scene: Tọa độ gốc Y=0)
     const currentZone = REALM_ZONES[`ZONE_${this.currentZoneId}`];
-    const minFloorY = KIEU_WORLD_ORIGIN.y + (currentZone?.floorHeight === 154.5 ? 5.8 : 1.8);
+    const minFloorY = KIEU_WORLD_ORIGIN.y + (currentZone?.floorHeight === 4.5 ? 5.8 : 1.8);
     if (this.camera.position.y < minFloorY && !this.isWarping) {
       this.camera.position.y = minFloorY;
     }

@@ -115,6 +115,7 @@ export class PortalInteraction {
       quote: opts.quote || 'Trang sách mở ra chân trời kỳ vĩ của tâm hồn dân tộc.',
       themeColor: opts.themeColor || 0xffd700,
       portalReady: opts.portalReady !== false,
+      targetRealm: opts.targetRealm || null,
       targetZoneId: opts.targetZoneId || 1,
       targetSceneCoordinates: coords,
       onActivate: typeof opts.onActivate === 'function' ? opts.onActivate : null,
@@ -125,6 +126,21 @@ export class PortalInteraction {
     mesh.userData.portalMetadata = metadata;
     mesh.userData.interactiveBookRoot = mesh;
     mesh.userData.targetSceneCoordinates = coords;
+    if (metadata.targetRealm) {
+      mesh.userData.targetRealm = metadata.targetRealm;
+    }
+    if (metadata.id === 'son_tinh_thuy_tinh' || metadata.id === 'son_tinh') {
+      mesh.userData.isTeleportBook = true;
+      mesh.userData.isSonTinhTeleportBook = true;
+    }
+    if (metadata.id === 'an_duong_vuong' || metadata.targetRealm === 'AN_DUONG_VUONG_REALM') {
+      mesh.userData.isTeleportBook = true;
+      mesh.userData.isAnDuongVuongTeleportBook = true;
+    }
+    if (metadata.id === 'vo_nhat' || metadata.targetRealm === 'VO_NHAT_REALM') {
+      mesh.userData.isTeleportBook = true;
+      mesh.userData.isVoNhatTeleportBook = true;
+    }
 
     const worldPos = new THREE.Vector3();
     mesh.getWorldPosition(worldPos);
@@ -138,6 +154,13 @@ export class PortalInteraction {
         child.userData.targetSceneCoordinates = coords;
         child.userData.excludeFromCollision = true;
         child.userData.cachedWorldPos = worldPos;
+        if (metadata.targetRealm) {
+          child.userData.targetRealm = metadata.targetRealm;
+        }
+        if (metadata.id === 'son_tinh_thuy_tinh' || metadata.id === 'son_tinh') {
+          child.userData.isTeleportBook = true;
+          child.userData.isSonTinhTeleportBook = true;
+        }
 
         if (!this.interactiveTargets.includes(child)) {
           this.interactiveTargets.push(child);
@@ -147,6 +170,23 @@ export class PortalInteraction {
 
     if (!this.interactiveTargets.includes(mesh)) {
       this.interactiveTargets.push(mesh);
+    }
+
+    // Chuẩn hóa và bọc Tight Click Hitbox (Skill: hitbox-collision-architect)
+    if (typeof window !== 'undefined' && window.__museumHitboxManager && !mesh.userData?.clickProxyHitbox && !mesh.userData?.isClickProxy) {
+      mesh.updateMatrixWorld(true);
+      const proxy = window.__museumHitboxManager.createTightClickHitbox(mesh, {
+        loreKey: metadata.id,
+        isBookPortal: true,
+        portalTargetRealm: metadata.targetRealm,
+        portalMetadata: metadata,
+        targetSceneCoordinates: coords,
+        onActivate: metadata.onActivate,
+        padding: 0.12
+      });
+      if (proxy && !this.interactiveTargets.includes(proxy)) {
+        this.interactiveTargets.push(proxy);
+      }
     }
 
     this.interactiveBooksMap.set(metadata.id, {
@@ -406,7 +446,7 @@ export class PortalInteraction {
           "Đoạn trường tân thanh – Khúc ca bi tráng về tài mệnh tương đố và khát vọng tự do."
         </div>
         <div class="lsp-action-hint" id="lsp-click-button">
-          ✨ [CLICK CHUỘT VÀO SÁCH ĐỂ BƯỚC VÀO THẾ GIỚI]
+          📖 CLICK CHUỘT VÀO SÁCH ĐỂ VÀO THẾ GIỚI TÁC PHẨM
         </div>
       `;
       document.body.appendChild(panel);
@@ -502,7 +542,7 @@ export class PortalInteraction {
         if (this.isTransitioning) return;
 
         // Bỏ qua nếu click vào UI HUD / Director panel
-        if (e.target.closest('#director-hud') || e.target.closest('#kieuworld-realm-hud') || e.target.closest('#directory-hud-modal')) {
+        if (e.target.closest('#director-hud') || e.target.closest('#kieuworld-realm-hud') || e.target.closest('#directory-hud-modal') || e.target.closest('#sttt-realm-top-hud')) {
           return;
         }
 
@@ -511,8 +551,88 @@ export class PortalInteraction {
         const result = this.performRaycast(pointerPos);
 
         if (result && result.rootBook) {
+          const mId = result.rootBook.userData?.portalMetadata?.id || result.hitMesh?.userData?.portalMetadata?.id;
+          const targetRealm = result.rootBook.userData?.targetRealm || result.hitMesh?.userData?.targetRealm || result.rootBook.userData?.portalMetadata?.targetRealm || result.hitMesh?.userData?.portalMetadata?.targetRealm;
+          const onAct = result.rootBook.userData?.portalMetadata?.onActivate || result.hitMesh?.userData?.portalMetadata?.onActivate;
+
+          if (targetRealm === 'SON_TINH_THUY_TINH_REALM' || mId === 'son_tinh_thuy_tinh' || mId === 'son_tinh' || result.rootBook.userData?.isSonTinhTeleportBook || result.hitMesh?.userData?.isSonTinhTeleportBook) {
+            if (typeof onAct === 'function') {
+              onAct();
+            } else if (typeof this.loadNarrativeWorld === 'function') {
+              this.loadNarrativeWorld('son_tinh_thuy_tinh', result.rootBook.userData?.targetSceneCoordinates, result.rootBook.userData?.portalMetadata);
+            }
+            return;
+          }
+
+          if (targetRealm === 'AN_DUONG_VUONG_REALM' || mId === 'an_duong_vuong' || result.rootBook.userData?.isAnDuongVuongTeleportBook || result.hitMesh?.userData?.isAnDuongVuongTeleportBook) {
+            if (typeof onAct === 'function') {
+              onAct();
+            } else if (typeof this.loadNarrativeWorld === 'function') {
+              this.loadNarrativeWorld('an_duong_vuong', result.rootBook.userData?.targetSceneCoordinates, result.rootBook.userData?.portalMetadata);
+            }
+            return;
+          }
+
+          if (targetRealm === 'VO_NHAT_REALM' || mId === 'vo_nhat' || result.rootBook.userData?.isVoNhatTeleportBook || result.hitMesh?.userData?.isVoNhatTeleportBook) {
+            if (typeof onAct === 'function') {
+              onAct();
+            } else if (typeof this.loadNarrativeWorld === 'function') {
+              this.loadNarrativeWorld('vo_nhat', result.rootBook.userData?.targetSceneCoordinates, result.rootBook.userData?.portalMetadata);
+            }
+            return;
+          }
+
+          if (mId === 'truyen_kieu' || result.rootBook.userData?.isKieuTeleportBook || result.hitMesh?.userData?.isKieuTeleportBook) {
+            if (typeof onAct === 'function') {
+              onAct();
+            } else if (typeof this.loadNarrativeWorld === 'function') {
+              this.loadNarrativeWorld('truyen_kieu', result.rootBook.userData?.targetSceneCoordinates, result.rootBook.userData?.portalMetadata);
+            }
+            return;
+          }
+
           this.triggerPortalTransition(result.rootBook);
         } else if (this.isHovered && this.hoveredRoot) {
+          const mId = this.hoveredRoot.userData?.portalMetadata?.id;
+          const targetRealm = this.hoveredRoot.userData?.targetRealm || this.hoveredRoot.userData?.portalMetadata?.targetRealm;
+          const onAct = this.hoveredRoot.userData?.portalMetadata?.onActivate;
+
+          if (targetRealm === 'SON_TINH_THUY_TINH_REALM' || mId === 'son_tinh_thuy_tinh' || mId === 'son_tinh' || this.hoveredRoot.userData?.isSonTinhTeleportBook) {
+            if (typeof onAct === 'function') {
+              onAct();
+            } else if (typeof this.loadNarrativeWorld === 'function') {
+              this.loadNarrativeWorld('son_tinh_thuy_tinh', this.hoveredRoot.userData?.targetSceneCoordinates, this.hoveredRoot.userData?.portalMetadata);
+            }
+            return;
+          }
+
+          if (targetRealm === 'AN_DUONG_VUONG_REALM' || mId === 'an_duong_vuong' || this.hoveredRoot.userData?.isAnDuongVuongTeleportBook) {
+            if (typeof onAct === 'function') {
+              onAct();
+            } else if (typeof this.loadNarrativeWorld === 'function') {
+              this.loadNarrativeWorld('an_duong_vuong', this.hoveredRoot.userData?.targetSceneCoordinates, this.hoveredRoot.userData?.portalMetadata);
+            }
+            return;
+          }
+
+          if (targetRealm === 'VO_NHAT_REALM' || mId === 'vo_nhat' || this.hoveredRoot.userData?.isVoNhatTeleportBook) {
+            if (typeof onAct === 'function') {
+              onAct();
+            } else if (typeof this.loadNarrativeWorld === 'function') {
+              this.loadNarrativeWorld('vo_nhat', this.hoveredRoot.userData?.targetSceneCoordinates, this.hoveredRoot.userData?.portalMetadata);
+            }
+            return;
+          }
+
+          if (mId === 'truyen_kieu' || this.hoveredRoot.userData?.isKieuTeleportBook) {
+            if (typeof onAct === 'function') {
+              onAct();
+            } else if (typeof this.loadNarrativeWorld === 'function') {
+              this.loadNarrativeWorld('truyen_kieu', this.hoveredRoot.userData?.targetSceneCoordinates, this.hoveredRoot.userData?.portalMetadata);
+            }
+            return;
+          }
+
           this.triggerPortalTransition(this.hoveredRoot);
         }
       } catch (err) {
@@ -540,6 +660,21 @@ export class PortalInteraction {
     try {
       this.raycaster.setFromCamera(pointerPos, this.camera);
       this.raycaster.far = maxDist;
+
+      // Ưu tiên kiểm tra các hộp Proxy Hitbox cho sách dịch chuyển (Skill: hitbox-collision-architect)
+      if (typeof window !== 'undefined' && window.__museumHitboxManager) {
+        const proxyHit = window.__museumHitboxManager.raycastInteractiveHitboxes(this.raycaster, maxDist);
+        if (proxyHit && (proxyHit.object?.userData?.isBookPortal || proxyHit.object?.userData?.isTeleportBook)) {
+          const hit = proxyHit.object;
+          const root = hit.userData.interactiveBookRoot || hit.userData.linkedVisualObject || hit;
+          return {
+            hitMesh: hit,
+            rootBook: root,
+            distance: proxyHit.distance,
+            point: proxyHit.point
+          };
+        }
+      }
 
       const camPos = this.camera.position;
       const maxDistSq = maxDist * maxDist;
@@ -719,12 +854,18 @@ export class PortalInteraction {
         if (quoteEl) quoteEl.textContent = `"${meta.quote ?? ''}"`;
 
         if (clickBtn) {
-          if (meta.portalReady !== false) {
-            clickBtn.textContent = '✨ [CLICK CHUỘT VÀO SÁCH ĐỂ BƯỚC VÀO THẾ GIỚI]';
-            clickBtn.classList.remove('disabled');
+          if (meta.id === 'truyen_kieu' || meta.id === 'son_tinh' || meta.id === 'son_tinh_thuy_tinh' || meta.id === 'an_duong_vuong' || meta.id === 'vo_nhat') {
+            // Không hiển thị nút 2D đan xen vì đã có nút bấm 3D riêng biệt đặt ngay trên cuốn sách
+            clickBtn.style.display = 'none';
           } else {
-            clickBtn.textContent = '🔒 [KHÔNG GIAN NARRATIVE ĐANG TRONG QUÁ TRÌNH KHỞI TẠO]';
-            clickBtn.classList.add('disabled');
+            clickBtn.style.display = 'block';
+            if (meta.portalReady !== false) {
+              clickBtn.textContent = '✨ [CLICK CHUỘT VÀO SÁCH ĐỂ BƯỚC VÀO THẾ GIỚI]';
+              clickBtn.classList.remove('disabled');
+            } else {
+              clickBtn.textContent = '🔒 [KHÔNG GIAN NARRATIVE ĐANG TRONG QUÁ TRÌNH KHỞI TẠO]';
+              clickBtn.classList.add('disabled');
+            }
           }
         }
       }
@@ -811,11 +952,20 @@ export class PortalInteraction {
       return;
     }
 
-    // 2. Chuyển giao trực tiếp cho hook của TruyenKieuWorld (Warp into Book)
+    // 2. Chuyển giao trực tiếp cho hook của narrative world (Sơn Tinh, An Dương Vương hoặc Truyện Kiều)
     if (typeof this.loadNarrativeWorld === 'function') {
-      const handled = this.loadNarrativeWorld(meta?.id || 'truyen_kieu', coords, meta);
-      if (handled !== false) {
-        return;
+      const bookId = (target.userData?.targetRealm === 'SON_TINH_THUY_TINH_REALM' || meta?.targetRealm === 'SON_TINH_THUY_TINH_REALM')
+        ? 'son_tinh_thuy_tinh'
+        : (target.userData?.targetRealm === 'AN_DUONG_VUONG_REALM' || meta?.targetRealm === 'AN_DUONG_VUONG_REALM')
+        ? 'an_duong_vuong'
+        : (target.userData?.targetRealm === 'VO_NHAT_REALM' || meta?.targetRealm === 'VO_NHAT_REALM')
+        ? 'vo_nhat'
+        : (meta?.id || '');
+      if (bookId) {
+        const handled = this.loadNarrativeWorld(bookId, coords, meta);
+        if (handled !== false) {
+          return;
+        }
       }
     }
 

@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { mergeGroupMeshesByMaterial } from '../utils/geometryMerger.js';
 
 /**
  * BIFURCATED GRAND STAIRCASE MODULE (CẦU THANG CHỮ Y LỘNG LẪY)
@@ -19,9 +18,6 @@ export class BifurcatedStaircase {
     this.buildTier1To2Staircase();
     this.buildTier2To3Staircase();
 
-    // Gộp toàn bộ bậc thang, tay vịn, con tiện tĩnh thành các mesh tối ưu hóa draw calls
-    mergeGroupMeshesByMaterial(this.group);
-
     // Vô hiệu hóa va chạm lưới trên toàn bộ cầu thang (cao độ đã xử lý toán học bằng getFloorHeightAt)
     this.group.traverse((child) => {
       child.userData = child.userData || {};
@@ -30,7 +26,7 @@ export class BifurcatedStaircase {
   }
 
   getMat(name) {
-    return this.matLib?.get?.(name) ?? new THREE.MeshStandardMaterial({ color: 0x888888 });
+    return this.matLib?.get?.(name) ?? new THREE.MeshLambertMaterial({ color: 0x888888 });
   }
 
   /**
@@ -58,7 +54,7 @@ export class BifurcatedStaircase {
     soffitShape.closePath();
 
     const extrudeSettings = {
-      steps: 50,
+      steps: 24, // Giảm đa giác gầm cầu thang từ 50 xuống 24
       bevelEnabled: false,
       extrudePath: curve
     };
@@ -72,7 +68,7 @@ export class BifurcatedStaircase {
     const soffitMesh = new THREE.Mesh(soffitGeo, this.getMat('whitePlaster'));
     soffitMesh.frustumCulled = true; // Bật Frustum Culling
     soffitMesh.castShadow = false; // Tối ưu: Vô hiệu hóa shadow pass gây nặng hành lang/cầu thang
-    soffitMesh.receiveShadow = true;
+    soffitMesh.receiveShadow = false;
     flightGroup.add(soffitMesh);
 
     // 3. Mặt bậc cầu thang ốp gỗ nâu trầm bóng (Polished Mahogany Treads)
@@ -105,7 +101,7 @@ export class BifurcatedStaircase {
       const angleY = Math.atan2(tangent.x, tangent.z);
       treadMesh.rotation.y = angleY;
       treadMesh.castShadow = false; // Tối ưu hóa bóng đổ GPU/CPU
-      treadMesh.receiveShadow = true;
+      treadMesh.receiveShadow = false;
       flightGroup.add(treadMesh);
 
       const nosing = new THREE.Mesh(nosingGeo, goldTrimMat);
@@ -135,7 +131,7 @@ export class BifurcatedStaircase {
       }
 
       const railCurve = new THREE.CatmullRomCurve3(railPoints);
-      const railGeo = new THREE.TubeGeometry(railCurve, 40, 0.065, 12, false);
+      const railGeo = new THREE.TubeGeometry(railCurve, 20, 0.065, 6, false); // Cắt giảm 70% đa giác tay vịn
       railGeo.computeVertexNormals();
       railGeo.computeBoundingBox();
       railGeo.computeBoundingSphere();
@@ -146,7 +142,7 @@ export class BifurcatedStaircase {
       railMesh.castShadow = false; // Tối ưu GPU
       flightGroup.add(railMesh);
 
-      const balusterGeo = new THREE.CylinderGeometry(0.025, 0.03, 0.90, 8);
+      const balusterGeo = new THREE.CylinderGeometry(0.025, 0.03, 0.90, 6); // Cắt giảm con tiện nhỏ xuống 6 mặt
       balusterGeo.computeVertexNormals();
       balusterGeo.computeBoundingBox();
       balusterGeo.computeBoundingSphere();
@@ -200,7 +196,7 @@ export class BifurcatedStaircase {
     groupT1T2.add(centralFlight);
 
     const landingRadius = 5.0;
-    const landingGeo = new THREE.CylinderGeometry(landingRadius, landingRadius, 0.4, 32);
+    const landingGeo = new THREE.CylinderGeometry(landingRadius, landingRadius, 0.4, 16);
     landingGeo.computeVertexNormals();
     landingGeo.computeBoundingBox();
     landingGeo.computeBoundingSphere();
@@ -209,11 +205,11 @@ export class BifurcatedStaircase {
     landingMesh.name = "Stair_Landing_L1_L2";
     landingMesh.frustumCulled = true;
     landingMesh.position.set(0, midY - 0.2, 7.5);
-    landingMesh.receiveShadow = true;
+    landingMesh.receiveShadow = false;
     landingMesh.castShadow = false;
     groupT1T2.add(landingMesh);
 
-    const landingSoffitGeo = new THREE.CylinderGeometry(landingRadius * 0.95, landingRadius * 0.85, 0.5, 32);
+    const landingSoffitGeo = new THREE.CylinderGeometry(landingRadius * 0.95, landingRadius * 0.85, 0.5, 16);
     landingSoffitGeo.computeVertexNormals();
     landingSoffitGeo.computeBoundingBox();
     landingSoffitGeo.computeBoundingSphere();
@@ -287,7 +283,7 @@ export class BifurcatedStaircase {
     groupT2T3.add(centralFlight);
 
     const landingRadius = 4.8;
-    const landingGeo = new THREE.CylinderGeometry(landingRadius, landingRadius, 0.4, 32);
+    const landingGeo = new THREE.CylinderGeometry(landingRadius, landingRadius, 0.4, 16);
     landingGeo.computeVertexNormals();
     landingGeo.computeBoundingBox();
     landingGeo.computeBoundingSphere();
@@ -355,6 +351,8 @@ export class BifurcatedStaircase {
     this.group.traverse((child) => {
       if (child.isMesh) {
         child.frustumCulled = true;
+        child.castShadow = false;
+        child.receiveShadow = false;
       }
     });
     return this.group;

@@ -89,7 +89,7 @@ export class PerformanceOptimizer {
         <span style="color: rgba(255,255,255,0.25)">|</span>
         <span id="perf-dc-val" style="color: #ffd770">0 DC</span>
         <span style="color: rgba(255,255,255,0.25)">|</span>
-        <span id="perf-quality-badge" style="color: #39e58c; font-size: 10px;">60+ FPS LOCKED</span>
+        <span id="perf-quality-badge" style="color: #39e58c; font-size: 10px;">HIGH-HZ UNLOCKED</span>
       `;
       document.body.appendChild(badge);
     }
@@ -194,7 +194,7 @@ export class PerformanceOptimizer {
         const remaining = Math.max(0, this.benchmarkDuration - this.benchmarkElapsed).toFixed(1);
         this.qualityValEl.innerHTML = `<span style="color:#ffd770;">⚡ ĐO FPS ${remaining}s</span>`;
       } else {
-        this.qualityValEl.innerHTML = `<span style="color:#39e58c; font-weight:bold; text-shadow: 0 0 6px rgba(57,229,140,0.5);">✓ 60+ FPS LOCKED</span>`;
+        this.qualityValEl.innerHTML = `<span style="color:#39e58c; font-weight:bold; text-shadow: 0 0 6px rgba(57,229,140,0.5);">✓ HIGH-HZ UNLOCKED</span>`;
       }
     }
   }
@@ -205,20 +205,31 @@ export class PerformanceOptimizer {
   isolateWorldState(isInsideKieuWorld) {
     if (isInsideKieuWorld) {
       if (this.app?.atriumGroup) this.app.atriumGroup.visible = false;
+      if (this.app?.proceduralVfx) this.app.proceduralVfx.setVisible?.(false);
       if (this.artDirectorLighting?.group) {
         this.artDirectorLighting.group.visible = false;
         if (this.artDirectorLighting.sunLight) {
           this.artDirectorLighting.sunLight.castShadow = false;
         }
       }
-      if (this.roomDecorator?.getGroup()) {
-        this.roomDecorator.getGroup().visible = false;
+      const rdGroup = typeof this.roomDecorator?.getGroup === 'function'
+        ? this.roomDecorator.getGroup()
+        : (this.roomDecorator?.isObject3D ? this.roomDecorator : this.roomDecorator?.group);
+      if (rdGroup) {
+        rdGroup.visible = false;
+      }
+      if (typeof this.app?.namQuocSonHaDecor?.getGroup === 'function') {
+        const nqGroup = this.app.namQuocSonHaDecor.getGroup();
+        if (nqGroup) nqGroup.visible = false;
+      }
+      if (this.app?.namQuocSonHaStoryWorld?.group) {
+        this.app.namQuocSonHaStoryWorld.group.visible = false;
       }
       if (this.truyenKieuStoryWorld?.worldGroup) {
         this.truyenKieuStoryWorld.worldGroup.visible = true;
       }
       if (this.truyenKieuStoryWorld?.sun1) {
-        this.truyenKieuStoryWorld.sun1.castShadow = true;
+        this.truyenKieuStoryWorld.sun1.castShadow = false;
       }
     } else {
       if (this.truyenKieuStoryWorld?.worldGroup) {
@@ -227,15 +238,22 @@ export class PerformanceOptimizer {
       if (this.truyenKieuStoryWorld?.sun1) {
         this.truyenKieuStoryWorld.sun1.castShadow = false;
       }
+      if (this.app?.namQuocSonHaStoryWorld?.group) {
+        this.app.namQuocSonHaStoryWorld.group.visible = false;
+      }
       if (this.app?.atriumGroup) this.app.atriumGroup.visible = true;
+      if (this.app?.proceduralVfx) this.app.proceduralVfx.setVisible?.(true);
       if (this.artDirectorLighting?.group) {
         this.artDirectorLighting.group.visible = true;
         if (this.artDirectorLighting.sunLight) {
-          this.artDirectorLighting.sunLight.castShadow = true;
+          this.artDirectorLighting.sunLight.castShadow = false;
         }
       }
-      if (this.roomDecorator?.getGroup()) {
-        this.roomDecorator.getGroup().visible = true;
+      const rdGroup = typeof this.roomDecorator?.getGroup === 'function'
+        ? this.roomDecorator.getGroup()
+        : (this.roomDecorator?.isObject3D ? this.roomDecorator : this.roomDecorator?.group);
+      if (rdGroup) {
+        rdGroup.visible = true;
       }
     }
   }

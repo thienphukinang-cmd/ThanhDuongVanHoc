@@ -1,14 +1,20 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DIMENSIONS } from '../config/dimensions.js';
-import { mergeGroupMeshesByMaterial } from '../utils/geometryMerger.js';
+import { 
+  getFakeShadowMaterial, 
+  getFakeGlowSpriteMaterial, 
+  getLightBeamMaterial, 
+  getFloorLightPoolMaterial 
+} from './proceduralMaterials.js';
 
 /**
- * MODEL CREATOR MODULE (MONUMENTAL STRUCTURAL BLOCKOUT)
+ * MODEL CREATOR MODULE (MONUMENTAL STRUCTURAL BLOCKOUT & MUSEUM FURNISHINGS)
  * Skill: threejs-model-creator
  * 
- * ĐÃ VÁ LỖI: Bổ sung computeBoundingBox() và computeBoundingSphere() cho toàn bộ
- * CylinderGeometry, SphereGeometry để triệt tiêu hiện tượng chớp tắt, mất hình
- * khi quay camera ở các góc biên do Frustum Culling.
+ * ĐÃ TÍCH HỢP MÔ HÌNH POLY HAVEN CHUẨN CC0 CHO ĐẠI SẢNH BẢO TÀNG:
+ * - Chậu cây cảnh bảo tàng (Potted Plants)
+ * - Ghế băng gỗ nghỉ chân (Painted Wooden Benches)
  */
 
 export class ModelCreator {
@@ -20,21 +26,18 @@ export class ModelCreator {
     this.buildColossalMarblePillars();
     this.buildGlassSkylightDome();
 
-    // GỘP CỘT & MÁI VÒM THEO VẬT LIỆU (Giảm từ ~70 draw calls xuống ~3 calls!)
-    mergeGroupMeshesByMaterial(this.group);
-
-    // Khóa matrixAutoUpdate cho toàn bộ vật thể tĩnh
+    // Giữ nguyên các mesh cột trụ và mái vòm độc lập
     this.group.traverse((child) => {
       if (child.isMesh) {
         child.frustumCulled = true;
-        child.matrixAutoUpdate = false;
-        child.updateMatrix();
+        child.castShadow = false;
+        child.receiveShadow = false;
       }
     });
   }
 
   getMat(name) {
-    return this.matLib?.get?.(name) ?? new THREE.MeshStandardMaterial({ color: 0x999999 });
+    return this.matLib?.get?.(name) ?? new THREE.MeshLambertMaterial({ color: 0x999999 });
   }
 
   /**
@@ -56,7 +59,7 @@ export class ModelCreator {
     const radius = pConfig?.radius ?? 1.35;
     const basePlinthRadius = pConfig?.basePlinthRadius ?? 1.9;
     const capitalRadius = pConfig?.capitalRadius ?? 2.0;
-    const radialSegments = pConfig?.radialSegments ?? 36;
+    const radialSegments = 6; // PERFORMANCE BLOCKOUT MODE: Ép xuống 6 (cột lục giác sảnh chính)
 
     const plinthGeo = new THREE.CylinderGeometry(
       basePlinthRadius, 
@@ -100,16 +103,31 @@ export class ModelCreator {
 
     const whiteMarbleMat = this.getMat('whiteMarble');
     const goldAccentMat = this.getMat('royalGold');
+    const shadowMat = this.matLib?.get?.('fakeShadow') ?? getFakeShadowMaterial();
+
+    const pillarShadowGeo = new THREE.PlaneGeometry(5.2, 5.2);
+    pillarShadowGeo.computeVertexNormals();
+    pillarShadowGeo.computeBoundingBox();
+    pillarShadowGeo.computeBoundingSphere();
 
     const createPillar = (x, z, name) => {
       const singlePillar = new THREE.Group();
       singlePillar.name = name;
 
+      // 0. BÓNG ĐỔ GIẢ LẬP DƯỚI CHÂN CỘT (FAKE CONTACT SHADOW / AMBIENT OCCLUSION)
+      const shadowPlane = new THREE.Mesh(pillarShadowGeo, shadowMat);
+      shadowPlane.name = `${name}_ContactShadow`;
+      shadowPlane.rotation.x = -Math.PI / 2;
+      shadowPlane.position.set(0, 0.015, 0); // Sát mặt sàn y = 0.015
+      shadowPlane.frustumCulled = true;
+      shadowPlane.renderOrder = 1;
+      singlePillar.add(shadowPlane);
+
       const plinth = new THREE.Mesh(plinthGeo, whiteMarbleMat);
       plinth.frustumCulled = true; // Bật Frustum Culling
       plinth.position.y = plinthHeight / 2;
       plinth.castShadow = false;
-      plinth.receiveShadow = true;
+      plinth.receiveShadow = false;
       singlePillar.add(plinth);
 
       const goldRingB = new THREE.Mesh(goldRingGeo, goldAccentMat);
@@ -121,8 +139,8 @@ export class ModelCreator {
       const shaft = new THREE.Mesh(shaftGeo, whiteMarbleMat);
       shaft.frustumCulled = true;
       shaft.position.y = plinthHeight + shaftHeight / 2;
-      shaft.castShadow = true;
-      shaft.receiveShadow = true;
+      shaft.castShadow = false;
+      shaft.receiveShadow = false;
       singlePillar.add(shaft);
 
       const goldRingT = new THREE.Mesh(goldRingGeo, goldAccentMat);
@@ -135,7 +153,7 @@ export class ModelCreator {
       capital.frustumCulled = true;
       capital.position.y = plinthHeight + shaftHeight + capitalHeight / 2;
       capital.castShadow = false;
-      capital.receiveShadow = true;
+      capital.receiveShadow = false;
       singlePillar.add(capital);
 
       singlePillar.position.set(x, 0, z);
@@ -168,7 +186,7 @@ export class ModelCreator {
   }
 
   /**
-   * Mái vòm kính lớn (Glass Skylight Dome)
+   * Mái trần kính giếng trời âm trần (Flat Coffer Glass Skylight - Phẳng, không nhô qua mái ngói)
    */
   buildGlassSkylightDome() {
     const skylightGroup = new THREE.Group();
@@ -177,84 +195,183 @@ export class ModelCreator {
     const sCfg = DIMENSIONS?.skylight ?? {};
     const baseElevation = sCfg?.elevation ?? 32.0;
     const domeRadius = sCfg?.domeRadius ?? 18.0;
-    const domeHeight = sCfg?.domeHeight ?? 7.5;
-    const oculusRadius = sCfg?.oculusRadius ?? 4.0;
 
-    const cofferRingGeo = new THREE.CylinderGeometry(
-      domeRadius + 2.0, 
-      domeRadius + 2.6, 
-      1.6, 
-      48, 
-      1, 
-      true
-    );
+    // Khung viền trần gỗ Mahogany phẳng (âm trần, không nhô lên khỏi mái ngói)
+    const cofferRingGeo = new THREE.CylinderGeometry(domeRadius + 0.5, domeRadius + 0.8, 0.4, 24);
     cofferRingGeo.computeVertexNormals();
     cofferRingGeo.computeBoundingBox();
     cofferRingGeo.computeBoundingSphere();
 
     const cofferRing = new THREE.Mesh(cofferRingGeo, this.getMat('polishedMahogany'));
-    cofferRing.frustumCulled = false;
-    cofferRing.position.set(0, baseElevation + 0.8, 0);
+    cofferRing.frustumCulled = true;
+    cofferRing.position.set(0, baseElevation, 0);
     cofferRing.castShadow = false;
     skylightGroup.add(cofferRing);
 
-    const domeGeo = new THREE.SphereGeometry(
-      domeRadius, 
-      48, 
-      24, 
-      0, 
-      Math.PI * 2, 
-      0, 
-      Math.PI * 0.46
-    );
+    // Kính phẳng âm trần (phẳng 2D, TUYỆT ĐỐI không đâm xuyên mái ngói truyền thống ra ngoài trời)
+    const domeGeo = new THREE.CircleGeometry(domeRadius, 32);
     domeGeo.computeVertexNormals();
     domeGeo.computeBoundingBox();
     domeGeo.computeBoundingSphere();
 
     const domeMesh = new THREE.Mesh(domeGeo, this.getMat('skylightGlass'));
-    domeMesh.frustumCulled = false;
-    domeMesh.position.set(0, baseElevation, 0);
+    domeMesh.rotation.x = Math.PI / 2;
+    domeMesh.position.set(0, baseElevation + 0.02, 0);
+    domeMesh.frustumCulled = true;
     domeMesh.castShadow = false;
     skylightGroup.add(domeMesh);
 
-    const ribCount = 20;
-    const ribGeo = new THREE.CylinderGeometry(0.18, 0.18, domeRadius, 16);
+    // Nan đồng trang trí trần giếng trời phẳng
+    const ribCount = 16;
+    const ribGeo = new THREE.BoxGeometry(0.18, 0.15, domeRadius * 2);
     ribGeo.computeVertexNormals();
-    ribGeo.computeBoundingBox();
-    ribGeo.computeBoundingSphere();
-
     const ribMat = this.getMat('bronzeFramework');
 
-    for (let i = 0; i < ribCount; i++) {
-      const angle = (i / ribCount) * Math.PI * 2;
+    for (let i = 0; i < ribCount / 2; i++) {
+      const angle = (i / (ribCount / 2)) * Math.PI;
       const rib = new THREE.Mesh(ribGeo, ribMat);
-      rib.frustumCulled = false;
-      rib.position.set(
-        Math.cos(angle) * (domeRadius * 0.5),
-        baseElevation + domeHeight * 0.55,
-        Math.sin(angle) * (domeRadius * 0.5)
-      );
-      rib.rotation.y = -angle + Math.PI / 2;
-      rib.rotation.z = 0.52;
+      rib.rotation.y = angle;
+      rib.position.set(0, baseElevation + 0.04, 0);
+      rib.frustumCulled = true;
       rib.castShadow = false;
       skylightGroup.add(rib);
     }
 
-    const oculusGeo = new THREE.CylinderGeometry(
-      oculusRadius, 
-      oculusRadius + 0.25, 
-      0.6, 
-      36
-    );
-    oculusGeo.computeVertexNormals();
-    oculusGeo.computeBoundingBox();
-    oculusGeo.computeBoundingSphere();
+    // =========================================================================
+    // 3. ĐÈN CHÙM HOÀNG GIA & QUẦNG SÁNG GIẢ LẬP TRÊN TRẦN SẢNH (FAKE VOLUMETRIC HALO)
+    // =========================================================================
+    const chandelierGroup = new THREE.Group();
+    chandelierGroup.name = "Central_Chandelier_Halo_System";
+    const chandelierY = baseElevation - 0.8; // Y = 31.2m
 
-    const oculusMesh = new THREE.Mesh(oculusGeo, this.getMat('royalGold'));
-    oculusMesh.frustumCulled = true;
-    oculusMesh.position.set(0, baseElevation + domeHeight + 0.2, 0);
-    oculusMesh.castShadow = false;
-    skylightGroup.add(oculusMesh);
+    // Khung đèn chùm bát giác hoàng gia Indochine bằng vàng cổ
+    const frameGeo = new THREE.CylinderGeometry(2.4, 2.6, 0.28, 8, 1, true);
+    frameGeo.computeVertexNormals();
+    frameGeo.computeBoundingBox();
+    frameGeo.computeBoundingSphere();
+    const chandelierFrame = new THREE.Mesh(frameGeo, this.getMat('royalGold'));
+    chandelierFrame.position.set(0, chandelierY, 0);
+    chandelierFrame.frustumCulled = true;
+    chandelierGroup.add(chandelierFrame);
+
+    // Lõi đèn phát sáng ấm áp
+    const coreGlowGeo = new THREE.CylinderGeometry(0.9, 0.9, 0.5, 8);
+    coreGlowGeo.computeVertexNormals();
+    coreGlowGeo.computeBoundingBox();
+    coreGlowGeo.computeBoundingSphere();
+    const coreGlow = new THREE.Mesh(coreGlowGeo, this.getMat('warmLedCove'));
+    coreGlow.position.set(0, chandelierY, 0);
+    coreGlow.frustumCulled = true;
+    chandelierGroup.add(coreGlow);
+
+    // 4 Dây xích đồng treo từ tâm vòm xuống đèn chùm
+    const chainMat = this.getMat('bronzeFramework');
+    const chainGeo = new THREE.CylinderGeometry(0.03, 0.03, 7.5, 4);
+    chainGeo.computeVertexNormals();
+    chainGeo.computeBoundingBox();
+    chainGeo.computeBoundingSphere();
+    const chainOffsets = [
+      [1.6, 0], [-1.6, 0], [0, 1.6], [0, -1.6]
+    ];
+    chainOffsets.forEach(([cx, cz]) => {
+      const chain = new THREE.Mesh(chainGeo, chainMat);
+      chain.position.set(cx * 0.5, chandelierY + 3.75, cz * 0.5);
+      chain.rotation.z = cx !== 0 ? (cx > 0 ? -0.18 : 0.18) : 0;
+      chain.rotation.x = cz !== 0 ? (cz > 0 ? 0.18 : -0.18) : 0;
+      chain.frustumCulled = true;
+      chandelierGroup.add(chain);
+    });
+
+    // HIỆU ỨNG QUẦNG SÁNG GIẢ LẬP SIÊU NHẸ (FAKE VOLUMETRIC HALO SPRITE - 128x128 Additive)
+    const glowMat = this.matLib?.get?.('fakeGlowSprite') ?? getFakeGlowSpriteMaterial();
+
+    // 1. Quầng sáng khí quyển tỏa rộng (Outer Atmospheric Corona)
+    const wideHalo = new THREE.Sprite(glowMat);
+    wideHalo.name = "Chandelier_Wide_Halo";
+    wideHalo.position.set(0, chandelierY, 0);
+    wideHalo.scale.set(18.0, 18.0, 1.0);
+    wideHalo.frustumCulled = true;
+    chandelierGroup.add(wideHalo);
+
+    // 2. Lõi sáng rạng rỡ (Inner Radiant Core Halo)
+    const coreHalo = new THREE.Sprite(glowMat);
+    coreHalo.name = "Chandelier_Core_Halo";
+    coreHalo.position.set(0, chandelierY, 0);
+    coreHalo.scale.set(7.5, 7.5, 1.0);
+    coreHalo.frustumCulled = true;
+    chandelierGroup.add(coreHalo);
+
+    skylightGroup.add(chandelierGroup);
+
+    // =========================================================================
+    // 4. HIỆU ỨNG TIA SÁNG CHIẾU RỌI TỪ GIẾNG TRỜI (FAKE VOLUMETRIC GOD-RAYS)
+    // =========================================================================
+    const beamGroup = new THREE.Group();
+    beamGroup.name = "Central_Skylight_GodRays_Group";
+    const beamMat = this.matLib?.get?.('lightBeam') ?? getLightBeamMaterial();
+
+    // 1. Hình nón tia sáng khối loe dần từ đèn chùm trần xuống mặt sàn
+    const beamGeo = new THREE.CylinderGeometry(2.6, 10.2, chandelierY, 16, 1, true);
+    beamGeo.computeVertexNormals();
+    beamGeo.computeBoundingBox();
+    beamGeo.computeBoundingSphere();
+    const beamCone = new THREE.Mesh(beamGeo, beamMat);
+    beamCone.name = "Central_GodRay_Cone";
+    beamCone.position.set(0, chandelierY * 0.5, 0);
+    beamCone.frustumCulled = true;
+    beamGroup.add(beamCone);
+
+    // 2. Hai cánh tia sáng chéo nhau (Crossed Quad Beams) tạo mật độ ánh sáng dày đặc từ mọi góc nhìn
+    const crossBeamGeo = new THREE.PlaneGeometry(16.0, chandelierY);
+    crossBeamGeo.computeVertexNormals();
+    crossBeamGeo.computeBoundingBox();
+    crossBeamGeo.computeBoundingSphere();
+
+    const crossBeam1 = new THREE.Mesh(crossBeamGeo, beamMat);
+    crossBeam1.name = "Central_GodRay_Cross1";
+    crossBeam1.position.set(0, chandelierY * 0.5, 0);
+    crossBeam1.rotation.y = Math.PI * 0.25;
+    crossBeam1.frustumCulled = true;
+
+    const crossBeam2 = new THREE.Mesh(crossBeamGeo, beamMat);
+    crossBeam2.name = "Central_GodRay_Cross2";
+    crossBeam2.position.set(0, chandelierY * 0.5, 0);
+    crossBeam2.rotation.y = -Math.PI * 0.25;
+    crossBeam2.frustumCulled = true;
+
+    beamGroup.add(crossBeam1, crossBeam2);
+    skylightGroup.add(beamGroup);
+
+    // =========================================================================
+    // 5. VỆT SÁNG IN TRÊN MẶT SÀN ĐẠI SẢNH (CENTRAL ATRIUM FLOOR LIGHT POOL)
+    // =========================================================================
+    const poolMat = this.matLib?.get?.('floorLightPool') ?? getFloorLightPoolMaterial();
+
+    // Vệt sáng lan tỏa rộng trên sàn đá cẩm thạch (Outer Ambient Pool)
+    const poolOuterGeo = new THREE.PlaneGeometry(18.0, 18.0);
+    poolOuterGeo.computeVertexNormals();
+    poolOuterGeo.computeBoundingBox();
+    poolOuterGeo.computeBoundingSphere();
+    const poolOuter = new THREE.Mesh(poolOuterGeo, poolMat);
+    poolOuter.name = "Central_Atrium_Floor_LightPool_Outer";
+    poolOuter.rotation.x = -Math.PI / 2;
+    poolOuter.position.set(0, 0.025, 0);
+    poolOuter.renderOrder = 2;
+    poolOuter.frustumCulled = true;
+    skylightGroup.add(poolOuter);
+
+    // Vệt sáng hội tụ cường độ cao ở tâm giếng trời (Inner Concentrated Pool)
+    const poolCoreGeo = new THREE.PlaneGeometry(8.5, 8.5);
+    poolCoreGeo.computeVertexNormals();
+    poolCoreGeo.computeBoundingBox();
+    poolCoreGeo.computeBoundingSphere();
+    const poolCore = new THREE.Mesh(poolCoreGeo, poolMat);
+    poolCore.name = "Central_Atrium_Floor_LightPool_Core";
+    poolCore.rotation.x = -Math.PI / 2;
+    poolCore.position.set(0, 0.027, 0);
+    poolCore.renderOrder = 3;
+    poolCore.frustumCulled = true;
+    skylightGroup.add(poolCore);
 
     this.group.add(skylightGroup);
   }
