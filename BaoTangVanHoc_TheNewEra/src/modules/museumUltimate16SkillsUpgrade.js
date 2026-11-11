@@ -1,25 +1,9 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {
-  createCarvedHeritagePbrMaterial,
-  createSculptedCloudScrollBracket3D,
-  attachSculptedCollarRingsToPillar
+  createCarvedHeritagePbrMaterial
 } from './museumReliefSculptor.js';
 import { upgradeRoomWallArchitecture } from './museumWallArchitectureSystem.js';
-import {
-  createTraditionalArchwayEntrance,
-  createCuratedArtifactStation,
-  MuseumAutoTourDirector
-} from './museumCuratorAndTourSystem.js';
 import { MuseumHitboxManager, getMuseumHitboxManager } from './museumHitboxSystem.js';
-import {
-  buildSonTinhThuyTinhMasterVfx,
-  removeOldSonTinhBackgroundAndDarkCones,
-  SON_TINH_REALM_OFFSET,
-  SON_TINH_LOCAL_POS,
-  THUY_TINH_LOCAL_POS
-} from './sonTinhWaterMountainVfx.js';
-import { setupMuseumWebXRTeleport } from './museumImmersionSystem.js';
 
 /**
  * ============================================================================
@@ -27,8 +11,6 @@ import { setupMuseumWebXRTeleport } from './museumImmersionSystem.js';
  * TỔNG CHỈ HUY ĐỒNG BỘ 16 KỸ NĂNG NÂNG CẤP BẢO TÀNG VĂN HỌC 3D
  * ============================================================================
  */
-
-const gltfLoader = new GLTFLoader();
 
 /**
  * Dọn dẹp triệt để trần giả và vật thể bay lơ lửng trên đầu Đại Sảnh
@@ -96,11 +78,7 @@ export async function setupGrandLobbyGiantBookCenterpiece(lobbyGroup, {
   hitboxManager = null,
   loreGuide = null,
   audioDirector = null,
-  candidateGlbPaths = [
-    '/model/heritage/giant_heritage_book.glb',
-    '/model/giant_book.glb',
-    '/model/web/giant_book.glb'
-  ]
+  candidateGlbPaths = []
 } = {}) {
   if (!lobbyGroup) return null;
 
@@ -158,69 +136,11 @@ export async function setupGrandLobbyGiantBookCenterpiece(lobbyGroup, {
   centerpieceGroup.name = 'Grand_Lobby_Giant_Book_Centerpiece';
   centerpieceGroup.position.set(0, 0, 0);
 
-  // 2. TÌM NẠP FILE .GLB HOẶC DỰNG SÁCH MỞ ĐIÊU KHẮC 3D CÓ HIỆU ỨNG TỰ ĐỘNG LẬT
-  let bookVisualRoot = null;
-  let loadedGlbPath = null;
-
-  for (const path of candidateGlbPaths) {
-    try {
-      const gltf = await new Promise((resolve, reject) => {
-        gltfLoader.load(path, resolve, undefined, reject);
-      });
-      if (gltf && gltf.scene) {
-        bookVisualRoot = gltf.scene;
-        loadedGlbPath = path;
-        break;
-      }
-    } catch {
-      // Thử đường dẫn kế tiếp
-    }
-  }
-
-  if (bookVisualRoot) {
-    console.log(`%c[16-Skills Integrator] Đã nạp model Sách Khổng Lồ từ: ${loadedGlbPath}`, 'color: #38bdf8; font-weight: bold;');
-    bookVisualRoot.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(bookVisualRoot);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-
-    const maxHorizontalSpan = Math.max(size.x, size.z, 0.001);
-    const scaleFactor = 6.8 / maxHorizontalSpan;
-    bookVisualRoot.scale.setScalar(scaleFactor);
-
-    bookVisualRoot.updateMatrixWorld(true);
-    const scaledBox = new THREE.Box3().setFromObject(bookVisualRoot);
-    const scaledCenter = new THREE.Vector3();
-    scaledBox.getCenter(scaledCenter);
-
-    bookVisualRoot.position.x -= scaledCenter.x;
-    bookVisualRoot.position.y += 0.05 - scaledBox.min.y; // Đặt trực tiếp sát mặt sàn
-    bookVisualRoot.position.z -= scaledCenter.z;
-
-    bookVisualRoot.traverse((child) => {
-      if (child.isMesh) {
-        child.castShadow = false;
-        child.receiveShadow = false;
-        child.frustumCulled = true;
-        if (child.material?.map && 'colorSpace' in child.material.map) {
-          child.material.map.colorSpace = THREE.SRGBColorSpace;
-          child.material.map.needsUpdate = true;
-        }
-      }
-    });
-  } else {
-    // Dựng mô hình Sách Mở Điêu Khắc 3D khổ lớn tích hợp Hiệu Ứng Tự Động Lật Trang
-    bookVisualRoot = createProceduralMonumentalOpenBook();
-    bookVisualRoot.position.set(0, 1.18, 0); // Đặt trang trọng trên bục tròn 3 tầng
-  }
+  // 2. DỰNG SÁCH MỞ ĐIÊU KHẮC 3D CÓ HIỆU ỨNG TỰ ĐỘNG LẬT (tránh probe 3 file GLB không tồn tại gây lag)
+  const bookVisualRoot = createProceduralMonumentalOpenBook();
+  bookVisualRoot.position.set(0, 1.18, 0); // Đặt trang trọng trên bục tròn 3 tầng
 
   centerpieceGroup.add(bookVisualRoot);
-
-  // 3. ĐÈN SPOTLIGHT ẤM ÁP RỌI XUỐNG MẶT SÁCH (KHÔNG ĐỔ BÓNG NẶNG)
-  const bookLight = new THREE.PointLight(0xfef08a, 4.0, 20, 1.2);
-  bookLight.position.set(0, 5.8, 1.4);
-  bookLight.castShadow = false;
-  centerpieceGroup.add(bookLight);
 
   // 4. HITBOX VẬT CẢN & CLICK TƯƠNG TÁC ÔM SÁT CUỐN SÁCH
   if (hitboxManager) {
@@ -255,13 +175,15 @@ export async function setupGrandLobbyGiantBookCenterpiece(lobbyGroup, {
 }
 
 /**
- * TẠO TEXTURE TRANG SÁCH BẢO TÀNG BẰNG CANVAS
+ * TẠO TEXTURE TRANG SÁCH BẢO TÀNG BẰNG CANVAS (downscale 1024x1024 -> 512x512)
  */
 function createHeritagePageCanvasTexture(pageTitle, chapterName, verses = []) {
   const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 1024;
+  canvas.width = 512;
+  canvas.height = 512;
   const ctx = canvas.getContext('2d');
+  ctx.save();
+  ctx.scale(0.5, 0.5);
 
   // Nền giấy điệp hoàng kim ấm áp
   ctx.fillStyle = '#f6edd9';
@@ -309,11 +231,15 @@ function createHeritagePageCanvasTexture(pageTitle, chapterName, verses = []) {
   ctx.font = 'bold 26px "Times New Roman", serif';
   ctx.fillText('BẢO', 817, 856);
   ctx.fillText('TÀNG', 817, 896);
+  ctx.restore();
 
   const texture = new THREE.CanvasTexture(canvas);
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.LinearFilter;
   if ('colorSpace' in texture && THREE.SRGBColorSpace) {
     texture.colorSpace = THREE.SRGBColorSpace;
   }
+  texture.needsUpdate = true;
   return texture;
 }
 
@@ -396,7 +322,7 @@ export function createProceduralMonumentalOpenBook() {
   });
 
   // Chồng trang bên Trái
-  const leftPageGeo = new THREE.BoxGeometry(3.25, 0.18, 4.05, 16, 1, 8);
+  const leftPageGeo = new THREE.BoxGeometry(3.25, 0.18, 4.05, 10, 1, 4);
   const leftPos = leftPageGeo.attributes.position;
   for (let i = 0; i < leftPos.count; i++) {
     const x = leftPos.getX(i);
@@ -408,11 +334,13 @@ export function createProceduralMonumentalOpenBook() {
   leftMesh.position.set(-1.78, 0.20, 0);
   leftMesh.rotation.x = 0.28;
   leftMesh.rotation.z = 0.08;
+  leftMesh.castShadow = false;
+  leftMesh.receiveShadow = false;
   leftMesh.userData.ignoreRaycaster = true;
   bookGroup.add(leftMesh);
 
   // Chồng trang bên Phải
-  const rightPageGeo = new THREE.BoxGeometry(3.25, 0.18, 4.05, 16, 1, 8);
+  const rightPageGeo = new THREE.BoxGeometry(3.25, 0.18, 4.05, 10, 1, 4);
   const rightPos = rightPageGeo.attributes.position;
   for (let i = 0; i < rightPos.count; i++) {
     const x = rightPos.getX(i);
@@ -424,11 +352,13 @@ export function createProceduralMonumentalOpenBook() {
   rightMesh.position.set(1.78, 0.20, 0);
   rightMesh.rotation.x = 0.28;
   rightMesh.rotation.z = -0.08;
+  rightMesh.castShadow = false;
+  rightMesh.receiveShadow = false;
   rightMesh.userData.ignoreRaycaster = true;
   bookGroup.add(rightMesh);
 
   // =========================================================================
-  // 4. HỆ THỐNG TRANG LẬT TỰ ĐỘNG (DYNAMIC FLIPPING PAGE WITH AERO CURL)
+  // 4. HỆ THỐNG TRANG LẬT TỰ ĐỘNG (GPU VERTEX CURL SHADER - 0 CPU VERTEX UPLOAD)
   // =========================================================================
   const turnPivot = new THREE.Group();
   turnPivot.name = 'Monumental_Turning_Page_Pivot';
@@ -438,12 +368,43 @@ export function createProceduralMonumentalOpenBook() {
 
   const flipPageW = 3.25;
   const flipPageD = 4.05;
-  // Lưới 28x10 để trang giấy uốn cong mượt mà tự nhiên
-  const flipGeo = new THREE.PlaneGeometry(flipPageW, flipPageD, 28, 10);
+  const flipGeo = new THREE.PlaneGeometry(flipPageW, flipPageD, 16, 6);
   flipGeo.rotateX(-Math.PI / 2); // Đưa về mặt phẳng XZ (normal hướng lên +Y)
   flipGeo.translate(flipPageW * 0.5, 0, 0); // Dời mép gáy về x = 0 (trục quay gáy sách)
 
-  const origPositions = flipGeo.attributes.position.clone();
+  const flipShaderUniforms = {
+    uPageWidth: { value: flipPageW },
+    uCurlAmp: { value: 0.0 },
+    uFlutterAmp: { value: 0.0 },
+    uTime: { value: 0.0 }
+  };
+
+  const attachPageCurlShader = (mat) => {
+    mat.customProgramCacheKey = () => 'monumental_book_page_curl_v1';
+    mat.onBeforeCompile = (shader) => {
+      shader.uniforms.uPageWidth = flipShaderUniforms.uPageWidth;
+      shader.uniforms.uCurlAmp = flipShaderUniforms.uCurlAmp;
+      shader.uniforms.uFlutterAmp = flipShaderUniforms.uFlutterAmp;
+      shader.uniforms.uTime = flipShaderUniforms.uTime;
+      shader.vertexShader = shader.vertexShader
+        .replace(
+          '#include <common>',
+          `#include <common>
+          uniform float uPageWidth;
+          uniform float uCurlAmp;
+          uniform float uFlutterAmp;
+          uniform float uTime;`
+        )
+        .replace(
+          '#include <begin_vertex>',
+          `#include <begin_vertex>
+          float normX = clamp(transformed.x / max(uPageWidth, 0.001), 0.0, 1.0);
+          float pageCurl = uCurlAmp * pow(normX, 1.45);
+          float pageFlutter = uFlutterAmp * sin(uTime * 7.5 + normX * 4.5);
+          transformed.y += pageCurl + pageFlutter;`
+        );
+    };
+  };
 
   // Mặt trước của trang lật (nhìn thấy khi ở bên phải và khi đang nhấc lên)
   const flipFrontTex = createHeritagePageCanvasTexture(
@@ -466,7 +427,10 @@ export function createProceduralMonumentalOpenBook() {
     transparent: true,
     opacity: 1.0
   });
+  attachPageCurlShader(flipFrontMat);
   const flipFrontMesh = new THREE.Mesh(flipGeo, flipFrontMat);
+  flipFrontMesh.castShadow = false;
+  flipFrontMesh.receiveShadow = false;
   flipFrontMesh.userData.ignoreRaycaster = true;
   turnPivot.add(flipFrontMesh);
 
@@ -493,14 +457,16 @@ export function createProceduralMonumentalOpenBook() {
     transparent: true,
     opacity: 1.0
   });
+  attachPageCurlShader(flipBackMat);
   const flipBackMesh = new THREE.Mesh(flipGeo, flipBackMat);
   flipBackMesh.position.y = -0.003; // Tránh z-fighting
+  flipBackMesh.castShadow = false;
+  flipBackMesh.receiveShadow = false;
   flipBackMesh.userData.ignoreRaycaster = true;
   turnPivot.add(flipBackMesh);
 
-  // VÒNG LẶP HOẠT HỌA TỰ ĐỘNG LẬT TRANG (PAGE-FLIP ANIMATOR)
-  bookGroup.userData.update = (timeSec, delta = 0.016) => {
-    // Chu kỳ lật trang: 6.0 giây
+  // VÒNG LẶP HOẠT HỌA TỰ ĐỘNG LẬT TRANG (CHỈ CẬP NHẬT UNIFORMS)
+  bookGroup.userData.update = (timeSec) => {
     const cyclePeriod = 6.0;
     const t = timeSec % cyclePeriod;
 
@@ -509,48 +475,23 @@ export function createProceduralMonumentalOpenBook() {
       turnPivot.rotation.z = -0.08;
       flipFrontMat.opacity = 1.0;
       flipBackMat.opacity = 1.0;
-
-      // Phục hồi độ phẳng của trang giấy
-      const pos = flipGeo.attributes.position;
-      const orig = origPositions;
-      for (let i = 0; i < pos.count; i++) {
-        pos.setY(i, orig.getY(i));
-      }
-      pos.needsUpdate = true;
+      flipShaderUniforms.uCurlAmp.value = 0.0;
+      flipShaderUniforms.uFlutterAmp.value = 0.0;
     }
-    // Pha 2: Lật trang từ phải sang trái (1.2s -> 4.4s, kéo dài 3.2s uyển chuyển)
+    // Pha 2: Lật trang từ phải sang trái (1.2s -> 4.4s)
     else if (t >= 1.2 && t < 4.4) {
-      const progress = (t - 1.2) / 3.2; // 0.0 đến 1.0
-
-      // Đường cong chuyển động mượt mà (Smooth Cubic Easing)
+      const progress = (t - 1.2) / 3.2;
       const ease = progress < 0.5
         ? 4 * progress * progress * progress
         : 1 - Math.pow(-2 * progress + 2, 3) / 2;
 
-      // Góc quay quanh gáy từ phải (-0.08 rad) sang trái (PI + 0.08 rad)
-      const angleZ = -0.08 + ease * (Math.PI + 0.16);
-      turnPivot.rotation.z = angleZ;
+      turnPivot.rotation.z = -0.08 + ease * (Math.PI + 0.16);
 
-      // Hiệu ứng uốn cong khí động học của trang giấy (Aerodynamic Curl Wave)
-      const pos = flipGeo.attributes.position;
-      const orig = origPositions;
-      const curlIntensity = Math.sin(progress * Math.PI) * 0.44;
-
-      for (let i = 0; i < pos.count; i++) {
-        const localX = orig.getX(i);
-        const normX = localX / flipPageW; // 0 ở gáy sách, 1 ở mép ngoài cùng
-
-        // Mép ngoài cuộn trễ theo lực cản không khí
-        const curlDirection = progress < 0.5 ? -1.0 : 1.0;
-        const curl = curlDirection * curlIntensity * Math.pow(normX, 1.45) * 0.85;
-
-        // Gợn sóng rung nhẹ của giấy cổ khi chuyển động
-        const flutter = Math.sin(timeSec * 7.5 + normX * 4.5) * 0.02 * Math.sin(progress * Math.PI);
-
-        pos.setY(i, orig.getY(i) + curl + flutter);
-      }
-      pos.needsUpdate = true;
-      flipGeo.computeVertexNormals();
+      const sinProg = Math.sin(progress * Math.PI);
+      const curlDirection = progress < 0.5 ? -1.0 : 1.0;
+      flipShaderUniforms.uCurlAmp.value = curlDirection * sinProg * 0.44 * 0.85;
+      flipShaderUniforms.uFlutterAmp.value = sinProg * 0.02;
+      flipShaderUniforms.uTime.value = timeSec;
 
       flipFrontMat.opacity = 1.0;
       flipBackMat.opacity = 1.0;
@@ -558,20 +499,16 @@ export function createProceduralMonumentalOpenBook() {
     // Pha 3: Nằm yên êm ái trên chồng trang bên trái (4.4s -> 5.4s)
     else if (t >= 4.4 && t < 5.4) {
       turnPivot.rotation.z = Math.PI + 0.08;
-
-      const pos = flipGeo.attributes.position;
-      const orig = origPositions;
-      for (let i = 0; i < pos.count; i++) {
-        pos.setY(i, orig.getY(i));
-      }
-      pos.needsUpdate = true;
-
+      flipShaderUniforms.uCurlAmp.value = 0.0;
+      flipShaderUniforms.uFlutterAmp.value = 0.0;
       flipFrontMat.opacity = 1.0;
       flipBackMat.opacity = 1.0;
     }
     // Pha 4: Chuyển tiếp mờ dần nhẹ nhàng để bắt đầu trang kế tiếp (5.4s -> 6.0s)
     else {
-      const resetProgress = (t - 5.4) / 0.6; // 0.0 đến 1.0
+      const resetProgress = (t - 5.4) / 0.6;
+      flipShaderUniforms.uCurlAmp.value = 0.0;
+      flipShaderUniforms.uFlutterAmp.value = 0.0;
       if (resetProgress < 0.5) {
         const fadeOut = 1.0 - resetProgress * 2.0;
         flipFrontMat.opacity = fadeOut;
@@ -650,6 +587,7 @@ export function buildSculptedLotusCofferCeiling(roomGroup, {
 export function setupPixelFxRetroController(renderer) {
   let mode = 0;
   let scanlineOverlay = null;
+  const basePixelRatio = Math.min(renderer?.getPixelRatio?.() || (typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1, 1.0);
 
   if (typeof document !== 'undefined') {
     scanlineOverlay = document.getElementById('pixelfx-crt-overlay');
@@ -715,7 +653,7 @@ export function setupPixelFxRetroController(renderer) {
     if (!renderer) return;
 
     if (mode === 0) {
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setPixelRatio(basePixelRatio);
       renderer.domElement.style.imageRendering = 'auto';
       if (scanlineOverlay) scanlineOverlay.style.display = 'none';
       showPixelFxToast('Crisp PBR HD (Nguyên Bản)', '#38bdf8');
@@ -797,99 +735,32 @@ export async function applyAll16SkillsToMuseum({
     });
   }
 
-  // 3. ĐIÊU KHẮC TƯỜNG CHO CÁC PHÒNG TRƯNG BÀY
+  // 3. ĐIÊU KHẮC TƯỜNG CHO CÁC PHÒNG TRƯNG BÀY (tránh gắn trùng cổng vòm đã có trong TotalOverhaulEngine)
   const roomUpgradeConfigs = [
-    {
-      key: 'truyenKieu',
-      title: 'ĐOẠN TRƯỜNG TÂN THANH',
-      leftCouplet: 'Trăm năm cõi thế nhân gian',
-      rightCouplet: 'Tài hoa mệnh bạc cung đàn ngân vang'
-    },
-    {
-      key: 'anDuongVuong',
-      title: 'CỔ LOA THÀNH KÝ',
-      leftCouplet: 'Chín vòng thành ốc uy linh',
-      rightCouplet: 'Nỏ thần giữ nước hiển vinh muôn đời'
-    },
-    {
-      key: 'voNhat',
-      title: 'KHÁT VỌNG BÌNH MINH',
-      leftCouplet: 'Giữa cơn tăm tối cơ hàn',
-      rightCouplet: 'Tình người thắp sáng muôn ngàn niềm tin'
-    }
+    { key: 'truyenKieu' },
+    { key: 'anDuongVuong' },
+    { key: 'voNhat' }
   ];
 
   roomUpgradeConfigs.forEach((cfg) => {
     const rGroup = roomsMap[cfg.key];
     if (!rGroup) return;
-
     upgradeRoomWallArchitecture(rGroup, { themeKey: cfg.key });
-
-    const arch = createTraditionalArchwayEntrance({
-      roomTitle: cfg.title,
-      leftCouplet: cfg.leftCouplet,
-      rightCouplet: cfg.rightCouplet
-    });
-    arch.position.set(0, 0, 12.05);
-    rGroup.add(arch);
   });
 
-  // 4. ĐẠI CẢNH THẾ GIỚI SƠN TINH - THỦY TINH ĐỘC LẬP TẠI (5000, 0, 5000)
-  let sonTinhRealmController = null;
-  const targetSonTinhRealm = sonTinhMythicRealmGroup || (typeof window !== 'undefined' ? window.__sonTinhThuyTinhScene : null);
-
-  if (targetSonTinhRealm) {
-    if (targetSonTinhRealm.isScene) {
-      targetSonTinhRealm.position.set(0, 0, 0);
-    }
-
-    const existingVfx = targetSonTinhRealm.getObjectByName('SonTinh_Mythic_World_Only_Vfx');
-    if (!existingVfx) {
-      removeOldSonTinhBackgroundAndDarkCones(targetSonTinhRealm);
-
-      sonTinhRealmController = buildSonTinhThuyTinhMasterVfx(targetSonTinhRealm, {
-        sonTinhModel,
-        thuyTinhModel,
-        hitboxManager: hbm,
-        moveRealmToSeparateOffset: !targetSonTinhRealm.isScene
-      });
-    }
-  }
-
-  // 5. BỘ ĐIỀU KHIỂN PIXELFX RETRO MODE [P], AUTO-TOUR [T] & WEBXR TELEPORT
+  // 4 & 5. PixelFX Retro Mode [P]; giữ null cho AutoTour/WebXR/SonTinhRealm (đã quản lý tại main.js để tránh trùng lặp)
   const pixelFxController = setupPixelFxRetroController(renderer);
+  const autoTourDirector = null;
+  const webXrController = null;
+  const sonTinhRealmController = null;
 
-  let autoTourDirector = null;
-  if (camera) {
-    autoTourDirector = new MuseumAutoTourDirector(camera, {
-      audioDirector,
-      loreGuide,
-      onTourStateChange
-    });
-  }
-
-  let webXrController = null;
-  if (renderer && renderer.xr && targetScene && camera) {
-    try {
-      webXrController = setupMuseumWebXRTeleport(renderer, targetScene, camera, walkableFloors);
-    } catch (err) {
-      console.warn('[WebXR] Bỏ qua WebXR trên trình duyệt không hỗ trợ:', err);
-    }
-  }
-
-  // VÒNG LẶP CẬP NHẬT TỔNG UPDATEALL: CẬP NHẬT HIỆU ỨNG LẬT TRANG SÁCH & REALM
+  // VÒNG LẶP CẬP NHẬT TỔNG UPDATEALL: CHỈ CẬP NHẬT SÁCH DI SẢN ĐẠI SẢNH
   const updateAll = (nowMs = performance.now()) => {
     const timeSec = nowMs * 0.001;
 
     try {
       if (giantBookCenterpiece?.userData?.update) {
         giantBookCenterpiece.userData.update(timeSec, 0.016);
-      }
-      if (sonTinhRealmController?.updateRealm) {
-        sonTinhRealmController.updateRealm(timeSec);
-      }
-      if (autoTourDirector?.update) {
-        autoTourDirector.update(nowMs);
       }
     } catch (err) {
       console.warn('[16-Skills Loop Self-Healing]:', err);

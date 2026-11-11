@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { LITERATURE_REGISTRY } from '../config/literatureRegistry.js';
-import { ALCOVE_CENTERS } from '../modules/RoomGenerator.js';
+import { ALCOVE_CENTERS, CUSTOM_ROOM_IDS } from '../modules/RoomGenerator.js';
 
 /**
  * INTERACTIVE DIRECTORY HUD (BẢNG THƯ MỤC ĐIỀU HƯỚNG TÁC PHẨM & FAST-TRAVEL)
@@ -124,7 +124,7 @@ export class DirectoryHUD {
 
           <div class="dir-modal-footer">
             <div class="footer-note">
-              <span class="status-dot online"></span> <strong>Phòng 01 (Truyện Kiều)</strong>: Cổng dịch chuyển KieuWorld đã sẵn sàng kết nối.
+              <span class="status-dot online"></span> Đang đồng bộ trạng thái ${LITERATURE_REGISTRY.length} phòng trưng bày...
             </div>
             <div class="footer-fast-travel-hint">
               <span>✈ 1.8s Cinematic Camera Glide</span>
@@ -158,22 +158,32 @@ export class DirectoryHUD {
     floorContainers[2].innerHTML = '';
     floorContainers[3].innerHTML = '';
 
-    LITERATURE_REGISTRY.forEach((item, index) => {
+    let completedCount = 0;
+    let portalReadyCount = 0;
+
+    LITERATURE_REGISTRY.forEach((item) => {
       const container = floorContainers[item.floor];
       if (!container) return;
 
       const roomCode = `${item.floor}0${item.roomIndex + 1}`;
       const isPortalReady = item.portalReady === true;
+      const isRoomCompleted = isPortalReady || item.roomCompleted === true || CUSTOM_ROOM_IDS.has(item.id);
+      if (isRoomCompleted) completedCount++;
+      if (isPortalReady) portalReadyCount++;
+
+      const statusText = isPortalReady
+        ? '✓ [ĐÃ MỞ CỔNG]'
+        : (isRoomCompleted ? '✓ [ĐÃ HOÀN THÀNH]' : '[SẢNH TRƯNG BÀY]');
 
       const card = document.createElement('div');
-      card.className = `dir-room-card ${isPortalReady ? 'portal-ready-card' : ''}`;
+      card.className = `dir-room-card ${isRoomCompleted ? 'portal-ready-card' : ''}`;
       card.dataset.id = item.id;
 
       card.innerHTML = `
         <div class="card-top-row">
           <span class="room-code-tag">PHÒNG ${roomCode}</span>
-          <span class="room-status-badge ${isPortalReady ? 'status-open' : 'status-exhibit'}">
-            ${isPortalReady ? '✓ [ĐÃ MỞ CỔNG]' : '[SẢNH TRƯNG BÀY]'}
+          <span class="room-status-badge ${isRoomCompleted ? 'status-open' : 'status-exhibit'}">
+            ${statusText}
           </span>
         </div>
         <div class="room-work-title">${item.name}</div>
@@ -191,6 +201,12 @@ export class DirectoryHUD {
 
       container.appendChild(card);
     });
+
+    const footerNote = this.modalElement?.querySelector('.footer-note');
+    if (footerNote) {
+      const totalRooms = LITERATURE_REGISTRY.length;
+      footerNote.innerHTML = `<span class="status-dot online"></span> <strong>Đã hoàn thành ${completedCount}/${totalRooms} phòng trưng bày</strong> • ${portalReadyCount} phòng đã mở cổng thế giới tương tác.`;
+    }
   }
 
   handleCardClick(item) {
@@ -313,11 +329,9 @@ export class DirectoryHUD {
         align-items: center;
         gap: 8px;
         padding: 9px 16px;
-        background: rgba(14, 18, 26, 0.88);
+        background: rgba(14, 18, 26, 0.94);
         border: 1px solid rgba(212, 175, 55, 0.65);
         border-radius: 20px;
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
         color: #f7eed8;
         font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
         font-size: 12px;
@@ -380,9 +394,7 @@ export class DirectoryHUD {
         left: 0;
         width: 100%;
         height: 100%;
-        background: rgba(6, 9, 14, 0.72);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
+        background: rgba(6, 9, 14, 0.84);
       }
 
       .dir-modal-container {
@@ -393,13 +405,11 @@ export class DirectoryHUD {
         max-height: calc(100vh - 48px);
         display: flex;
         flex-direction: column;
-        background: radial-gradient(ellipse at 50% 0%, rgba(26, 33, 44, 0.96) 0%, rgba(12, 16, 22, 0.98) 100%);
+        background: radial-gradient(ellipse at 50% 0%, rgba(26, 33, 44, 0.98) 0%, rgba(12, 16, 22, 0.99) 100%);
         border: 1px solid rgba(212, 175, 55, 0.55);
         border-radius: 16px;
         padding: 28px 34px;
         box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85), 0 0 40px rgba(212, 175, 55, 0.2);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
         color: #f7eed8;
         transform: scale(0.96);
         transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
@@ -685,13 +695,12 @@ export class DirectoryHUD {
         bottom: 80px;
         left: 50%;
         transform: translateX(-50%) translateY(20px);
-        background: rgba(14, 18, 26, 0.94);
+        background: rgba(14, 18, 26, 0.96);
         border: 1px solid #ffd269;
         color: #fff8e7;
         padding: 10px 22px;
         border-radius: 24px;
         box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7), 0 0 20px rgba(212, 175, 55, 0.4);
-        backdrop-filter: blur(14px);
         font-size: 13px;
         font-weight: 700;
         letter-spacing: 0.5px;

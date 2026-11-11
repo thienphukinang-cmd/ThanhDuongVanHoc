@@ -15,6 +15,12 @@ export const PRESET_VIEWS = {
     target: new THREE.Vector3(0, 6.0, 5.0),
     description: 'Chiêm ngưỡng toàn cảnh Đại Sảnh Bảo Tàng Văn Học, Cầu Thang Chữ Y và Giếng Trời Hoàng Kim'
   },
+  ROOM_101_THANH_GIONG: {
+    name: 'Phòng Trưng Bày Thánh Gióng – Phù Đổng Thiên Vương (Tầng 1)',
+    position: new THREE.Vector3(-37.2, 1.8, 19.0),
+    target: new THREE.Vector3(-50.5, 2.2, 19.0),
+    description: 'Chiêm ngưỡng Bệ Đá Trống Đồng Đông Sơn, Tượng Đài Phù Đổng Thiên Vương, Làng Gióng, Lò Rèn Vũ Khí & Cổng Sóc Sơn'
+  },
   ROOM_201_BOOK: {
     name: 'Phòng Mẫu 01 (Sách Truyện Kiều)',
     position: new THREE.Vector3(-44.5, 11.8, 19.0),
@@ -22,10 +28,10 @@ export const PRESET_VIEWS = {
     description: 'Chiêm ngưỡng trọn vẹn Bục Sách Truyện Kiều 1:1, Án Thư và Đàn Tỳ Bà'
   },
   ROOM_202_BOOK: {
-    name: 'Phòng 02 (Nam Quốc Sơn Hà)',
-    position: new THREE.Vector3(-44.5, 11.8, -19.0),
-    target: new THREE.Vector3(-48.0, 11.2, -19.0),
-    description: 'Chiêm ngưỡng Bục Chiếu Thư Hoàng Kim, Bia Đá Định Phận và Bảo Kiếm Triều Lý'
+    name: 'Phòng 202 (Nam Quốc Sơn Hà – Lý Thường Kiệt)',
+    position: new THREE.Vector3(-37.2, 11.8, -19.0),
+    target: new THREE.Vector3(-50.5, 12.1, -19.0),
+    description: 'Chiêm ngưỡng tượng Thái úy Lý Thường Kiệt trên bệ hoa sen, Chiếu thư Nam Quốc Sơn Hà, Sa bàn Như Nguyệt & Cổng Đền Trương Hống – Trương Hát'
   },
   ROOM_102_SON_TINH: {
     name: 'Phòng Trưng Bày Sơn Tinh - Thủy Tinh (Tầng 1)',
@@ -44,6 +50,12 @@ export const PRESET_VIEWS = {
     position: new THREE.Vector3(0.0, 2.0, -42.0),
     target: new THREE.Vector3(0.0, 2.6, -52.0),
     description: 'Chiêm ngưỡng toàn cảnh Đại Gian Cổ Loa Thành, Nỏ Thần Cao Lỗ và Thần Kim Quy'
+  },
+  ROOM_302_TAT_DEN: {
+    name: 'Phòng Trưng Bày Tắt Đèn - Ngô Tất Tố (Tầng 3)',
+    position: new THREE.Vector3(-37.0, 21.8, -19.0),
+    target: new THREE.Vector3(-52.8, 22.1, -19.0),
+    description: 'Bước qua Cổng Đình Đông Xá vào không gian Tắt Đèn với Chị Dậu, Đèn Dầu, Tráp Sưu Thuế và Nồi Cháo Cám'
   },
   ROOM_304_VO_NHAT: {
     name: 'Phòng Trưng Bày Vợ Nhặt - Kim Lân (Tầng 3)',
@@ -159,6 +171,18 @@ export class CameraManager {
   setView(preset, smooth = true) {
     if (this.cinematicTour?.isPlaying) {
       this.cinematicTour.stop();
+    }
+    if (this.cameraController) {
+      this.cameraController.isFastTraveling = false;
+      if (this.cameraController.controls?.isLocked) {
+        try { this.cameraController.controls.unlock(); } catch (e) {}
+      }
+    }
+    if (typeof document !== 'undefined' && document.pointerLockElement && document.exitPointerLock) {
+      try { document.exitPointerLock(); } catch (e) {}
+    }
+    if (this.controls) {
+      this.controls.enabled = true;
     }
 
     if (!smooth) {

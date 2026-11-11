@@ -33,7 +33,8 @@ export const CUSTOM_ROOM_IDS = new Set([
   'son_tinh_thuy_tinh',
   'nam_quoc_son_ha',
   'an_duong_vuong',
-  'vo_nhat'
+  'vo_nhat',
+  'tat_den'
 ]);
 
 export const ALCOVE_CENTERS = [
@@ -70,7 +71,7 @@ export class RoomGenerator {
   getMat(name) {
     return this.matLib?.get?.(name) ?? new THREE.MeshBasicMaterial({
       color: 0xffffff,
-      side: THREE.DoubleSide
+      side: THREE.FrontSide
     });
   }
 
@@ -124,138 +125,44 @@ export class RoomGenerator {
    * - Sàn phòng chính là toàn bộ mặt sàn đại sảnh nằm kẹp giữa 2 vách ngăn lớn.
    */
   initAlcovePartitionWalls() {
-    const wallsMasterGroup = new THREE.Group();
-    wallsMasterGroup.name = "Cathedral_Massive_Partition_Walls_Master_Group";
-
-    // Vách ngăn đại sảnh khổng lồ: Rộng 0.85m (tăng độ dày để triệt tiêu lọt khe tường), Cao 8.0m, Sâu 20.0m
-    const wallGeo = new THREE.BoxGeometry(0.85, 8.0, 20.0);
-    this.prepareGeometry(wallGeo);
-
-    // Chân tường wainscot ốp gỗ trầm cao 1.2m
-    const baseboardGeo = new THREE.BoxGeometry(0.89, 1.2, 20.0);
-    this.prepareGeometry(baseboardGeo);
-
-    // Nẹp chỉ vàng kim loại trang trí chạy dọc vách
-    const goldTrimGeo = new THREE.BoxGeometry(0.91, 0.08, 20.0);
-    this.prepareGeometry(goldTrimGeo);
-
-    const plasterMat = new THREE.MeshLambertMaterial({ color: 0xf5f2eb, side: THREE.DoubleSide });
-
-    const woodMat = new THREE.MeshLambertMaterial({ color: 0x2b1810, side: THREE.DoubleSide });
-
-    const goldMat = new THREE.MeshPhongMaterial({ color: 0xd4af37, emissive: 0x332200, shininess: 80, specular: 0xffeba8, side: THREE.DoubleSide });
+    // ProceduralArchitecture.buildFifteenOpenPavilions() đã dựng đầy đủ tường ngăn kiến trúc cho cả 15 phòng.
+    // Chỉ giữ cachedWallColliders dạng toán học để không tạo thêm 48 mesh tường trùng lặp gây overdraw & draw calls.
+    this.cachedWallColliders = [];
 
     LITERATURE_REGISTRY.forEach((item) => {
-      if (CUSTOM_ROOM_IDS.has(item.id)) return; // Bỏ qua hoàn toàn vách thạch cao trùng lặp cho phòng đã có decorator riêng
+      if (CUSTOM_ROOM_IDS.has(item.id)) return;
       const pos = this.calculateItemPosition(item);
-      const alcoveGroup = new THREE.Group();
-      alcoveGroup.name = `Massive_Alcove_Walls_${item.id}`;
-      alcoveGroup.position.set(pos.x, pos.y, pos.z);
-
-      // Xoay hướng tâm theo độ cong của hành lang (Math.atan2)
       const rotY = pos.rotY !== undefined ? pos.rotY : Math.atan2(pos.x, pos.z);
-      alcoveGroup.rotation.y = rotY;
+      const cosR = Math.cos(rotY);
+      const sinR = Math.sin(rotY);
 
-      // -----------------------------------------------------------------
-      // VÁCH NGĂN TRÁI KHỔNG LỒ (X = -13.0m, Z = -3.0m)
-      // Kéo dài từ mép lan can Z = +7.0m đâm sâu vào vách đá Z = -13.0m
-      // -----------------------------------------------------------------
-      const leftWallGroup = new THREE.Group();
-      leftWallGroup.name = `Alcove_LeftWallGroup_${item.id}`;
-      leftWallGroup.position.set(-13.0, 4.0, -3.0);
-
-      const leftWall = new THREE.Mesh(wallGeo, plasterMat);
-      leftWall.name = `Massive_Alcove_LeftWall_${item.id}`;
-      leftWall.castShadow = false; // Tối ưu hóa: Không đổ bóng trên vách phụ
-      leftWall.receiveShadow = true;
-      leftWallGroup.add(leftWall);
-
-      const leftBase = new THREE.Mesh(baseboardGeo, woodMat);
-      leftBase.name = `Baseboard_Left_${item.id}`;
-      leftBase.position.y = -4.0 + 0.6; // Chân tường cao 1.2m
-      leftBase.castShadow = false; // Tối ưu hóa bóng đổ GPU
-      leftBase.receiveShadow = true;
-      leftWallGroup.add(leftBase);
-
-      const leftTrim = new THREE.Mesh(goldTrimGeo, goldMat);
-      leftTrim.name = `GoldTrim_Left_${item.id}`;
-      leftTrim.position.y = -4.0 + 1.24;
-      leftTrim.castShadow = false; // Tối ưu hóa bóng đổ GPU
-      leftTrim.receiveShadow = true;
-      leftWallGroup.add(leftTrim);
-
-      alcoveGroup.add(leftWallGroup);
-
-      // -----------------------------------------------------------------
-      // VÁCH NGĂN PHẢI KHỔNG LỒ (X = +13.0m, Z = -3.0m)
-      // -----------------------------------------------------------------
-      const rightWallGroup = new THREE.Group();
-      rightWallGroup.name = `Alcove_RightWallGroup_${item.id}`;
-      rightWallGroup.position.set(13.0, 4.0, -3.0);
-
-      const rightWall = new THREE.Mesh(wallGeo, plasterMat);
-      rightWall.name = `Massive_Alcove_RightWall_${item.id}`;
-      rightWall.castShadow = false; // Tối ưu hóa: Không đổ bóng trên vách phụ
-      rightWall.receiveShadow = true;
-      rightWallGroup.add(rightWall);
-
-      const rightBase = new THREE.Mesh(baseboardGeo, woodMat);
-      rightBase.name = `Baseboard_Right_${item.id}`;
-      rightBase.position.y = -4.0 + 0.6;
-      rightBase.castShadow = false; // Tối ưu hóa bóng đổ GPU
-      rightBase.receiveShadow = true;
-      rightWallGroup.add(rightBase);
-
-      const rightTrim = new THREE.Mesh(goldTrimGeo, goldMat);
-      rightTrim.name = `GoldTrim_Right_${item.id}`;
-      rightTrim.position.y = -4.0 + 1.24;
-      rightTrim.castShadow = false; // Tối ưu hóa bóng đổ GPU
-      rightTrim.receiveShadow = true;
-      rightWallGroup.add(rightTrim);
-
-      alcoveGroup.add(rightWallGroup);
-
-      // Phòng 01 Truyện Kiều kích hoạt thêm Layer 1 để đón nhận ánh sáng cô lập
-      if (CUSTOM_ROOM_IDS.has(item.id)) {
-        leftWallGroup.traverse(c => c.layers.enable(1));
-        rightWallGroup.traverse(c => c.layers.enable(1));
-      }
-
-      wallsMasterGroup.add(alcoveGroup);
-    });
-
-    // 1. Lưu lại danh sách va chạm của 15 vách ngăn trước khi gộp (kèm center để proximity check siêu tốc)
-    this.cachedWallColliders = [];
-    wallsMasterGroup.traverse((child) => {
-      if (child.isMesh && (child.name.includes('Massive_Alcove_LeftWall') || child.name.includes('Massive_Alcove_RightWall'))) {
-        child.updateMatrixWorld(true);
-        const box = new THREE.Box3().setFromObject(child);
-        const center = new THREE.Vector3();
-        box.getCenter(center);
+      [-13.0, 13.0].forEach((localX, sideIdx) => {
+        const localZ = -3.0;
+        const wx = pos.x + localX * cosR + localZ * sinR;
+        const wz = pos.z - localX * sinR + localZ * cosR;
+        const isRot = Math.abs(sinR) > 0.707;
+        const halfX = isRot ? 10.0 : 0.425;
+        const halfZ = isRot ? 0.425 : 10.0;
+        const box = new THREE.Box3(
+          new THREE.Vector3(wx - halfX, pos.y, wz - halfZ),
+          new THREE.Vector3(wx + halfX, pos.y + 8.0, wz + halfZ)
+        );
+        const center = new THREE.Vector3(wx, pos.y + 4.0, wz);
         this.cachedWallColliders.push({
-          name: child.name,
+          name: `Massive_Alcove_${sideIdx === 0 ? 'Left' : 'Right'}Wall_${item.id}`,
           isMesh: false,
           visible: true,
-          userData: { worldAABB: box, center: center }
+          userData: { worldAABB: box, center }
         });
-      }
+      });
     });
-
-    // Giữ nguyên các mesh vách ngăn và vật liệu tường gốc
-    wallsMasterGroup.traverse((c) => {
-      if (c.isMesh) {
-        c.frustumCulled = true;
-      }
-    });
-
-    this.group.add(wallsMasterGroup);
   }
 
   /**
    * 2. KHỞI TẠO 15 BỆ ĐÁ CẨM THẠCH TRẮNG TRÊN SÀN BẢO TÀNG (THREE.InstancedMesh)
    */
   initInstancedPedestals() {
-    const pedestalGeo = new THREE.CylinderGeometry(0.85, 0.95, 0.95, 32);
+    const pedestalGeo = new THREE.CylinderGeometry(0.85, 0.95, 0.95, 16);
     this.prepareGeometry(pedestalGeo);
 
     const marbleMat = this.getMat('whiteMarble');
@@ -264,9 +171,11 @@ export class RoomGenerator {
     instancedPedestals.name = "Instanced_Marble_Pedestals_15Rooms";
     instancedPedestals.frustumCulled = true;
     instancedPedestals.castShadow = false; // Tối ưu hóa: Không đổ bóng bệ sách
-    instancedPedestals.receiveShadow = true;
+    instancedPedestals.receiveShadow = false;
+    instancedPedestals.matrixAutoUpdate = false;
 
     const dummy = new THREE.Object3D();
+    const nonCustomPositions = [];
 
     LITERATURE_REGISTRY.forEach((item, idx) => {
       const pos = this.calculateItemPosition(item);
@@ -274,11 +183,11 @@ export class RoomGenerator {
       dummy.position.set(pos.x, pos.y + 0.475, pos.z);
       dummy.rotation.set(0, 0, 0);
 
-      // Phòng 01 Truyện Kiều sử dụng Án thư cổ làm bàn trưng bày thay cho bệ đá
       if (CUSTOM_ROOM_IDS.has(item.id)) {
         dummy.scale.set(0, 0, 0);
       } else {
         dummy.scale.set(1, 1, 1);
+        nonCustomPositions.push(pos);
       }
       dummy.updateMatrix();
 
@@ -288,41 +197,58 @@ export class RoomGenerator {
     instancedPedestals.instanceMatrix.needsUpdate = true;
     instancedPedestals.computeBoundingBox();
     instancedPedestals.computeBoundingSphere();
+    instancedPedestals.updateMatrix();
 
     this.group.add(instancedPedestals);
 
-    // BÓNG ĐỔ GIẢ LẬP DƯỚI CHÂN 15 BỆ TRƯNG BÀY (FAKE CONTACT SHADOW)
-    const pedestalShadowGeo = new THREE.PlaneGeometry(2.6, 2.6);
-    this.prepareGeometry(pedestalShadowGeo);
-    const shadowMat = this.matLib?.get?.('fakeShadow') ?? getFakeShadowMaterial();
+    // BÓNG ĐỔ GIẢ LẬP & VỆT SÁNG DƯỚI CHÂN CÁC BỆ TRƯNG BÀY (INSTANCED MESH - 2 DRAW CALLS)
+    if (nonCustomPositions.length > 0) {
+      const pedestalShadowGeo = new THREE.PlaneGeometry(2.6, 2.6);
+      pedestalShadowGeo.rotateX(-Math.PI / 2);
+      this.prepareGeometry(pedestalShadowGeo);
+      const shadowMat = this.matLib?.get?.('fakeShadow') ?? getFakeShadowMaterial();
 
-    // VỆT SÁNG IN TRÊN SÀN DƯỚI 15 BỆ TRƯNG BÀY (FLOOR LIGHT POOL)
-    const pedestalLightPoolGeo = new THREE.PlaneGeometry(3.6, 3.6);
-    this.prepareGeometry(pedestalLightPoolGeo);
-    const poolMat = this.matLib?.get?.('floorLightPool') ?? getFloorLightPoolMaterial();
+      const pedestalLightPoolGeo = new THREE.PlaneGeometry(3.6, 3.6);
+      pedestalLightPoolGeo.rotateX(-Math.PI / 2);
+      this.prepareGeometry(pedestalLightPoolGeo);
+      const poolMat = this.matLib?.get?.('floorLightPool') ?? getFloorLightPoolMaterial();
 
-    LITERATURE_REGISTRY.forEach((item) => {
-      if (CUSTOM_ROOM_IDS.has(item.id)) return; // Phòng 01 có án thư riêng
-      const pos = this.calculateItemPosition(item);
-      const pShadow = new THREE.Mesh(pedestalShadowGeo, shadowMat);
-      pShadow.name = `Pedestal_Shadow_${item.id}`;
-      pShadow.rotation.x = -Math.PI / 2;
-      pShadow.position.set(pos.x, pos.y + 0.012, pos.z);
-      pShadow.frustumCulled = true;
-      pShadow.renderOrder = 1;
+      const shadowInst = new THREE.InstancedMesh(pedestalShadowGeo, shadowMat, nonCustomPositions.length);
+      shadowInst.name = "Instanced_Pedestal_Shadows";
+      shadowInst.frustumCulled = true;
+      shadowInst.renderOrder = 1;
+      shadowInst.matrixAutoUpdate = false;
 
-      // Vệt sáng sàn bệ trưng bày (Floor Light Pool)
-      const pPool = new THREE.Mesh(pedestalLightPoolGeo, poolMat);
-      pPool.name = `Pedestal_LightPool_${item.id}`;
-      pPool.rotation.x = -Math.PI / 2;
-      pPool.position.set(pos.x, pos.y + 0.015, pos.z);
-      pPool.frustumCulled = true;
-      pPool.renderOrder = 2;
-      this.group.add(pPool);
+      const poolInst = new THREE.InstancedMesh(pedestalLightPoolGeo, poolMat, nonCustomPositions.length);
+      poolInst.name = "Instanced_Pedestal_LightPools";
+      poolInst.frustumCulled = true;
+      poolInst.renderOrder = 2;
+      poolInst.matrixAutoUpdate = false;
 
-      // (ĐÃ XÓA BỎ HÌNH NÓN ÁNH SÁNG THÔ LƠ LỬNG Ở HÀNH LANG THEO YÊU CẦU)
-      this.group.add(pShadow);
-    });
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(1, 1, 1);
+      nonCustomPositions.forEach((pos, idx) => {
+        dummy.position.set(pos.x, pos.y + 0.012, pos.z);
+        dummy.updateMatrix();
+        shadowInst.setMatrixAt(idx, dummy.matrix);
+
+        dummy.position.set(pos.x, pos.y + 0.015, pos.z);
+        dummy.updateMatrix();
+        poolInst.setMatrixAt(idx, dummy.matrix);
+      });
+
+      shadowInst.instanceMatrix.needsUpdate = true;
+      shadowInst.computeBoundingBox();
+      shadowInst.computeBoundingSphere();
+      shadowInst.updateMatrix();
+
+      poolInst.instanceMatrix.needsUpdate = true;
+      poolInst.computeBoundingBox();
+      poolInst.computeBoundingSphere();
+      poolInst.updateMatrix();
+
+      this.group.add(shadowInst, poolInst);
+    }
   }
 
   /**
@@ -335,7 +261,7 @@ export class RoomGenerator {
     const bookPagesGeo = new THREE.BoxGeometry(0.74, 0.12, 1.02);
     this.prepareGeometry(bookPagesGeo);
 
-    const pagesMat = new THREE.MeshLambertMaterial({ color: 0xf5f2eb, side: THREE.DoubleSide });
+    const pagesMat = new THREE.MeshLambertMaterial({ color: 0xf5f2eb, side: THREE.FrontSide });
 
     const goldRibMat = this.getMat('royalGold');
 
@@ -354,7 +280,7 @@ export class RoomGenerator {
       const baseHoverY = pos.y + 1.55;
       bookGroup.position.set(pos.x, baseHoverY, pos.z);
 
-      const coverMat = new THREE.MeshLambertMaterial({ color: item.themeColor, side: THREE.DoubleSide });
+      const coverMat = new THREE.MeshLambertMaterial({ color: item.themeColor, side: THREE.FrontSide });
 
       const coverMesh = new THREE.Mesh(bookCoverGeo, coverMat);
       coverMesh.castShadow = false; // Tối ưu hóa: Không đổ bóng bìa sách
@@ -429,6 +355,7 @@ export class RoomGenerator {
   initLocalizedMoodLighting() {
     const lightsGroup = new THREE.Group();
     lightsGroup.name = "Diorama_Localized_Mood_Lights_Group";
+    this.lightsGroup = lightsGroup;
 
     LITERATURE_REGISTRY.forEach((item) => {
       // Bỏ qua Phòng 01 vì RoomDecorator đã quản lý hệ sinh thái ánh sáng cô lập Layer 1
@@ -516,21 +443,24 @@ export class RoomGenerator {
 
     const camPos = camera?.position;
 
-    // 1. Cập nhật hoạt ảnh sách bay kết hợp Distance Culling
+    // 1. Cập nhật hoạt ảnh sách bay kết hợp Distance Culling (dùng distanceToSquared tránh Math.sqrt)
+    const maxBookDistSq = 4900.0; // 70m * 70m
     for (let i = 0; i < this.books.length; i++) {
       const b = this.books[i];
       if (camPos) {
-        const dist = camPos.distanceTo(b.group.position);
-        b.group.visible = dist < 70.0;
-        if (!b.group.visible) continue;
+        const distSq = camPos.distanceToSquared(b.group.position);
+        const vis = distSq < maxBookDistSq;
+        if (b.group.visible !== vis) b.group.visible = vis;
+        if (!vis) continue;
       }
       const yOffset = Math.sin(elapsedTime * b.floatSpeed + b.phase) * b.bobbingAmp;
       b.group.position.y = b.baseY + yOffset;
       b.group.rotation.y += b.rotSpeed * delta;
     }
 
-    // 2. TỐI ƯU HÓA PROXIMITY LIGHT STREAMING (THROTTLE 3HZ):
-    // Chỉ tính toán khoảng cách 30 nguồn sáng định kỳ mỗi 0.35s bằng phép toán distSq O(1)
+    // 2. Bỏ qua throttle đèn nếu initThreePointLighting đã gỡ toàn bộ đèn cục bộ khỏi atriumGroup
+    if (!this.lightsGroup || this.lightsGroup.children.length === 0) return;
+
     this.lightThrottleTimer = (this.lightThrottleTimer || 0) + delta;
     if (this.lightThrottleTimer >= 0.35) {
       this.lightThrottleTimer = 0;

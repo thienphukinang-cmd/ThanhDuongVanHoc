@@ -1,7 +1,10 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { loadGlbCached } from '../utils/modelLoaderHelper.js';
 import { upgradeRoomWallArchitecture } from './museumWallArchitectureSystem.js';
 import { replaceAllMuseumCarpetsWithTimelinePattern, applyTimelineCarpetToMesh } from './museumCarpetReplacer.js';
+
+const _lobbyBoxScratch = new THREE.Box3();
+const _lobbyVecScratch = new THREE.Vector3();
 
 /**
  * ============================================================================
@@ -38,6 +41,8 @@ function getLobbyTex(key, w, h, drawFn, repeatX = 1, repeatY = 1) {
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(repeatX, repeatY);
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
   if ('colorSpace' in tex && THREE.SRGBColorSpace) {
     tex.colorSpace = THREE.SRGBColorSpace;
   }
@@ -54,12 +59,16 @@ export function normalizeLobbyGlb(rootScene, targetHeight = 2.0) {
     if (!child.isMesh) return;
     child.castShadow = false;
     child.receiveShadow = false;
-    child.frustumCulled = false;
+    child.frustumCulled = true;
     child.userData.ignoreRaycaster = true;
 
     const mats = Array.isArray(child.material) ? child.material : [child.material];
     mats.forEach((m) => {
-      if (m?.map && 'colorSpace' in m.map && THREE.SRGBColorSpace) {
+      if (!m) return;
+      if (!m.transparent && !m.alphaTest) {
+        m.side = THREE.FrontSide;
+      }
+      if (m.map && 'colorSpace' in m.map && THREE.SRGBColorSpace && m.map.colorSpace !== THREE.SRGBColorSpace) {
         m.map.colorSpace = THREE.SRGBColorSpace;
         m.map.needsUpdate = true;
       }
@@ -70,21 +79,19 @@ export function normalizeLobbyGlb(rootScene, targetHeight = 2.0) {
   wrapper.userData.ignoreRaycaster = true;
   rootScene.updateMatrixWorld(true);
 
-  const box = new THREE.Box3().setFromObject(rootScene);
-  const size = new THREE.Vector3();
-  box.getSize(size);
+  _lobbyBoxScratch.setFromObject(rootScene);
+  _lobbyBoxScratch.getSize(_lobbyVecScratch);
 
-  const scale = targetHeight / Math.max(size.y, 0.001);
+  const scale = targetHeight / Math.max(_lobbyVecScratch.y, 0.001);
   rootScene.scale.multiplyScalar(scale);
   rootScene.updateMatrixWorld(true);
 
-  const scaledBox = new THREE.Box3().setFromObject(rootScene);
-  const center = new THREE.Vector3();
-  scaledBox.getCenter(center);
+  _lobbyBoxScratch.setFromObject(rootScene);
+  _lobbyBoxScratch.getCenter(_lobbyVecScratch);
 
-  rootScene.position.x -= center.x;
-  rootScene.position.z -= center.z;
-  rootScene.position.y -= scaledBox.min.y;
+  rootScene.position.x -= _lobbyVecScratch.x;
+  rootScene.position.z -= _lobbyVecScratch.z;
+  rootScene.position.y -= _lobbyBoxScratch.min.y;
 
   wrapper.add(rootScene);
   return wrapper;
@@ -174,7 +181,11 @@ export function createImperialMarbleFloorTexture() {
  * 2. ĐẠI MANDALA TRỐNG ĐỒNG ĐÔNG SƠN 14 CÁNH PHÁT SÁNG Ở TÂM SẢNH
  */
 export function createDongSonCenterMandalaTexture() {
-  return getLobbyTex('lobby_dongson_mandala_v3', 1024, 1024, (ctx, w, h) => {
+  return getLobbyTex('lobby_dongson_mandala_v3', 512, 512, (ctx) => {
+    ctx.save();
+    ctx.scale(0.5, 0.5);
+    const w = 1024;
+    const h = 1024;
     const cx = w / 2;
     const cy = h / 2;
 
@@ -296,6 +307,7 @@ export function createDongSonCenterMandalaTexture() {
       ctx.arc(sx, sy, 8, 0, Math.PI * 2);
       ctx.stroke();
     }
+    ctx.restore();
   });
 }
 
@@ -364,7 +376,11 @@ export function createCorridorRoyalCarpetTexture() {
  * 4. TRANH PHÙ ĐIÊU SƠN MÀI TREO TƯỜNG HÀNH LANG KHẮC THƠ BẢO TÀNG
  */
 export function createCorridorLacquerMural(title, verse) {
-  const tex = getLobbyTex(`lobby_mural_v3_${title}`, 1024, 512, (ctx, w, h) => {
+  const tex = getLobbyTex(`lobby_mural_v3_${title}`, 512, 256, (ctx) => {
+    ctx.save();
+    ctx.scale(0.5, 0.5);
+    const w = 1024;
+    const h = 512;
     // Nền sơn mài đỏ then son truyền thống
     const bg = ctx.createLinearGradient(0, 0, w, h);
     bg.addColorStop(0.0, '#1c0707');
@@ -392,12 +408,15 @@ export function createCorridorLacquerMural(title, verse) {
     ctx.fillStyle = '#fef3c7';
     ctx.font = 'italic 30px "Times New Roman", serif';
     ctx.fillText(verse, w / 2, 285);
+    ctx.restore();
   });
 
   const mesh = new THREE.Mesh(
     new THREE.PlaneGeometry(5.6, 2.8),
-    new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide })
+    new THREE.MeshBasicMaterial({ map: tex, side: THREE.FrontSide })
   );
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
   mesh.userData.ignoreRaycaster = true;
   return mesh;
 }
@@ -410,7 +429,7 @@ export function createCentralDongSonMonument() {
   monumentGroup.name = 'Lobby_Central_DongSon_Monument';
   monumentGroup.userData.ignoreRaycaster = true;
 
-  // Bệ đá bát giác 3 tầng cẩm thạch đen viền vàng hoàng kim
+  // Bệ đá bát giác 3 tầng cẩm thạch đen viền vàng hoàng kim (tối giản phân đoạn, FrontSide)
   const stepConfigs = [
     { radius: 4.8, height: 0.32, color: 0x140f1a, rimColor: 0xfacc15 },
     { radius: 3.8, height: 0.32, color: 0x1e1528, rimColor: 0xf59e0b },
@@ -420,152 +439,40 @@ export function createCentralDongSonMonument() {
   let currentY = 0;
   stepConfigs.forEach((cfg) => {
     const step = new THREE.Mesh(
-      new THREE.CylinderGeometry(cfg.radius, cfg.radius + 0.22, cfg.height, 32),
+      new THREE.CylinderGeometry(cfg.radius, cfg.radius + 0.22, cfg.height, 16),
       new THREE.MeshStandardMaterial({
         color: cfg.color,
         metalness: 0.65,
-        roughness: 0.25
+        roughness: 0.25,
+        side: THREE.FrontSide
       })
     );
     step.position.y = currentY + cfg.height * 0.5;
+    step.castShadow = false;
+    step.receiveShadow = false;
     step.userData.ignoreRaycaster = true;
 
     // Viền kim loại dát vàng
     const rim = new THREE.Mesh(
-      new THREE.TorusGeometry(cfg.radius + 0.05, 0.045, 10, 48),
+      new THREE.TorusGeometry(cfg.radius + 0.05, 0.045, 6, 20),
       new THREE.MeshStandardMaterial({
         color: cfg.rimColor,
         metalness: 0.85,
         roughness: 0.2,
         emissive: 0x713f12,
-        emissiveIntensity: 0.3
+        emissiveIntensity: 0.3,
+        side: THREE.FrontSide
       })
     );
     rim.rotation.x = Math.PI / 2;
     rim.position.y = currentY + cfg.height;
+    rim.castShadow = false;
+    rim.receiveShadow = false;
     rim.userData.ignoreRaycaster = true;
 
     monumentGroup.add(step, rim);
     currentY += cfg.height;
   });
-
-  // Khối Trống Đồng Đông Sơn 3D xoay uy nghi ở đỉnh đài
-  const drumGroup = new THREE.Group();
-  drumGroup.position.y = currentY + 0.15;
-  drumGroup.userData.ignoreRaycaster = true;
-
-  // Thân Trống Đồng: Tang trống loe, thân trụ, chân đế loe rộng
-  const drumPoints = [
-    new THREE.Vector2(1.15, 0.0),   // Chân trống loe
-    new THREE.Vector2(0.92, 0.35),  // Thắt lưng thân
-    new THREE.Vector2(0.92, 0.65),  // Thân trụ
-    new THREE.Vector2(1.22, 0.95),  // Tang trống loe
-    new THREE.Vector2(1.20, 1.05)   // Vành mặt trống
-  ];
-  const drumGeo = new THREE.LatheGeometry(drumPoints, 48);
-  const drumMat = new THREE.MeshStandardMaterial({
-    color: 0xfacc15,
-    metalness: 0.85,
-    roughness: 0.22,
-    emissive: 0x854d0e,
-    emissiveIntensity: 0.35
-  });
-  const drumMesh = new THREE.Mesh(drumGeo, drumMat);
-  drumMesh.userData.ignoreRaycaster = true;
-  drumGroup.add(drumMesh);
-
-  // Mặt Trống Đồng tròn với Đại Mandala 14 cánh ở đỉnh
-  const drumFace = new THREE.Mesh(
-    new THREE.CircleGeometry(1.20, 48),
-    new THREE.MeshBasicMaterial({
-      map: createDongSonCenterMandalaTexture(),
-      side: THREE.DoubleSide
-    })
-  );
-  drumFace.rotation.x = -Math.PI / 2;
-  drumFace.position.y = 1.055;
-  drumFace.userData.ignoreRaycaster = true;
-  drumGroup.add(drumFace);
-
-  // 4 Quai Trống Đồng bện thừng đôi cong ở 4 hướng
-  const handleMat = new THREE.MeshStandardMaterial({ color: 0xca8a04, metalness: 0.8, roughness: 0.3 });
-  for (let hIdx = 0; hIdx < 4; hIdx++) {
-    const angle = (hIdx * Math.PI) / 2;
-    const handle = new THREE.Mesh(
-      new THREE.TorusGeometry(0.24, 0.05, 10, 24, Math.PI),
-      handleMat
-    );
-    handle.rotation.z = Math.PI / 2;
-    handle.rotation.y = angle;
-    handle.position.set(Math.cos(angle) * 1.12, 0.68, Math.sin(angle) * 1.12);
-    handle.userData.ignoreRaycaster = true;
-    drumGroup.add(handle);
-  }
-
-  // Tự động nạp mô hình Trống Đồng Đông Sơn 3D Blender (dong_son_drum_3d.glb)
-  const drumGlbLoader = new GLTFLoader();
-  drumGlbLoader.load(
-    '/model/heritage/dong_son_drum_3d.glb',
-    (gltf) => {
-      const glbDrum = gltf.scene;
-      glbDrum.name = 'Blender_Dong_Son_Drum_3D';
-      glbDrum.traverse((c) => {
-        if (c.isMesh) {
-          c.castShadow = false;
-          c.receiveShadow = false;
-          c.frustumCulled = true;
-          c.userData.ignoreRaycaster = true;
-          if (c.material?.map && 'colorSpace' in c.material.map && THREE.SRGBColorSpace) {
-            c.material.map.colorSpace = THREE.SRGBColorSpace;
-          }
-        }
-      });
-      const box = new THREE.Box3().setFromObject(glbDrum);
-      const sz = new THREE.Vector3();
-      box.getSize(sz);
-      const drumScale = 2.45 / Math.max(sz.x, sz.z, 0.001);
-      glbDrum.scale.set(drumScale, drumScale, drumScale);
-      glbDrum.position.set(0, 0.05, 0);
-      drumGroup.add(glbDrum);
-
-      // Cập nhật ma trận thế giới & Đăng ký Hitbox chuẩn hóa (Skill: hitbox-collision-architect)
-      monumentGroup.updateMatrixWorld(true);
-      if (typeof window !== 'undefined' && window.__museumHitboxManager) {
-        // Đăng ký Hitbox vật cản bệ đá & đài trống đồng với shrinkFactor: 0.92
-        window.__museumHitboxManager.registerSolidObjectCollider(monumentGroup, {
-          shrinkFactor: 0.92,
-          tag: 'Central_DongSon_Drum_Monument'
-        });
-        // Bọc Tight Click Hitbox ôm sát Trống Đồng để click chuẩn 100%
-        window.__museumHitboxManager.createTightClickHitbox(glbDrum, {
-          loreKey: 'lobby_dongSonDrum',
-          isBookPortal: false,
-          padding: 0.12
-        });
-      }
-
-      // Ẩn thân trống procedural để nhường chỗ cho model Blender
-      drumMesh.visible = false;
-      drumFace.visible = false;
-    },
-    undefined,
-    () => {}
-  );
-
-  // Vòng Hào Quang Thần Thánh phát sáng xoay quanh Trống Đồng
-  const haloRing = new THREE.Mesh(
-    new THREE.TorusGeometry(1.85, 0.04, 12, 64),
-    new THREE.MeshBasicMaterial({
-      color: 0xfde047,
-      transparent: true,
-      opacity: 0.88,
-      blending: THREE.AdditiveBlending
-    })
-  );
-  haloRing.rotation.x = Math.PI / 3;
-  haloRing.position.y = 0.55;
-  haloRing.userData.ignoreRaycaster = true;
-  drumGroup.add(haloRing);
 
   // Đã bỏ hoàn toàn khối trống đồng & vòng hào quang xoay tròn ở tâm sảnh theo yêu cầu người dùng
   monumentGroup.userData.rotatingPart = null;
@@ -592,30 +499,33 @@ export function createInstancedCorridorPillarsAndLanterns(pillarPositions = [], 
   if (count === 0) return group;
 
   // Thân cột sơn mài đỏ son hoàng cung
-  const shaftGeo = new THREE.CylinderGeometry(0.44, 0.48, pillarHeight, 16);
+  const shaftGeo = new THREE.CylinderGeometry(0.44, 0.48, pillarHeight, 10);
   const shaftMat = new THREE.MeshStandardMaterial({
     color: 0x7f1d1d,
     roughness: 0.32,
-    metalness: 0.35
+    metalness: 0.35,
+    side: THREE.FrontSide
   });
 
   // Chân đế & Đỉnh cột đấu củng thếp vàng
-  const capGeo = new THREE.CylinderGeometry(0.66, 0.66, 0.48, 16);
+  const capGeo = new THREE.CylinderGeometry(0.66, 0.66, 0.48, 10);
   const capMat = new THREE.MeshStandardMaterial({
     color: 0xfacc15,
     roughness: 0.22,
     metalness: 0.85,
     emissive: 0x713f12,
-    emissiveIntensity: 0.35
+    emissiveIntensity: 0.35,
+    side: THREE.FrontSide
   });
 
   // Đèn lồng hoàng cung phát sáng treo ở độ cao 6.2m
-  const lanternGeo = new THREE.SphereGeometry(0.35, 12, 12);
+  const lanternGeo = new THREE.SphereGeometry(0.35, 8, 6);
   const lanternMat = new THREE.MeshBasicMaterial({
     color: 0xfef08a,
     transparent: true,
     opacity: 0.92,
-    blending: THREE.AdditiveBlending
+    blending: THREE.AdditiveBlending,
+    side: THREE.FrontSide
   });
 
   const shaftInst = new THREE.InstancedMesh(shaftGeo, shaftMat, count);
@@ -623,10 +533,14 @@ export function createInstancedCorridorPillarsAndLanterns(pillarPositions = [], 
   const topInst = new THREE.InstancedMesh(capGeo, capMat, count);
   const lanternInst = new THREE.InstancedMesh(lanternGeo, lanternMat, count);
 
+  const instBoundingSphere = new THREE.Sphere(new THREE.Vector3(0, pillarHeight * 0.5, 0), 30);
   [shaftInst, baseInst, topInst, lanternInst].forEach((inst) => {
     inst.castShadow = false;
     inst.receiveShadow = false;
-    inst.frustumCulled = false;
+    inst.frustumCulled = true;
+    inst.boundingSphere = instBoundingSphere;
+    inst.matrixAutoUpdate = false;
+    inst.updateMatrix();
     inst.userData.ignoreRaycaster = true;
   });
 
@@ -693,11 +607,13 @@ export function createLobbySkylightAndGodRays(skylightApex = 28.0) {
       color: 0xfacc15,
       metalness: 0.85,
       roughness: 0.25,
-      side: THREE.DoubleSide
+      side: THREE.FrontSide
     })
   );
   ceilingSkylightFrame.rotation.x = Math.PI / 2;
   ceilingSkylightFrame.position.y = 28.2;
+  ceilingSkylightFrame.castShadow = false;
+  ceilingSkylightFrame.receiveShadow = false;
   ceilingSkylightFrame.userData.ignoreRaycaster = true;
   lightGroup.add(ceilingSkylightFrame);
 
@@ -708,11 +624,13 @@ export function createLobbySkylightAndGodRays(skylightApex = 28.0) {
       color: 0xfef9c3,
       transparent: true,
       opacity: 0.35,
-      side: THREE.DoubleSide
+      side: THREE.FrontSide
     })
   );
   ceilingGlass.rotation.x = Math.PI / 2;
   ceilingGlass.position.y = 28.22;
+  ceilingGlass.castShadow = false;
+  ceilingGlass.receiveShadow = false;
   ceilingGlass.userData.ignoreRaycaster = true;
   lightGroup.add(ceilingGlass);
 
@@ -728,7 +646,7 @@ export function createLobbySkylightAndGodRays(skylightApex = 28.0) {
   });
 
   const mainRay = new THREE.Mesh(
-    new THREE.CylinderGeometry(2.4, 7.8, 28.0, 32, 1, true),
+    new THREE.CylinderGeometry(2.4, 7.8, 28.0, 16, 1, true),
     new THREE.MeshBasicMaterial({
       map: rayTex,
       color: 0xfde047,
@@ -740,14 +658,11 @@ export function createLobbySkylightAndGodRays(skylightApex = 28.0) {
     })
   );
   mainRay.position.set(0, 14.0, 0);
+  mainRay.castShadow = false;
+  mainRay.receiveShadow = false;
   mainRay.userData.ignoreRaycaster = true;
   lightGroup.add(mainRay);
   lightGroup.userData.godRayMesh = mainRay;
-
-  // Nguồn sáng thực ấm áp (PointLight vàng ấm 3000K)
-  const centerPointLight = new THREE.PointLight(0xfde047, 2.8, 54, 1.4);
-  centerPointLight.position.set(0, 5.2, 0);
-  lightGroup.add(centerPointLight);
 
   return lightGroup;
 }
@@ -755,9 +670,59 @@ export function createLobbySkylightAndGodRays(skylightApex = 28.0) {
 /**
  * 8. TỰ ĐỘNG NẠP CẢ 4 MODEL .GLB TỪ POLY HAVEN (VÀ DỰ PHÒNG PROCEDURAL)
  */
-export function populateLobbyGlbProps(targetGroup) {
-  const loader = new GLTFLoader();
+function placeInstancedLobbyGlb(baseObj, spots, yOffset, targetGroup, targetHeight = 2.0) {
+  baseObj.updateMatrixWorld(true);
+  const invRoot = baseObj.matrixWorld.clone().invert();
+  const relMatrix = new THREE.Matrix4();
+  const spotMatrix = new THREE.Matrix4();
+  const finalMatrix = new THREE.Matrix4();
 
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (let i = 0; i < spots.length; i++) {
+    const s = spots[i];
+    if (s.x < minX) minX = s.x;
+    if (s.x > maxX) maxX = s.x;
+    if (s.z < minZ) minZ = s.z;
+    if (s.z > maxZ) maxZ = s.z;
+  }
+  const cx = (minX + maxX) * 0.5;
+  const cy = yOffset + targetHeight * 0.5;
+  const cz = (minZ + maxZ) * 0.5;
+  const rx = (maxX - minX) * 0.5 + 2.0;
+  const ry = targetHeight * 0.5 + 1.0;
+  const rz = (maxZ - minZ) * 0.5 + 2.0;
+  const sharedBounds = new THREE.Sphere(new THREE.Vector3(cx, cy, cz), Math.sqrt(rx * rx + ry * ry + rz * rz));
+
+  baseObj.traverse((child) => {
+    if (!child.isMesh || !child.geometry) return;
+    const mat = Array.isArray(child.material) ? child.material[0] : child.material;
+    if (!mat) return;
+    if (!mat.transparent && !mat.alphaTest) {
+      mat.side = THREE.FrontSide;
+    }
+    if (!child.geometry.boundingBox) child.geometry.computeBoundingBox();
+    if (!child.geometry.boundingSphere) child.geometry.computeBoundingSphere();
+
+    relMatrix.multiplyMatrices(invRoot, child.matrixWorld);
+    const inst = new THREE.InstancedMesh(child.geometry, mat, spots.length);
+    for (let i = 0; i < spots.length; i++) {
+      spotMatrix.makeTranslation(spots[i].x, yOffset, spots[i].z);
+      finalMatrix.multiplyMatrices(spotMatrix, relMatrix);
+      inst.setMatrixAt(i, finalMatrix);
+    }
+    inst.instanceMatrix.needsUpdate = true;
+    inst.castShadow = false;
+    inst.receiveShadow = false;
+    inst.frustumCulled = true;
+    inst.boundingSphere = sharedBounds;
+    inst.matrixAutoUpdate = false;
+    inst.updateMatrix();
+    inst.userData.ignoreRaycaster = true;
+    targetGroup.add(inst);
+  });
+}
+
+export function populateLobbyGlbProps(targetGroup) {
   // 1. wooden_pedestal.glb (8 đôn gỗ trưng bày nép sát hàng cột, giải phóng 100% thảm đỏ)
   const pedestalSpots = [
     { x: -9.5, z: -10.5 }, { x: 9.5, z: -10.5 },
@@ -766,54 +731,46 @@ export function populateLobbyGlbProps(targetGroup) {
     { x: 14.5, z: -5.0 },  { x: 14.5, z: 5.0 }
   ];
 
-  const loadWithFallback = (urls, onSucc, onFail) => {
-    let uIdx = 0;
-    const tryUrl = () => {
-      if (uIdx >= urls.length) {
-        if (onFail) onFail();
-        return;
-      }
-      loader.load(urls[uIdx++], (gltf) => onSucc(gltf), undefined, () => tryUrl());
-    };
-    tryUrl();
-  };
-
-  loadWithFallback(
-    ['/model/web/wooden_pedestal.glb', '/model/lobby/lobby_pedestal.glb'],
-    (gltf) => {
-      const basePedestal = normalizeLobbyGlb(gltf.scene, 1.05);
-      pedestalSpots.forEach((spot) => {
-        const clone = basePedestal.clone(true);
-        clone.position.set(spot.x, 0, spot.z);
-        targetGroup.add(clone);
-      });
-    },
-    () => {
-      // Fallback: Đôn gỗ bát giác procedural
+  loadGlbCached(['/model/web/wooden_pedestal.glb', '/model/lobby/lobby_pedestal.glb'], {
+    maxTextureSize: 512,
+    disableMipmaps: true,
+    clone: true
+  })
+    .then((sceneObj) => {
+      const basePedestal = normalizeLobbyGlb(sceneObj, 1.05);
+      placeInstancedLobbyGlb(basePedestal, pedestalSpots, 0, targetGroup, 1.05);
+    })
+    .catch(() => {
+      // Fallback: Đôn gỗ bát giác procedural (InstancedMesh)
       const pGeo = new THREE.CylinderGeometry(0.48, 0.55, 1.05, 8);
-      const pMat = new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.3, metalness: 0.2 });
-      pedestalSpots.forEach((spot) => {
-        const pMesh = new THREE.Mesh(pGeo, pMat);
-        pMesh.position.set(spot.x, 0.525, spot.z);
-        pMesh.userData.ignoreRaycaster = true;
-        targetGroup.add(pMesh);
+      const pMat = new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.3, metalness: 0.2, side: THREE.FrontSide });
+      const inst = new THREE.InstancedMesh(pGeo, pMat, pedestalSpots.length);
+      const m = new THREE.Matrix4();
+      pedestalSpots.forEach((spot, idx) => {
+        m.makeTranslation(spot.x, 0.525, spot.z);
+        inst.setMatrixAt(idx, m);
       });
-    }
-  );
+      inst.instanceMatrix.needsUpdate = true;
+      inst.castShadow = false;
+      inst.receiveShadow = false;
+      inst.frustumCulled = true;
+      inst.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0.525, 0), 20);
+      inst.userData.ignoreRaycaster = true;
+      targetGroup.add(inst);
+    });
 
-  // 2. antique_vase.glb (8 lục bình đồng cổ đặt trên đôn)
-  loadWithFallback(
-    ['/model/web/antique_vase.glb', '/model/lobby/lobby_vase.glb'],
-    (gltf) => {
-      const baseVase = normalizeLobbyGlb(gltf.scene, 1.75);
-      pedestalSpots.forEach((spot) => {
-        const clone = baseVase.clone(true);
-        clone.position.set(spot.x, 1.05, spot.z); // Đặt trên đỉnh đôn gỗ
-        targetGroup.add(clone);
-      });
-    },
-    () => {
-      // Fallback: Lục bình gốm dát vàng
+  // 2. antique_vase.glb (8 lục bình đồng cổ đặt trên đôn - InstancedMesh)
+  loadGlbCached(['/model/web/antique_vase.glb', '/model/lobby/lobby_vase.glb'], {
+    maxTextureSize: 512,
+    disableMipmaps: true,
+    clone: true
+  })
+    .then((sceneObj) => {
+      const baseVase = normalizeLobbyGlb(sceneObj, 1.75);
+      placeInstancedLobbyGlb(baseVase, pedestalSpots, 1.05, targetGroup, 1.75);
+    })
+    .catch(() => {
+      // Fallback: Lục bình gốm dát vàng (InstancedMesh)
       const points = [
         new THREE.Vector2(0.0, 0.0),
         new THREE.Vector2(0.36, 0.05),
@@ -822,18 +779,24 @@ export function populateLobbyGlbProps(targetGroup) {
         new THREE.Vector2(0.20, 1.40),
         new THREE.Vector2(0.34, 1.70)
       ];
-      const vaseGeo = new THREE.LatheGeometry(points, 20);
-      const vaseMat = new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.8, roughness: 0.25 });
-      pedestalSpots.forEach((spot) => {
-        const vMesh = new THREE.Mesh(vaseGeo, vaseMat);
-        vMesh.position.set(spot.x, 1.05, spot.z);
-        vMesh.userData.ignoreRaycaster = true;
-        targetGroup.add(vMesh);
+      const vaseGeo = new THREE.LatheGeometry(points, 12);
+      const vaseMat = new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.8, roughness: 0.25, side: THREE.FrontSide });
+      const inst = new THREE.InstancedMesh(vaseGeo, vaseMat, pedestalSpots.length);
+      const m = new THREE.Matrix4();
+      pedestalSpots.forEach((spot, idx) => {
+        m.makeTranslation(spot.x, 1.05, spot.z);
+        inst.setMatrixAt(idx, m);
       });
-    }
-  );
+      inst.instanceMatrix.needsUpdate = true;
+      inst.castShadow = false;
+      inst.receiveShadow = false;
+      inst.frustumCulled = true;
+      inst.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 1.9, 0), 20);
+      inst.userData.ignoreRaycaster = true;
+      targetGroup.add(inst);
+    });
 
-  // 3. lobby_plant.glb (8 chậu cây cảnh đặt tại các góc thoáng của đại sảnh, giải phóng 100% thảm đỏ và hành lang)
+  // 3. lobby_plant.glb (8 chậu cây cảnh đặt tại các góc thoáng của đại sảnh - InstancedMesh)
   const plantSpots = [
     { x: -6.5, z: 26.0 },  { x: 6.5, z: 26.0 },   // Hai bên sảnh đón phía Nam (cách thảm đỏ 4.4m)
     { x: -6.5, z: 12.0 },  { x: 6.5, z: 12.0 },   // Nép sát hàng cột phía Nam (cách thảm đỏ 4.4m, cách hành lang 7.0m)
@@ -841,55 +804,65 @@ export function populateLobbyGlbProps(targetGroup) {
     { x: -14.5, z: 0.0 },  { x: 14.5, z: 0.0 }    // Hai bên cánh gà đại sảnh trung tâm (cách mọi thảm đỏ > 14m)
   ];
 
-  loadWithFallback(
-    ['/model/web/lobby_plant.glb', '/model/lobby/lobby_plant.glb'],
-    (gltf) => {
-      const basePlant = normalizeLobbyGlb(gltf.scene, 2.3);
-      plantSpots.forEach((spot) => {
-        const clone = basePlant.clone(true);
-        clone.position.set(spot.x, 0, spot.z);
-        targetGroup.add(clone);
+  loadGlbCached(['/model/web/lobby_plant.glb', '/model/lobby/lobby_plant.glb'], {
+    maxTextureSize: 512,
+    disableMipmaps: true,
+    clone: true
+  })
+    .then((sceneObj) => {
+      const basePlant = normalizeLobbyGlb(sceneObj, 2.3);
+      placeInstancedLobbyGlb(basePlant, plantSpots, 0, targetGroup, 2.3);
+    })
+    .catch(() => {
+      // Fallback: Chậu cây xanh procedural (InstancedMesh)
+      const potGeo = new THREE.CylinderGeometry(0.55, 0.42, 0.75, 10);
+      const potMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.4, side: THREE.FrontSide });
+      const foliageGeo = new THREE.DodecahedronGeometry(0.9, 0);
+      const foliageMat = new THREE.MeshStandardMaterial({ color: 0x166534, roughness: 0.6, side: THREE.FrontSide });
+      const potInst = new THREE.InstancedMesh(potGeo, potMat, plantSpots.length);
+      const foliageInst = new THREE.InstancedMesh(foliageGeo, foliageMat, plantSpots.length);
+      const m = new THREE.Matrix4();
+      plantSpots.forEach((spot, idx) => {
+        m.makeTranslation(spot.x, 0.375, spot.z);
+        potInst.setMatrixAt(idx, m);
+        m.makeTranslation(spot.x, 1.35, spot.z);
+        foliageInst.setMatrixAt(idx, m);
       });
-    },
-    () => {
-      // Fallback: Chậu cây xanh procedural
-      const potGeo = new THREE.CylinderGeometry(0.55, 0.42, 0.75, 16);
-      const potMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.4 });
-      const foliageGeo = new THREE.DodecahedronGeometry(0.9, 1);
-      const foliageMat = new THREE.MeshStandardMaterial({ color: 0x166534, roughness: 0.6 });
-      plantSpots.forEach((spot) => {
-        const pGroup = new THREE.Group();
-        pGroup.position.set(spot.x, 0, spot.z);
-        pGroup.userData.ignoreRaycaster = true;
-        const pot = new THREE.Mesh(potGeo, potMat);
-        pot.position.y = 0.375;
-        const foliage = new THREE.Mesh(foliageGeo, foliageMat);
-        foliage.position.y = 1.35;
-        pGroup.add(pot, foliage);
-        targetGroup.add(pGroup);
+      const bounds = new THREE.Sphere(new THREE.Vector3(0, 1.15, 9), 30);
+      [potInst, foliageInst].forEach((inst) => {
+        inst.instanceMatrix.needsUpdate = true;
+        inst.castShadow = false;
+        inst.receiveShadow = false;
+        inst.frustumCulled = true;
+        inst.boundingSphere = bounds;
+        inst.userData.ignoreRaycaster = true;
+        targetGroup.add(inst);
       });
-    }
-  );
+    });
 
   // 4. royal_chandelier.glb (Đèn chùm hoàng cung Poly Haven treo vòm sảnh chính)
-  loadWithFallback(
-    ['/model/web/royal_chandelier.glb', '/model/lobby/lobby_chandelier.glb'],
-    (gltf) => {
-      const chandelier = normalizeLobbyGlb(gltf.scene, 4.2);
+  loadGlbCached(['/model/web/royal_chandelier.glb', '/model/lobby/lobby_chandelier.glb'], {
+    maxTextureSize: 512,
+    disableMipmaps: true,
+    clone: true
+  })
+    .then((sceneObj) => {
+      const chandelier = normalizeLobbyGlb(sceneObj, 4.2);
       chandelier.position.set(0, 18.5, 0); // Treo ở độ cao 18.5m
       targetGroup.add(chandelier);
       targetGroup.userData.chandelier = chandelier;
 
       // Xích đồng treo đèn lên đỉnh vòm
-      const chainGeo = new THREE.CylinderGeometry(0.04, 0.04, 14.0, 8);
-      const chainMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.85 });
+      const chainGeo = new THREE.CylinderGeometry(0.04, 0.04, 14.0, 6);
+      const chainMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.85, side: THREE.FrontSide });
       const chain = new THREE.Mesh(chainGeo, chainMat);
       chain.position.set(0, 25.5, 0);
+      chain.castShadow = false;
+      chain.receiveShadow = false;
       chain.userData.ignoreRaycaster = true;
       targetGroup.add(chain);
-    },
-    () => {} // Vòm kính God-Rays đã có luồng sáng trung tâm
-  );
+    })
+    .catch(() => {}); // Vòm kính God-Rays đã có luồng sáng trung tâm
 }
 
 /**
@@ -910,33 +883,23 @@ export function decorateMuseumGrandLobbyAndCorridors(container, {
   lobbyGroup.name = 'Museum_Grand_Lobby_And_Corridors';
   lobbyGroup.userData.ignoreRaycaster = true;
 
-  // 1.1. Sàn Đá Cẩm Thạch Phủ Kín Ngoại Vi Các Hành Lang Kết Nối
-  const floorMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(lobbySize + corridorLength * 2, lobbySize + corridorLength * 2),
-    new THREE.MeshStandardMaterial({
-      map: createImperialMarbleFloorTexture(),
-      roughness: 0.22,
-      metalness: 0.35
-    })
-  );
-  floorMesh.rotation.x = -Math.PI / 2;
-  floorMesh.position.y = 0.015;
-  floorMesh.userData.ignoreRaycaster = true;
-  floorMesh.userData.isFloor = true;
-  lobbyGroup.add(floorMesh);
+  // Đã bỏ sàn 108x108m đè lên Ground_Floor_Marble (126x126m) để tránh 100% overdraw & tốn VRAM 1024x1024.
 
   // 2. Đại Mandala Trống Đồng Đông Sơn 14 cánh phát sáng giữa đại sảnh
   const centerMandala = new THREE.Mesh(
-    new THREE.CircleGeometry(10.5, 64),
+    new THREE.CircleGeometry(10.5, 32),
     new THREE.MeshBasicMaterial({
       map: createDongSonCenterMandalaTexture(),
       transparent: true,
       blending: THREE.AdditiveBlending,
-      depthWrite: false
+      depthWrite: false,
+      side: THREE.FrontSide
     })
   );
   centerMandala.rotation.x = -Math.PI / 2;
   centerMandala.position.y = 0.035;
+  centerMandala.castShadow = false;
+  centerMandala.receiveShadow = false;
   centerMandala.userData.ignoreRaycaster = true;
   lobbyGroup.add(centerMandala);
 

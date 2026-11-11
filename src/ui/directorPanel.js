@@ -64,9 +64,7 @@ export class DirectorPanel {
         }
 
         .hud-card {
-          background: rgba(10, 14, 22, 0.92);
-          backdrop-filter: blur(16px);
-          -webkit-backdrop-filter: blur(16px);
+          background: rgba(10, 14, 22, 0.95);
           border: 1px solid rgba(212, 175, 55, 0.4);
           border-radius: 12px;
           padding: 16px 18px;
@@ -309,11 +307,20 @@ export class DirectorPanel {
           <button class="cam-btn active" id="btn-room201" style="grid-column: span 2; background: linear-gradient(135deg, rgba(212, 175, 55, 0.45), rgba(150, 110, 20, 0.45)); border-color: #ffd770; font-weight: 700;">
             📖 Vào Phòng Mẫu 01 (Sách Truyện Kiều)
           </button>
+          <button class="cam-btn" id="btn-room202" style="grid-column: span 2; background: linear-gradient(135deg, rgba(139, 30, 30, 0.58), rgba(11, 21, 40, 0.88)); border-color: #d4af37; color: #fde68a; font-weight: 700;">
+            ⚔️ Vào Phòng Nam Quốc Sơn Hà (Tầng 2)
+          </button>
+          <button class="cam-btn" id="btn-room101" style="grid-column: span 2; background: linear-gradient(135deg, rgba(180, 83, 9, 0.55), rgba(124, 45, 18, 0.65)); border-color: #f59e0b; color: #fef3c7; font-weight: 700;">
+            🐎 Vào Phòng Thánh Gióng - Phù Đổng (Tầng 1)
+          </button>
           <button class="cam-btn" id="btn-room102" style="grid-column: span 2; background: linear-gradient(135deg, rgba(56, 189, 248, 0.35), rgba(14, 116, 144, 0.45)); border-color: #38bdf8; color: #e0f2fe; font-weight: 700;">
             🌊 Vào Phòng Sơn Tinh - Thủy Tinh (Tầng 1)
           </button>
           <button class="cam-btn" id="btn-room103" style="grid-column: span 2; background: linear-gradient(135deg, rgba(16, 185, 129, 0.35), rgba(5, 150, 105, 0.45)); border-color: #10b981; color: #ecfdf5; font-weight: 700;">
             🏹 Vào Phòng Cổ Loa - An Dương Vương (Tầng 1)
+          </button>
+          <button class="cam-btn" id="btn-room302" style="grid-column: span 2; background: linear-gradient(135deg, rgba(64, 42, 26, 0.72), rgba(18, 14, 14, 0.85)); border-color: #d97706; color: #fde68a; font-weight: 700;">
+            🏮 Vào Phòng Tắt Đèn - Ngô Tất Tố (Tầng 3)
           </button>
           <button class="cam-btn" id="btn-room304" style="grid-column: span 2; background: linear-gradient(135deg, rgba(234, 88, 12, 0.40), rgba(154, 52, 18, 0.45)); border-color: #fb923c; color: #ffedd5; font-weight: 700;">
             🌾 Vào Phòng Vợ Nhặt - Kim Lân (Tầng 3)
@@ -338,22 +345,25 @@ export class DirectorPanel {
           <button class="cam-btn" id="btn-enter-vnrealm" style="grid-column: span 2; background: linear-gradient(135deg, rgba(234, 88, 12, 0.55), rgba(220, 38, 38, 0.45)); border-color: #ea580c; color: #fef08a; font-weight: 700;">
             🚩 Cổng Dịch Chuyển: Cõi Vợ Nhặt - Xóm Ngụ Cư
           </button>
+          <button class="cam-btn" id="btn-enter-tatdenrealm" style="grid-column: span 2; background: linear-gradient(135deg, rgba(120, 53, 15, 0.72), rgba(17, 13, 10, 0.88)); border-color: #f59e0b; color: #fef3c7; font-weight: 700;">
+            🏮 Cổng Dịch Chuyển: Cõi Tắt Đèn - Làng Đông Xá
+          </button>
+          <button class="cam-btn" id="btn-enter-nqshrealm" style="grid-column: span 2; background: linear-gradient(135deg, rgba(11, 21, 40, 0.85), rgba(139, 30, 30, 0.65)); border-color: #d4af37; color: #fef08a; font-weight: 700;">
+            🌊 Cổng Dịch Chuyển: Chiến Tuyến Sông Như Nguyệt
+          </button>
+          <button class="cam-btn" id="btn-tour-nqsh" style="grid-column: span 2; background: linear-gradient(135deg, rgba(212, 175, 55, 0.32), rgba(11, 21, 40, 0.85)); border-color: #fde047; color: #fef9c3; font-weight: 700;">
+            🧭 Auto-Tour: Nam Quốc Sơn Hà ➔ Sông Như Nguyệt
+          </button>
+          <button class="cam-btn" id="btn-enter-thanhgiongrealm" style="grid-column: span 2; background: linear-gradient(135deg, rgba(194, 65, 12, 0.72), rgba(120, 53, 15, 0.85)); border-color: #fb923c; color: #ffedd5; font-weight: 700;">
+            🔥 Cổng Dịch Chuyển: Chiến Trường & Đỉnh Sóc Sơn
+          </button>
+          <button class="cam-btn" id="btn-tour-thanhgiong" style="grid-column: span 2; background: linear-gradient(135deg, rgba(245, 158, 11, 0.35), rgba(124, 45, 18, 0.85)); border-color: #fcd34d; color: #fef9c3; font-weight: 700;">
+            🧭 Auto-Tour: Thánh Gióng ➔ Đỉnh Núi Sóc Sơn
+          </button>
           <div style="grid-column: span 2; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-top: 2px;">
             <button class="cam-btn" id="hud-zone-1" style="font-size: 9.5px; padding: 5px 2px;">🌸 Vườn Thúy</button>
             <button class="cam-btn" id="hud-zone-2" style="font-size: 9.5px; padding: 5px 2px;">🌊 Lầu Ngưng Bích</button>
             <button class="cam-btn" id="hud-zone-3" style="font-size: 9.5px; padding: 5px 2px;">⚔️ Từ Hải</button>
-          </div>
-        </div>
-
-        <!-- LIGHTING & CONTROLS -->
-        <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px;">
-          <div class="slider-row">
-            <span>Tia Sáng God-Rays:</span>
-            <input type="range" id="slider-godrays" min="0" max="3" step="0.1" value="0.0">
-          </div>
-          <div class="slider-row">
-            <span>Quầng Sáng Bloom:</span>
-            <input type="range" id="slider-bloom" min="0" max="1.2" step="0.05" value="0.0">
           </div>
         </div>
 
@@ -407,17 +417,32 @@ export class DirectorPanel {
       });
     }
 
+    let lastTourSec = -1;
+    let lastTourPhase = '';
+    let lastTourUpdateMs = 0;
     tour.onProgressUpdate = (current, total) => {
       try {
-        const curSec = Math.floor(current ?? 0).toString().padStart(2, '0');
-        const totSec = Math.floor(total ?? 30).toString().padStart(2, '0');
-        if (timeText) timeText.textContent = `00:${curSec} / 00:${totSec}`;
+        const now = performance.now();
+        if (now - lastTourUpdateMs < 100 && current < total) return;
+        lastTourUpdateMs = now;
+
+        const secInt = Math.floor(current ?? 0);
+        if (timeText && secInt !== lastTourSec) {
+          lastTourSec = secInt;
+          const curSec = secInt.toString().padStart(2, '0');
+          const totSec = Math.floor(total ?? 30).toString().padStart(2, '0');
+          timeText.textContent = `00:${curSec} / 00:${totSec}`;
+        }
 
         const pct = Math.min(100, Math.max(0, ((current ?? 0) / (total || 30)) * 100));
-        if (progBar) progBar.style.width = `${pct}%`;
+        if (progBar) progBar.style.width = `${pct.toFixed(1)}%`;
 
         if (statusDesc) {
-          statusDesc.textContent = tour.getCurrentPhaseName?.() ?? "Đang bay nghiệm thu...";
+          const phase = tour.getCurrentPhaseName?.() ?? "Đang bay nghiệm thu...";
+          if (phase !== lastTourPhase) {
+            lastTourPhase = phase;
+            statusDesc.textContent = phase;
+          }
         }
       } catch (e) {
         console.warn("[SELF-HEALING] Lỗi cập nhật tiến độ tour:", e);
@@ -481,10 +506,144 @@ export class DirectorPanel {
       };
     }
 
+    const unlockPointerCleanly = () => {
+      try {
+        if (typeof document !== 'undefined' && document.pointerLockElement && document.exitPointerLock) {
+          document.exitPointerLock();
+        }
+        if (this.camMgr?.cameraController?.controls?.isLocked) {
+          this.camMgr.cameraController.controls.unlock();
+        }
+      } catch (e) {}
+    };
+
+    const forceExitTruyenKieuStoryWorldSync = () => {
+      const tw = this.truyenKieuStoryWorld;
+      if (!tw || (!tw.isInsideWorld && !tw.isWarping)) return;
+      try {
+        if (tw.warpAnimId) { cancelAnimationFrame(tw.warpAnimId); tw.warpAnimId = null; }
+        if (tw.pullBackAnimId) { cancelAnimationFrame(tw.pullBackAnimId); tw.pullBackAnimId = null; }
+        tw.isInsideWorld = false;
+        tw.isWarping = false;
+        if (tw.worldGroup) tw.worldGroup.visible = false;
+        if (tw.realmHudElement) tw.realmHudElement.style.display = 'none';
+        if (tw.topExitElement) tw.topExitElement.style.display = 'none';
+        tw.hideWarpOverlay?.();
+        if (tw.renderer) tw.renderer.toneMappingExposure = tw.savedExposure || 1.0;
+        if (tw.cameraController) {
+          tw.cameraController.setFloorHeightProvider?.(null);
+          tw.cameraController.floorHeightProvider = null;
+          tw.cameraController.velocity?.set?.(0, 0, 0);
+          tw.cameraController.isEnabled = true;
+        }
+        const kBtn = document.getElementById('btn-enter-kieuworld');
+        if (kBtn) {
+          kBtn.innerHTML = '🌸 Cổng Dịch Chuyển: 3 Cõi Truyện Kiều (Click Sách)';
+          kBtn.style.borderColor = '#ff99bb';
+        }
+      } catch (e) {}
+    };
+
+    const isStttActive = () => {
+      const appRef = typeof window !== 'undefined' ? window.__app : null;
+      return Boolean(
+        this.sonTinhThuyTinhRoom?.isInsideRealm?.() ||
+        (typeof window !== 'undefined' && window.__stttRealmActive) ||
+        (appRef?.sonTinhThuyTinhScene && appRef.activeScene === appRef.sonTinhThuyTinhScene)
+      );
+    };
+
+    const isTruyenKieuRoomRealmActive = () => {
+      return Boolean(
+        this.truyenKieuRoom?.isInsideRealm?.() ||
+        (typeof window !== 'undefined' && window.__tkRealmActive)
+      );
+    };
+
+    this._panelTransitionToken = 0;
+    const switchContextSafely = (action, { targetRealmKey = null, ensureMainScene = false } = {}) => {
+      const token = ++this._panelTransitionToken;
+      unlockPointerCleanly();
+
+      if (targetRealmKey !== 'kieuStoryWorld') {
+        forceExitTruyenKieuStoryWorldSync();
+      }
+      if (targetRealmKey !== 'worldManager' && this.worldManager?.currentState === 'KIEU_WORLD') {
+        this.worldManager?.forceExitImmediate?.();
+      }
+      const activeThanhGiong = this.thanhGiongRoom || (typeof window !== 'undefined' ? window.__thanhGiongRoom : null);
+      if (targetRealmKey !== 'thanhGiong' && activeThanhGiong?.isInsideRealm?.()) {
+        activeThanhGiong.exitRealm?.({ immediate: true, moveCameraBack: false });
+      }
+      activeThanhGiong?.userData?.stopAutoTour?.();
+      activeThanhGiong?.stopAutoTour?.();
+
+      const activeTatDen = this.tatDenRoom || (typeof window !== 'undefined' ? window.__tatDenRoom : null);
+      if (targetRealmKey !== 'tatDen' && activeTatDen?.isInsideRealm?.()) {
+        activeTatDen.exitRealm?.({ immediate: true, moveCameraBack: false });
+      }
+      const activeNqsh = this.namQuocSonHaRoom || (typeof window !== 'undefined' ? window.__namQuocSonHaRoom : null);
+      if (targetRealmKey !== 'namQuocSonHa' && activeNqsh?.isInsideRealm?.()) {
+        activeNqsh.exitRealm?.({ immediate: true, moveCameraBack: false });
+      }
+
+      // Kiểm tra các cõi dùng closure async cutscene để tránh xung đột scene/camera
+      let pendingClosureExit = false;
+      if (targetRealmKey !== 'truyenKieuRoom' && isTruyenKieuRoomRealmActive()) {
+        this.truyenKieuRoom?.exitRealm?.();
+        pendingClosureExit = true;
+      }
+      if (targetRealmKey !== 'sonTinh' && isStttActive()) {
+        this.sonTinhThuyTinhRoom?.exitRealm?.();
+        pendingClosureExit = true;
+      }
+      if (targetRealmKey !== 'anDuongVuong' && this.anDuongVuongRoom?.isInsideRealm?.()) {
+        this.anDuongVuongRoom.exitRealm?.();
+        pendingClosureExit = true;
+      }
+      if (targetRealmKey !== 'voNhat' && this.voNhatRoom?.isInsideRealm?.()) {
+        this.voNhatRoom.exitRealm?.();
+        pendingClosureExit = true;
+      }
+
+      const runTarget = () => {
+        if (token !== this._panelTransitionToken) return;
+        const appRef = typeof window !== 'undefined' ? window.__app : null;
+        if (ensureMainScene && appRef?.setActiveScene && appRef.mainScene) {
+          appRef.setActiveScene(appRef.mainScene);
+        }
+        action();
+      };
+
+      if (!pendingClosureExit) {
+        runTarget();
+        return;
+      }
+
+      const waitStart = performance.now();
+      const pollExit = () => {
+        if (token !== this._panelTransitionToken) return;
+        const stillInside =
+          (targetRealmKey !== 'truyenKieuRoom' && isTruyenKieuRoomRealmActive()) ||
+          (targetRealmKey !== 'sonTinh' && isStttActive()) ||
+          (targetRealmKey !== 'anDuongVuong' && this.anDuongVuongRoom?.isInsideRealm?.()) ||
+          (targetRealmKey !== 'voNhat' && this.voNhatRoom?.isInsideRealm?.());
+        if (!stillInside || (performance.now() - waitStart) > 1500) {
+          runTarget();
+        } else {
+          setTimeout(pollExit, 60);
+        }
+      };
+      setTimeout(pollExit, 60);
+    };
+
     const buttons = {
       'btn-room201': PRESET_VIEWS?.ROOM_201_BOOK,
+      'btn-room202': PRESET_VIEWS?.ROOM_202_BOOK,
+      'btn-room101': PRESET_VIEWS?.ROOM_101_THANH_GIONG,
       'btn-room102': PRESET_VIEWS?.ROOM_102_SON_TINH,
       'btn-room103': PRESET_VIEWS?.ROOM_103_AN_DUONG_VUONG,
+      'btn-room302': PRESET_VIEWS?.ROOM_302_TAT_DEN,
       'btn-room304': PRESET_VIEWS?.ROOM_304_VO_NHAT,
       'btn-staircase': PRESET_VIEWS?.STAIRCASE_FRONT,
       'btn-landing': PRESET_VIEWS?.STAIRCASE_LANDING,
@@ -501,25 +660,9 @@ export class DirectorPanel {
           try {
             document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            if (this.truyenKieuStoryWorld?.isInsideWorld) {
-              this.truyenKieuStoryWorld.toggleStoryWorld();
-            }
-            if (this.worldManager?.currentState === 'KIEU_WORLD') {
-              this.worldManager?.transitionTo?.('MUSEUM_ATRIUM');
-            }
-            if (this.sonTinhThuyTinhRoom?.isInsideRealm?.()) {
-              this.sonTinhThuyTinhRoom.exitRealm?.();
-            }
-            if (this.anDuongVuongRoom?.isInsideRealm?.()) {
-              this.anDuongVuongRoom.exitRealm?.();
-            }
-            if (this.voNhatRoom?.isInsideRealm?.()) {
-              this.voNhatRoom.exitRealm?.();
-            }
-            if (window.__app?.setActiveScene && window.__app.mainScene) {
-              window.__app.setActiveScene(window.__app.mainScene);
-            }
-            this.camMgr?.setView?.(preset, true);
+            switchContextSafely(() => {
+              this.camMgr?.setView?.(preset, true);
+            }, { ensureMainScene: true });
           } catch (e) {
             console.warn("[SELF-HEALING] Lỗi đặt preset góc nhìn:", e);
           }
@@ -533,17 +676,13 @@ export class DirectorPanel {
         try {
           document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
           enterStttBtn.classList.add('active');
-          if (this.truyenKieuStoryWorld?.isInsideWorld) {
-            this.truyenKieuStoryWorld.toggleStoryWorld();
-          }
-          if (this.anDuongVuongRoom?.isInsideRealm?.()) {
-            this.anDuongVuongRoom.exitRealm?.();
-          }
-          if (this.sonTinhThuyTinhRoom?.enterRealm) {
-            this.sonTinhThuyTinhRoom.enterRealm();
-          } else if (window.__stttExhibition?.enterRealm) {
-            window.__stttExhibition.enterRealm();
-          }
+          switchContextSafely(() => {
+            if (this.sonTinhThuyTinhRoom?.enterRealm) {
+              this.sonTinhThuyTinhRoom.enterRealm();
+            } else if (window.__stttExhibition?.enterRealm) {
+              window.__stttExhibition.enterRealm();
+            }
+          }, { targetRealmKey: 'sonTinh', ensureMainScene: true });
         } catch (e) {
           console.warn("[SELF-HEALING] Lỗi chuyển cõi Sơn Tinh - Thủy Tinh:", e);
         }
@@ -556,17 +695,13 @@ export class DirectorPanel {
         try {
           document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
           enterAdvBtn.classList.add('active');
-          if (this.truyenKieuStoryWorld?.isInsideWorld) {
-            this.truyenKieuStoryWorld.toggleStoryWorld();
-          }
-          if (this.sonTinhThuyTinhRoom?.isInsideRealm?.()) {
-            this.sonTinhThuyTinhRoom.exitRealm?.();
-          }
-          if (this.anDuongVuongRoom?.enterRealm) {
-            this.anDuongVuongRoom.enterRealm();
-          } else if (window.__anDuongVuongRoom?.enterRealm) {
-            window.__anDuongVuongRoom.enterRealm();
-          }
+          switchContextSafely(() => {
+            if (this.anDuongVuongRoom?.enterRealm) {
+              this.anDuongVuongRoom.enterRealm();
+            } else if (window.__anDuongVuongRoom?.enterRealm) {
+              window.__anDuongVuongRoom.enterRealm();
+            }
+          }, { targetRealmKey: 'anDuongVuong', ensureMainScene: true });
         } catch (e) {
           console.warn("[SELF-HEALING] Lỗi chuyển cõi An Dương Vương:", e);
         }
@@ -579,37 +714,129 @@ export class DirectorPanel {
         try {
           document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
           enterVnBtn.classList.add('active');
-          if (this.truyenKieuStoryWorld?.isInsideWorld) {
-            this.truyenKieuStoryWorld.toggleStoryWorld();
-          }
-          if (this.sonTinhThuyTinhRoom?.isInsideRealm?.()) {
-            this.sonTinhThuyTinhRoom.exitRealm?.();
-          }
-          if (this.anDuongVuongRoom?.isInsideRealm?.()) {
-            this.anDuongVuongRoom.exitRealm?.();
-          }
-          if (this.voNhatRoom?.enterRealm) {
-            this.voNhatRoom.enterRealm();
-          } else if (window.__voNhatRoom?.enterRealm) {
-            window.__voNhatRoom.enterRealm();
-          }
+          switchContextSafely(() => {
+            if (this.voNhatRoom?.enterRealm) {
+              this.voNhatRoom.enterRealm();
+            } else if (window.__voNhatRoom?.enterRealm) {
+              window.__voNhatRoom.enterRealm();
+            }
+          }, { targetRealmKey: 'voNhat', ensureMainScene: true });
         } catch (e) {
           console.warn("[SELF-HEALING] Lỗi chuyển cõi Vợ Nhặt:", e);
         }
       });
     }
 
+    const enterTatDenBtn = document.getElementById('btn-enter-tatdenrealm');
+    if (enterTatDenBtn) {
+      enterTatDenBtn.addEventListener('click', () => {
+        try {
+          document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
+          enterTatDenBtn.classList.add('active');
+          switchContextSafely(() => {
+            if (this.tatDenRoom?.enterRealm) {
+              this.tatDenRoom.enterRealm();
+            } else if (window.__tatDenRoom?.enterRealm) {
+              window.__tatDenRoom.enterRealm();
+            }
+          }, { targetRealmKey: 'tatDen', ensureMainScene: true });
+        } catch (e) {
+          console.warn("[SELF-HEALING] Lỗi chuyển cõi Tắt Đèn:", e);
+        }
+      });
+    }
+
+    const enterNqshBtn = document.getElementById('btn-enter-nqshrealm');
+    if (enterNqshBtn) {
+      enterNqshBtn.addEventListener('click', () => {
+        try {
+          document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
+          enterNqshBtn.classList.add('active');
+          switchContextSafely(() => {
+            if (this.namQuocSonHaRoom?.enterRealm) {
+              this.namQuocSonHaRoom.enterRealm('namquocsonha');
+            } else if (window.__namQuocSonHaRoom?.enterRealm) {
+              window.__namQuocSonHaRoom.enterRealm('namquocsonha');
+            }
+          }, { targetRealmKey: 'namQuocSonHa', ensureMainScene: true });
+        } catch (e) {
+          console.warn("[SELF-HEALING] Lỗi chuyển cõi Sông Như Nguyệt:", e);
+        }
+      });
+    }
+
+    const tourNqshBtn = document.getElementById('btn-tour-nqsh');
+    if (tourNqshBtn) {
+      tourNqshBtn.addEventListener('click', () => {
+        try {
+          document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
+          tourNqshBtn.classList.add('active');
+          switchContextSafely(() => {
+            const nqsh = this.namQuocSonHaRoom || window.__namQuocSonHaRoom;
+            if (nqsh?.startFullAutoTour) {
+              nqsh.startFullAutoTour();
+            }
+          }, { ensureMainScene: true });
+        } catch (e) {
+          console.warn("[SELF-HEALING] Lỗi Auto-Tour Nam Quốc Sơn Hà:", e);
+        }
+      });
+    }
+
+    const enterThanhGiongBtn = document.getElementById('btn-enter-thanhgiongrealm');
+    if (enterThanhGiongBtn) {
+      enterThanhGiongBtn.addEventListener('click', () => {
+        try {
+          document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
+          enterThanhGiongBtn.classList.add('active');
+          switchContextSafely(() => {
+            const tg = this.thanhGiongRoom || window.__thanhGiongRoom;
+            if (tg?.enterRealm) {
+              tg.enterRealm('thanhgiong');
+            } else if (tg?.userData?.enterRealm) {
+              tg.userData.enterRealm('thanhgiong');
+            }
+          }, { targetRealmKey: 'thanhGiong', ensureMainScene: true });
+        } catch (e) {
+          console.warn("[SELF-HEALING] Lỗi chuyển cõi Chiến Trường & Đỉnh Sóc Sơn:", e);
+        }
+      });
+    }
+
+    const tourThanhGiongBtn = document.getElementById('btn-tour-thanhgiong');
+    if (tourThanhGiongBtn) {
+      tourThanhGiongBtn.addEventListener('click', () => {
+        try {
+          document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
+          tourThanhGiongBtn.classList.add('active');
+          switchContextSafely(() => {
+            const tg = this.thanhGiongRoom || window.__thanhGiongRoom;
+            if (tg?.startFullAutoTour) {
+              tg.startFullAutoTour();
+            } else if (tg?.userData?.startFullAutoTour) {
+              tg.userData.startFullAutoTour();
+            }
+          }, { ensureMainScene: true });
+        } catch (e) {
+          console.warn("[SELF-HEALING] Lỗi Auto-Tour Thánh Gióng:", e);
+        }
+      });
+    }
+
     const enterKieuBtn = document.getElementById('btn-enter-kieuworld');
     if (enterKieuBtn) {
+      enterKieuBtn._kieuBound = true; // Ngăn TruyenKieuWorld.bindHUD gắn listener trùng lặp
       enterKieuBtn.addEventListener('click', () => {
         try {
           document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
           enterKieuBtn.classList.add('active');
-          if (this.truyenKieuStoryWorld) {
-            this.truyenKieuStoryWorld.toggleStoryWorld();
-          } else {
-            this.worldManager?.transitionTo?.('KIEU_WORLD');
-          }
+          switchContextSafely(() => {
+            if (this.truyenKieuStoryWorld) {
+              this.truyenKieuStoryWorld.toggleStoryWorld();
+            } else {
+              this.worldManager?.transitionTo?.('KIEU_WORLD');
+            }
+          }, { targetRealmKey: 'kieuStoryWorld' });
         } catch (e) {
           console.warn("[SELF-HEALING] Lỗi chuyển KieuWorld:", e);
         }
@@ -623,37 +850,17 @@ export class DirectorPanel {
           try {
             document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
             zBtn.classList.add('active');
-            if (this.truyenKieuStoryWorld) {
-              this.truyenKieuStoryWorld.switchZone(zid);
-            }
+            switchContextSafely(() => {
+              if (this.truyenKieuStoryWorld) {
+                this.truyenKieuStoryWorld.switchZone(zid);
+              }
+            }, { targetRealmKey: 'kieuStoryWorld' });
           } catch (err) {
             console.warn(`[SELF-HEALING] Lỗi chuyển Zone ${zid}:`, err);
           }
         });
       }
     });
-
-    const godRaySlider = document.getElementById('slider-godrays');
-    if (godRaySlider) {
-      godRaySlider.addEventListener('input', (e) => {
-        try {
-          this.lighting?.setGodRayIntensity?.(parseFloat(e.target.value));
-        } catch (err) {
-          console.warn("[SELF-HEALING] Lỗi slider godrays:", err);
-        }
-      });
-    }
-
-    const bloomSlider = document.getElementById('slider-bloom');
-    if (bloomSlider) {
-      bloomSlider.addEventListener('input', (e) => {
-        try {
-          this.post?.setBloomStrength?.(parseFloat(e.target.value));
-        } catch (err) {
-          console.warn("[SELF-HEALING] Lỗi slider bloom:", err);
-        }
-      });
-    }
 
     // Điều khiển chế độ chất lượng & tối ưu FPS
     const perfStatus = document.getElementById('hud-perf-status');
@@ -667,16 +874,18 @@ export class DirectorPanel {
       if (perfStatus) perfStatus.textContent = modeName;
     };
 
+    const getPerfOpt = () => this.performanceOptimizer || (typeof window !== 'undefined' ? window.performanceOptimizer : null);
+
     btnAuto?.addEventListener('click', () => {
-      window.performanceOptimizer?.setMode?.('auto');
+      getPerfOpt()?.setMode?.('auto');
       setActivePerf(btnAuto, 'AUTO (Thích Ứng)');
     });
     btnHigh?.addEventListener('click', () => {
-      window.performanceOptimizer?.setMode?.('high');
+      getPerfOpt()?.setMode?.('high');
       setActivePerf(btnHigh, 'HIGH (Cao)');
     });
     btnEco?.addEventListener('click', () => {
-      window.performanceOptimizer?.setMode?.('low');
+      getPerfOpt()?.setMode?.('low');
       setActivePerf(btnEco, 'ECO (Tiết Kiệm)');
     });
   }
@@ -695,6 +904,18 @@ export class DirectorPanel {
 
   setVoNhatRoom(room) {
     this.voNhatRoom = room;
+  }
+
+  setTatDenRoom(room) {
+    this.tatDenRoom = room;
+  }
+
+  setNamQuocSonHaRoom(room) {
+    this.namQuocSonHaRoom = room;
+  }
+
+  setThanhGiongRoom(room) {
+    this.thanhGiongRoom = room;
   }
 
   setPerformanceOptimizer(optimizer) {

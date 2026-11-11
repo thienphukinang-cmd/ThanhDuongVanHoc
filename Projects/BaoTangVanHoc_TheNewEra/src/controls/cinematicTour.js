@@ -18,6 +18,8 @@ export class CinematicTour {
 
     this.savedPosition = new THREE.Vector3();
     this.savedTarget = new THREE.Vector3();
+    this._camPos = new THREE.Vector3();
+    this._targetPos = new THREE.Vector3();
 
     this.onProgressUpdate = null;
     this.onTourComplete = null;
@@ -142,8 +144,8 @@ export class CinematicTour {
   updateCameraAtTime(t = 0) {
     if (!this.camera) return;
 
-    const camPos = new THREE.Vector3();
-    const targetPos = new THREE.Vector3();
+    const camPos = this._camPos;
+    const targetPos = this._targetPos;
 
     // 1. GIÂY 0-5
     if (t < 5.0) {

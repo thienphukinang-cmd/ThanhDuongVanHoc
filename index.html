@@ -24,12 +24,45 @@
       }
       canvas {
         display: block;
-        width: 100% !important;
-        height: 100% !important;
+        width: 100%;
+        height: 100%;
+      }
+      #museum-boot-loader {
+        position: fixed;
+        inset: 0;
+        z-index: 999999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        background: #07090d;
+        color: #f7eed8;
+        font-family: 'Segoe UI', system-ui, sans-serif;
+        transition: opacity 0.25s ease;
+      }
+      #museum-boot-loader.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .boot-spinner {
+        width: 38px;
+        height: 38px;
+        border: 3px solid rgba(212, 175, 55, 0.22);
+        border-top-color: #ffd269;
+        border-radius: 50%;
+        animation: bootSpin 0.8s linear infinite;
+      }
+      @keyframes bootSpin {
+        to { transform: rotate(360deg); }
       }
     </style>
   </head>
   <body>
+    <div id="museum-boot-loader">
+      <div class="boot-spinner"></div>
+      <div style="font-size: 13px; font-weight: 700; letter-spacing: 1.4px; color: #ffd269;">ĐANG KHỞI TẠO BẢO TÀNG VĂN HỌC 3D...</div>
+    </div>
     <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
   </body>

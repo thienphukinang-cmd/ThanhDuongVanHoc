@@ -51,10 +51,13 @@ export class AudioManager {
     try {
       this.initListener();
       this.initAutoplayUnlock();
-      this.initBackgroundMusic();
-      this.initPositionalAudios();
+      // Hoãn tổng hợp buffer âm thanh tới khi người dùng tương tác / vào thế giới (tránh đơ boot ~3.45M mẫu)
+      this._atriumBufferReady = false;
+      this._kieuBuffersReady = false;
+      this._pendingStreamTarget = null;
+      this._pendingDamTienTarget = null;
       this.createHUDToggleUI();
-      console.log("%c✓ AudioManager initialized • Spatial Soundscape Engine ready", "color: #39e58c; font-weight: bold;");
+      console.log("%c✓ AudioManager initialized • Spatial Soundscape Engine ready (lazy synth)", "color: #39e58c; font-weight: bold;");
     } catch (err) {
       console.error("[SELF-HEALING] Lỗi khởi tạo AudioManager:", err);
     }
@@ -155,11 +158,9 @@ export class AudioManager {
           align-items: center;
           gap: 7px;
           padding: 9px 14px;
-          background: rgba(14, 18, 26, 0.88);
+          background: rgba(14, 18, 26, 0.94);
           border: 1px solid rgba(212, 175, 55, 0.65);
           border-radius: 20px;
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
           color: #f7eed8;
           font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
           font-size: 11.5px;
@@ -261,44 +262,68 @@ export class AudioManager {
   // 3. HỆ THỐNG NHẠC NỀN THÍCH ỨNG (ADAPTIVE AMBIENCE & CROSS-FADE 1.5S)
   // =========================================================================
 
-  initBackgroundMusic() {
-    if (!this.listener) return;
-
+  ensureAtriumAudio() {
+    if (this._atriumBufferReady || !this.listener) return;
     try {
-      this.atriumBgm = new THREE.Audio(this.listener);
-      this.kieuBgm = new THREE.Audio(this.listener);
-
       const ctx = this.listener.context;
       if (!ctx) return;
-
-      // 1. Kênh Sảnh chính (atriumBgm): Tiếng gió hành lang vòm + Đàn Tranh / Đàn Kìm cổ truyền
+      if (!this.atriumBgm) {
+        this.atriumBgm = new THREE.Audio(this.listener);
+      }
       const atriumBuffer = this.generateProceduralAtriumBgm(ctx);
       if (atriumBuffer) {
         this.atriumBgm.setBuffer(atriumBuffer);
         this.atriumBgm.setLoop(true);
         this.atriumBgm.setVolume(this.currentWorld === 'MUSEUM_ATRIUM' ? 0.6 : 0.0);
       }
+      this._atriumBufferReady = true;
+    } catch (e) {
+      console.warn("[SELF-HEALING] Error lazy-initializing atrium audio:", e);
+    }
+  }
 
-      // 2. Kênh Thế giới Kiều (kieuBgm): Tiếng suối róc rách + Sáo Trúc thanh thoát chiều tà
+  ensureKieuAudio() {
+    if (this._kieuBuffersReady || !this.listener) return;
+    try {
+      const ctx = this.listener.context;
+      if (!ctx) return;
+      if (!this.kieuBgm) {
+        this.kieuBgm = new THREE.Audio(this.listener);
+      }
       const kieuBuffer = this.generateProceduralKieuBgm(ctx);
       if (kieuBuffer) {
         this.kieuBgm.setBuffer(kieuBuffer);
         this.kieuBgm.setLoop(true);
         this.kieuBgm.setVolume(this.currentWorld === 'KIEU_WORLD' ? 0.6 : 0.0);
       }
+      this.initPositionalAudios();
+      if (this._pendingStreamTarget && this.streamAudio) {
+        this._pendingStreamTarget.add(this.streamAudio);
+        this._pendingStreamTarget = null;
+      }
+      if (this._pendingDamTienTarget && this.damTienAudio) {
+        this._pendingDamTienTarget.add(this.damTienAudio);
+        this._pendingDamTienTarget = null;
+      }
+      this._kieuBuffersReady = true;
     } catch (e) {
-      console.warn("[SELF-HEALING] Error initializing background music channels:", e);
+      console.warn("[SELF-HEALING] Error lazy-initializing Kieu audio:", e);
     }
+  }
+
+  initBackgroundMusic() {
+    this.ensureAtriumAudio();
+    this.ensureKieuAudio();
   }
 
   startMuseumAtriumAudio() {
     try {
+      this.ensureAtriumAudio();
       if (this.atriumBgm && !this.atriumBgm.isPlaying && this.atriumBgm.buffer) {
         this.atriumBgm.play();
       }
-      if (this.kieuBgm && !this.kieuBgm.isPlaying && this.kieuBgm.buffer) {
-        this.kieuBgm.play();
-        this.kieuBgm.setVolume(0.0); // Chạy song song ở mức 0 volume
+      if (this.kieuBgm && this.kieuBgm.isPlaying) {
+        this.kieuBgm.setVolume(0.0);
       }
       // Dừng positional audio thế giới Kiều khi ở sảnh
       if (this.streamAudio?.isPlaying) this.streamAudio.pause();
@@ -310,6 +335,7 @@ export class AudioManager {
 
   startKieuWorldAudio() {
     try {
+      this.ensureKieuAudio();
       if (this.kieuBgm && !this.kieuBgm.isPlaying && this.kieuBgm.buffer) {
         this.kieuBgm.play();
       }
@@ -333,7 +359,17 @@ export class AudioManager {
    * Kỹ thuật Cross-fade chuyển âm lượng mượt mà 1.5s giữa 2 kênh BGM
    */
   crossfadeTo(targetWorld, duration = 1.5) {
-    if (!this.atriumBgm || !this.kieuBgm) return;
+    this.ensureAtriumAudio();
+    if (targetWorld === 'KIEU_WORLD') {
+      this.ensureKieuAudio();
+    }
+    if (!this.atriumBgm) return;
+    if (!this.kieuBgm && targetWorld === 'MUSEUM_ATRIUM') {
+      this.currentWorld = targetWorld;
+      this.atriumBgm.setVolume(0.6);
+      return;
+    }
+    if (!this.kieuBgm) return;
 
     if (this.crossfadeAnimId) {
       cancelAnimationFrame(this.crossfadeAnimId);
@@ -994,30 +1030,36 @@ export class AudioManager {
   }
 
   attachStreamAudio(streamMesh) {
-    if (streamMesh && this.streamAudio) {
-      try {
-        streamMesh.add(this.streamAudio);
-        if (this.isUnlocked && this.currentWorld === 'KIEU_WORLD') {
-          if (!this.streamAudio.isPlaying) this.streamAudio.play();
-        }
-        console.log("%c✓ THREE.PositionalAudio attached to StreamMesh (ref:4, max:25)", "color: #39e58c; font-weight: bold;");
-      } catch (e) {
-        console.warn("[SELF-HEALING] attachStreamAudio:", e);
+    if (!streamMesh) return;
+    if (!this.streamAudio) {
+      this._pendingStreamTarget = streamMesh;
+      return;
+    }
+    try {
+      streamMesh.add(this.streamAudio);
+      if (this.isUnlocked && this.currentWorld === 'KIEU_WORLD') {
+        if (!this.streamAudio.isPlaying) this.streamAudio.play();
       }
+      console.log("%c✓ THREE.PositionalAudio attached to StreamMesh (ref:4, max:25)", "color: #39e58c; font-weight: bold;");
+    } catch (e) {
+      console.warn("[SELF-HEALING] attachStreamAudio:", e);
     }
   }
 
   attachDamTienAudio(graveGroup) {
-    if (graveGroup && this.damTienAudio) {
-      try {
-        graveGroup.add(this.damTienAudio);
-        if (this.isUnlocked && this.currentWorld === 'KIEU_WORLD') {
-          if (!this.damTienAudio.isPlaying) this.damTienAudio.play();
-        }
-        console.log("%c✓ THREE.PositionalAudio attached to DamTien Grave (ref:4, max:25)", "color: #39e58c; font-weight: bold;");
-      } catch (e) {
-        console.warn("[SELF-HEALING] attachDamTienAudio:", e);
+    if (!graveGroup) return;
+    if (!this.damTienAudio) {
+      this._pendingDamTienTarget = graveGroup;
+      return;
+    }
+    try {
+      graveGroup.add(this.damTienAudio);
+      if (this.isUnlocked && this.currentWorld === 'KIEU_WORLD') {
+        if (!this.damTienAudio.isPlaying) this.damTienAudio.play();
       }
+      console.log("%c✓ THREE.PositionalAudio attached to DamTien Grave (ref:4, max:25)", "color: #39e58c; font-weight: bold;");
+    } catch (e) {
+      console.warn("[SELF-HEALING] attachDamTienAudio:", e);
     }
   }
 

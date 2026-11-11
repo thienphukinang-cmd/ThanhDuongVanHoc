@@ -1,15 +1,7 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import {
-  createDetailedInstancedParticles,
-  createDetailedMandalaFloorDecal,
-  createArtisticSkyDomeAndGodRays,
-  disposeSceneBranch
-} from './museumMasterBeautifier.js';
-import {
-  createTraditionalArchwayEntrance,
-  createCuratedArtifactStation
-} from './museumCuratorAndTourSystem.js';
+import { loadGlbCached } from '../utils/modelLoaderHelper.js';
+import { disposeSceneBranch } from './museumMasterBeautifier.js';
+import { createTraditionalArchwayEntrance } from './museumCuratorAndTourSystem.js';
 import {
   decorateMuseumGrandLobbyAndCorridors as decorateGrandLobbyInternal
 } from './museumLobbyCorridorDecorator.js';
@@ -38,15 +30,62 @@ import {
  * ============================================================================
  */
 
-const overhaulLoadingManager = new THREE.LoadingManager();
-overhaulLoadingManager.setURLModifier((url) => {
-  if (url.includes('colormap.png')) {
-    return '/model/Textures/colormap.png';
-  }
-  return url;
-});
-const gltfLoader = new GLTFLoader(overhaulLoadingManager);
 const MODEL_CACHE = new Map();
+const _overhaulBoxScratch = new THREE.Box3();
+const _overhaulVecScratch = new THREE.Vector3();
+
+function createInstancedBranchGroup(baseObj, transforms, name, boundingCenter, boundingRadius) {
+  const group = new THREE.Group();
+  group.name = name;
+  group.userData.ignoreRaycaster = true;
+
+  baseObj.updateMatrixWorld(true);
+  const invRoot = baseObj.matrixWorld.clone().invert();
+  const relMatrix = new THREE.Matrix4();
+  const trMatrix = new THREE.Matrix4();
+  const finalMatrix = new THREE.Matrix4();
+  const pos = new THREE.Vector3();
+  const quat = new THREE.Quaternion();
+  const euler = new THREE.Euler();
+  const scale = new THREE.Vector3();
+  const bounds = new THREE.Sphere(boundingCenter, boundingRadius);
+
+  baseObj.traverse((child) => {
+    if (!child.isMesh || !child.geometry) return;
+    const mat = Array.isArray(child.material) ? child.material[0] : child.material;
+    if (!mat) return;
+    if (!mat.transparent && !mat.alphaTest) {
+      mat.side = THREE.FrontSide;
+    }
+    if (!child.geometry.boundingBox) child.geometry.computeBoundingBox();
+    if (!child.geometry.boundingSphere) child.geometry.computeBoundingSphere();
+
+    relMatrix.multiplyMatrices(invRoot, child.matrixWorld);
+    const inst = new THREE.InstancedMesh(child.geometry, mat, transforms.length);
+    for (let i = 0; i < transforms.length; i++) {
+      const t = transforms[i];
+      pos.set(t.x || 0, t.y || 0, t.z || 0);
+      euler.set(0, t.rotY || 0, 0);
+      quat.setFromEuler(euler);
+      const s = t.scale ?? 1;
+      scale.set(s, s, s);
+      trMatrix.compose(pos, quat, scale);
+      finalMatrix.multiplyMatrices(trMatrix, relMatrix);
+      inst.setMatrixAt(i, finalMatrix);
+    }
+    inst.instanceMatrix.needsUpdate = true;
+    inst.castShadow = false;
+    inst.receiveShadow = false;
+    inst.frustumCulled = true;
+    inst.boundingSphere = bounds;
+    inst.matrixAutoUpdate = false;
+    inst.updateMatrix();
+    inst.userData.ignoreRaycaster = true;
+    group.add(inst);
+  });
+
+  return group;
+}
 
 /**
  * Nạp model .GLB (từ Blender hoặc Web) có bộ nhớ đệm, chuẩn hóa kích thước,
@@ -64,58 +103,56 @@ export function loadCachedGlbModel(url, {
     return MODEL_CACHE.get(cacheKey).then((template) => template.clone(true));
   }
 
-  const promise = new Promise((resolve, reject) => {
-    gltfLoader.load(
-      url,
-      (gltf) => {
-        const root = gltf.scene;
-        root.traverse((child) => {
-          if (!child.isMesh) return;
-          child.castShadow = castShadow;
-          child.receiveShadow = receiveShadow;
-          child.frustumCulled = true;
-          child.userData.ignoreRaycaster = true;
+  const promise = loadGlbCached([url], {
+    maxTextureSize: 512,
+    disableMipmaps: true,
+    clone: true
+  }).then((root) => {
+    root.traverse((child) => {
+      if (!child.isMesh) return;
+      child.castShadow = castShadow;
+      child.receiveShadow = receiveShadow;
+      child.frustumCulled = true;
+      child.userData.ignoreRaycaster = true;
 
-          const mats = Array.isArray(child.material) ? child.material : [child.material];
-          mats.forEach((m) => {
-            if (m?.map && 'colorSpace' in m.map && THREE.SRGBColorSpace) {
-              m.map.colorSpace = THREE.SRGBColorSpace;
-              m.map.needsUpdate = true;
-            }
-          });
-        });
+      const mats = Array.isArray(child.material) ? child.material : [child.material];
+      mats.forEach((m) => {
+        if (!m) return;
+        if (!m.transparent && !m.alphaTest) {
+          m.side = THREE.FrontSide;
+        }
+        if (m.map && 'colorSpace' in m.map && THREE.SRGBColorSpace && m.map.colorSpace !== THREE.SRGBColorSpace) {
+          m.map.colorSpace = THREE.SRGBColorSpace;
+          m.map.needsUpdate = true;
+        }
+      });
+    });
 
-        // Chuẩn hóa kích thước & trọng tâm, bảo tồn nguyên vẹn vật liệu PBR
-        root.updateMatrixWorld(true);
-        const box = new THREE.Box3().setFromObject(root);
-        const sz = new THREE.Vector3();
-        box.getSize(sz);
+    // Chuẩn hóa kích thước & trọng tâm, bảo tồn nguyên vẹn vật liệu PBR
+    root.updateMatrixWorld(true);
+    _overhaulBoxScratch.setFromObject(root);
+    _overhaulBoxScratch.getSize(_overhaulVecScratch);
 
-        let refDim = Math.max(sz.y, 0.001);
-        if (fitAxis === 'x') refDim = Math.max(sz.x, 0.001);
-        else if (fitAxis === 'z') refDim = Math.max(sz.z, 0.001);
-        else if (fitAxis === 'maxHorizontal') refDim = Math.max(sz.x, sz.z, 0.001);
-        else if (fitAxis === 'maxDim') refDim = Math.max(sz.x, sz.y, sz.z, 0.001);
+    let refDim = Math.max(_overhaulVecScratch.y, 0.001);
+    if (fitAxis === 'x') refDim = Math.max(_overhaulVecScratch.x, 0.001);
+    else if (fitAxis === 'z') refDim = Math.max(_overhaulVecScratch.z, 0.001);
+    else if (fitAxis === 'maxHorizontal') refDim = Math.max(_overhaulVecScratch.x, _overhaulVecScratch.z, 0.001);
+    else if (fitAxis === 'maxDim') refDim = Math.max(_overhaulVecScratch.x, _overhaulVecScratch.y, _overhaulVecScratch.z, 0.001);
 
-        const scale = targetSpan / refDim;
-        root.scale.multiplyScalar(scale);
-        root.updateMatrixWorld(true);
+    const scale = targetSpan / refDim;
+    root.scale.multiplyScalar(scale);
+    root.updateMatrixWorld(true);
 
-        const scaledBox = new THREE.Box3().setFromObject(root);
-        const center = new THREE.Vector3();
-        scaledBox.getCenter(center);
-        root.position.x -= center.x;
-        root.position.z -= center.z;
-        root.position.y -= scaledBox.min.y;
+    _overhaulBoxScratch.setFromObject(root);
+    _overhaulBoxScratch.getCenter(_overhaulVecScratch);
+    root.position.x -= _overhaulVecScratch.x;
+    root.position.z -= _overhaulVecScratch.z;
+    root.position.y -= _overhaulBoxScratch.min.y;
 
-        const wrapper = new THREE.Group();
-        wrapper.userData.ignoreRaycaster = true;
-        wrapper.add(root);
-        resolve(wrapper);
-      },
-      undefined,
-      (err) => reject(err)
-    );
+    const wrapper = new THREE.Group();
+    wrapper.userData.ignoreRaycaster = true;
+    wrapper.add(root);
+    return wrapper;
   });
 
   MODEL_CACHE.set(cacheKey, promise);
@@ -276,12 +313,17 @@ export async function overhaulExhibitionRoom(roomGroup, {
       targetSpan: 1.75,
       fitAxis: 'y'
     });
-    [[-6.5, 0, -8.2], [6.5, 0, -8.2]].forEach(([x, y, z]) => {
-      const v = antiqueVase.clone(true);
-      v.position.set(x, y, z);
-      v.userData.ignoreRaycaster = true;
-      overhaulContainer.add(v);
-    });
+    const instancedVases = createInstancedBranchGroup(
+      antiqueVase,
+      [
+        { x: -6.5, y: 0, z: -8.2 },
+        { x: 6.5, y: 0, z: -8.2 }
+      ],
+      'Instanced_Room_Antique_Vases',
+      new THREE.Vector3(0, 0.9, -8.2),
+      8.0
+    );
+    overhaulContainer.add(instancedVases);
   } catch {}
 
   targetInterior.add(overhaulContainer);
@@ -323,14 +365,6 @@ export async function reinforceTanVienMountainWithBoulders(mountainGroup, {
       fitAxis: 'y'
     });
 
-    baseBoulder.traverse((c) => {
-      if (c.isMesh) {
-        c.castShadow = false;
-        c.receiveShadow = false;
-        c.userData.ignoreRaycaster = true;
-      }
-    });
-
     const bastionClusters = [
       { x: 18.0, y: 14.0, z: 4.0, scale: 1.4, rotY: 0.5 },
       { x: 16.5, y: 22.0, z: -2.0, scale: 1.2, rotY: 1.2 },
@@ -340,18 +374,13 @@ export async function reinforceTanVienMountainWithBoulders(mountainGroup, {
       { x: 4.5, y: 39.8, z: -2.5, scale: 1.1, rotY: 2.7 }
     ];
 
-    const group = new THREE.Group();
-    group.name = 'Tan_Vien_Reinforced_Boulders';
-    group.userData.ignoreRaycaster = true;
-
-    bastionClusters.forEach((cl) => {
-      const b = baseBoulder.clone(true);
-      b.position.set(cl.x, cl.y, cl.z);
-      b.scale.multiplyScalar(cl.scale);
-      b.rotation.y = cl.rotY;
-      b.userData.ignoreRaycaster = true;
-      group.add(b);
-    });
+    const group = createInstancedBranchGroup(
+      baseBoulder,
+      bastionClusters,
+      'Tan_Vien_Reinforced_Boulders',
+      new THREE.Vector3(12, 27, 2),
+      28.0
+    );
 
     mountainGroup.add(group);
     return group;
@@ -475,7 +504,7 @@ export class MuseumTotalOverhaulEngine {
 
   update(elapsedTime) {
     if (!this.isInitialized) return;
-    const timeSec = (elapsedTime || performance.now()) * 0.001;
+    const timeSec = typeof elapsedTime === 'number' ? elapsedTime : performance.now() * 0.001;
     for (let i = 0; i < this.overhauls.length; i++) {
       this.overhauls[i].update?.(timeSec);
     }

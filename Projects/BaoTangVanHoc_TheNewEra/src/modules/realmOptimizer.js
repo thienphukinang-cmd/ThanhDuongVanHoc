@@ -77,6 +77,9 @@ export function createOptimizedGodRays(colorHex = '#fde047', height = 20, topRad
   
   const geometry = new THREE.CylinderGeometry(topRadius, bottomRadius, height, 16, 1, true);
   geometry.translate(0, -height / 2, 0); // Đặt tâm chóp quay lên trên
+  geometry.computeVertexNormals();
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
 
   const material = new THREE.MeshBasicMaterial({
     map: texture,
@@ -85,23 +88,52 @@ export function createOptimizedGodRays(colorHex = '#fde047', height = 20, topRad
     opacity: 0.4,
     blending: THREE.AdditiveBlending, // Quan trọng: tạo hiệu ứng phát sáng cộng gộp
     depthWrite: false, // Không cản các vật thể phía sau
-    side: THREE.DoubleSide
+    side: THREE.FrontSide
   });
 
   const godRayMesh = new THREE.Mesh(geometry, material);
-  godRayMesh.frustumCulled = false; // Tránh chớp nháy khi quay camera
+  godRayMesh.castShadow = false;
+  godRayMesh.receiveShadow = false;
+  godRayMesh.frustumCulled = true;
   return godRayMesh;
 }
 
 // Thiết lập sương mù môi trường (Fog)
 // Đặt trong hàm khởi tạo thế giới Truyện Kiều hoặc Sơn Tinh
 export function setupRealmAtmosphere(scene, fogColor = 0x1a0b2e, density = 0.0015) {
-  scene.fog = new THREE.FogExp2(fogColor, density);
-  scene.background = new THREE.Color(fogColor);
-  
-  // Ambient Light dịu nhẹ toàn cục
-  const ambient = new THREE.AmbientLight(0xffffff, 0.4);
-  scene.add(ambient);
+  if (!scene) return null;
+  if (scene.fog?.isFogExp2) {
+    scene.fog.color.setHex(fogColor);
+    scene.fog.density = density;
+  } else {
+    scene.fog = new THREE.FogExp2(fogColor, density);
+  }
+  if (scene.background?.isColor) {
+    scene.background.setHex(fogColor);
+  } else {
+    scene.background = new THREE.Color(fogColor);
+  }
+
+  // Tái sử dụng 1 AmbientLight duy nhất để tránh rò rỉ đèn mỗi lần vào cõi
+  let ambient = scene.getObjectByName('Realm_Atmosphere_AmbientLight');
+  if (!ambient) {
+    ambient = new THREE.AmbientLight(0xffffff, 0.4);
+    ambient.name = 'Realm_Atmosphere_AmbientLight';
+    scene.add(ambient);
+  } else {
+    ambient.visible = true;
+    ambient.intensity = 0.4;
+  }
+  return ambient;
+}
+
+export function cleanupRealmAtmosphere(scene) {
+  if (!scene) return;
+  const ambient = scene.getObjectByName('Realm_Atmosphere_AmbientLight');
+  if (ambient) {
+    ambient.visible = false;
+    ambient.parent?.remove(ambient);
+  }
 }
 export function disposeHierarchy(node) {
   if (!node) return;

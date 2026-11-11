@@ -137,6 +137,9 @@ export class CameraController {
     this._testBoxX = new THREE.Box3();
     this._testBoxZ = new THREE.Box3();
     this._testBoxXZ = new THREE.Box3();
+    this._resolveStartPos = new THREE.Vector3();
+    this._resolveTargetPos = new THREE.Vector3();
+    this._tempSize = new THREE.Vector3();
 
     this.spatialGrid = new SpatialCollisionGrid(8.0);
     this.customHitboxes = [];
@@ -155,6 +158,7 @@ export class CameraController {
     this.onFastTravelComplete = null;
     this.audioManager = options?.audioManager ?? null;
     this.stepDistanceAccumulator = 0.6;
+    this._stairPolylines = this._buildStaircasePolylines();
 
     try {
       this.initControls();
@@ -166,11 +170,113 @@ export class CameraController {
     }
   }
 
+  _buildStaircasePolylines() {
+    const sampleFlight = (controlPoints, halfWidth, segments = 28) => {
+      const curve = new THREE.CatmullRomCurve3(controlPoints);
+      curve.curveType = 'centripetal';
+      const pts = [];
+      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+      for (let i = 0; i <= segments; i++) {
+        const p = curve.getPoint(i / segments);
+        pts.push(p);
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.z < minZ) minZ = p.z;
+        if (p.z > maxZ) maxZ = p.z;
+      }
+      const pad = halfWidth + 0.15;
+      return {
+        pts,
+        halfWidthSq: halfWidth * halfWidth,
+        minX: minX - pad,
+        maxX: maxX + pad,
+        minZ: minZ - pad,
+        maxZ: maxZ + pad
+      };
+    };
+
+    return [
+      // Tầng 1 -> Tầng 2 (Khớp 100% BifurcatedStaircase)
+      sampleFlight([
+        new THREE.Vector3(0, 0.0, 24.0),
+        new THREE.Vector3(0, 1.6, 18.5),
+        new THREE.Vector3(0, 3.4, 13.0),
+        new THREE.Vector3(0, 5.0, 8.0)
+      ], 2.85),
+      sampleFlight([
+        new THREE.Vector3(-1.8, 5.0, 6.5),
+        new THREE.Vector3(-7.5, 6.4, 7.8),
+        new THREE.Vector3(-14.5, 8.2, 11.0),
+        new THREE.Vector3(-22.0, 10.0, 15.5)
+      ], 2.0),
+      sampleFlight([
+        new THREE.Vector3(1.8, 5.0, 6.5),
+        new THREE.Vector3(7.5, 6.4, 7.8),
+        new THREE.Vector3(14.5, 8.2, 11.0),
+        new THREE.Vector3(22.0, 10.0, 15.5)
+      ], 2.0),
+      // Tầng 2 -> Tầng 3 (Khớp 100% BifurcatedStaircase)
+      sampleFlight([
+        new THREE.Vector3(0, 10.0, -24.0),
+        new THREE.Vector3(0, 11.6, -18.5),
+        new THREE.Vector3(0, 13.4, -13.0),
+        new THREE.Vector3(0, 15.0, -8.0)
+      ], 2.68),
+      sampleFlight([
+        new THREE.Vector3(-1.8, 15.0, -6.5),
+        new THREE.Vector3(-7.5, 16.4, -7.8),
+        new THREE.Vector3(-14.5, 18.2, -11.0),
+        new THREE.Vector3(-22.0, 20.0, -15.5)
+      ], 2.0),
+      sampleFlight([
+        new THREE.Vector3(1.8, 15.0, -6.5),
+        new THREE.Vector3(7.5, 16.4, -7.8),
+        new THREE.Vector3(14.5, 18.2, -11.0),
+        new THREE.Vector3(22.0, 20.0, -15.5)
+      ], 2.0)
+    ];
+  }
+
+  _sampleFlightHeightAt(flight, x, z) {
+    if (x < flight.minX || x > flight.maxX || z < flight.minZ || z > flight.maxZ) {
+      return null;
+    }
+    const pts = flight.pts;
+    let bestDistSq = flight.halfWidthSq;
+    let bestY = null;
+
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i];
+      const b = pts[i + 1];
+      const dx = b.x - a.x;
+      const dz = b.z - a.z;
+      const lenSq = dx * dx + dz * dz;
+      let s = 0.0;
+      if (lenSq > 1e-8) {
+        s = ((x - a.x) * dx + (z - a.z) * dz) / lenSq;
+        if (s < 0.0) s = 0.0;
+        else if (s > 1.0) s = 1.0;
+      }
+      const cx = a.x + s * dx;
+      const cz = a.z + s * dz;
+      const distSq = (x - cx) * (x - cx) + (z - cz) * (z - cz);
+      if (distSq <= bestDistSq) {
+        bestDistSq = distSq;
+        bestY = a.y + s * (b.y - a.y);
+      }
+    }
+    return bestY;
+  }
+
   initControls() {
     if (!this.camera) return;
     try {
       this.controls = new PointerLockControls(this.camera, this.domElement);
-      this.controls.addEventListener('lock', () => this.updateLockHint(true));
+      this.controls.addEventListener('lock', () => {
+        this.velocity.y = 0;
+        this.isOnGround = true;
+        this.updateLockHint(true);
+      });
       this.controls.addEventListener('unlock', () => this.updateLockHint(false));
     } catch (err) {
       console.warn("[SELF-HEALING] Lỗi tạo PointerLockControls:", err);
@@ -187,8 +293,8 @@ export class CameraController {
         <style>
           #camera-mode-hint {
             position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-            z-index: 1000; background: rgba(12, 16, 24, 0.88);
-            border: 1px solid rgba(212, 175, 55, 0.45); backdrop-filter: blur(12px);
+            z-index: 1000; background: rgba(12, 16, 24, 0.94);
+            border: 1px solid rgba(212, 175, 55, 0.45);
             color: #f0f3f6; font-family: 'Segoe UI', sans-serif; font-size: 12px;
             padding: 8px 18px; border-radius: 24px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
             display: flex; align-items: center; gap: 12px; user-select: none;
@@ -269,7 +375,7 @@ export class CameraController {
 
     this.onCanvasClick = (e) => {
       if (this.isFastTraveling) return;
-      if (e.target?.closest?.('#director-hud, #portal-modal-overlay, #directory-hud-modal, #directory-hud-toggle-btn, #literature-summary-panel')) return;
+      if (e.target?.closest?.('#director-hud, #portal-modal-overlay, #directory-hud-modal, #directory-hud-toggle-btn, #literature-summary-panel, #audio-mute-toggle-btn, #perf-fps-badge, #return-waypoint-prompt')) return;
       if (this.isEnabled && this.controls && !this.controls.isLocked) {
         this.controls.lock();
       }
@@ -485,87 +591,47 @@ export class CameraController {
 
     // B. ĐỊNH NGHĨA SÀN BÊ TÔNG ĐẶC (CÁC TẦNG BẢO TÀNG)
     // Ngoại vi bảo tàng: |x| <= 63.5 và |z| <= 63.5
-    // Giếng trời trung tâm thông tầng rỗng: |x| < 21.5 và |z| < 21.5
-    const isSolidFloorSlab = (Math.abs(x) >= 21.5 || Math.abs(z) >= 21.5) && Math.abs(x) <= 63.5 && Math.abs(z) <= 63.5;
+    // Giếng trời trung tâm thông tầng rỗng: |x| < 21.75 và |z| < 21.75
+    const isSolidFloorSlab = (Math.abs(x) >= 21.75 || Math.abs(z) >= 21.75) && Math.abs(x) <= 63.5 && Math.abs(z) <= 63.5;
 
-    // =========================================================================
-    // 1. CẦU THANG CHỮ Y TẦNG 2 -> TẦNG 3 (Elevation Y = 10.0m -> 20.0m)
-    // =========================================================================
-    // 1.1. Hai vế thang treo T2 -> T3 (Y = 15.0m -> 20.0m):
-    // CHỈ áp dụng khi người chơi thực sự đang ở trên cao (feetY >= 13.5m).
-    // TUYỆT ĐỐI KHÔNG áp dụng cho người chơi đang đi bên dưới ở hành lang Tầng 2 (feetY ~ 10m)
-    // để triệt tiêu vĩnh viễn lỗi bị dịch chuyển/hút ngược đột ngột lên Tầng 3!
-    if (feetY >= 13.5) {
-      // Vế Tây: X in [-24.5, -1.5], Z in [-18.5, -5.0]
-      if (x <= -1.5 && x >= -24.5 && z <= -5.0 && z >= -18.5) {
-        const t = Math.max(0.0, Math.min(1.0, (-x - 1.8) / 20.2));
-        return 15.0 + t * 5.0;
-      }
-      // Vế Đông: X in [1.5, 24.5], Z in [-18.5, -5.0]
-      if (x >= 1.5 && x <= 24.5 && z <= -5.0 && z >= -18.5) {
-        const t = Math.max(0.0, Math.min(1.0, (x - 1.8) / 20.2));
-        return 15.0 + t * 5.0;
-      }
-      // Chiếu nghỉ T2 -> T3 (Y = 15.0m)
-      if (Math.hypot(x, z - (-7.5)) <= 5.2) {
-        return 15.0;
-      }
-    }
+    // Ngưỡng bước bậc hợp lý:
+    // - Khi đang đứng/đi trên mặt sàn: cho phép bước lên tối đa 0.55m -> leo bậc thang mượt,
+    //   nhưng TUYỆT ĐỐI không hút người đi dưới gầm cầu thang/chiếu nghỉ lên trên (chênh >= 1.5m..5.0m).
+    // - Khi đang nhảy giữa không trung: không tự nhấc lên mặt thang phía trên đầu khi đang bay lên.
+    const maxStepUp = this.isOnGround
+      ? 0.55
+      : (this.velocity.y > 0 ? 0.05 : 0.25);
+    const maxAllowedY = feetY + maxStepUp;
 
-    // 1.2. Nhánh trung tâm T2 -> T3 (Y = 10.0m -> 15.0m, Z in [-24.8, -7.2]):
-    // Chỉ áp dụng khi người chơi ở Tầng 2 hoặc đang leo nhánh này (feetY in [8.5m, 16.0m]).
-    // Khi người chơi ở Tầng 3 (feetY ~ 20m), nhánh này nằm bên dưới, sàn Tầng 3 là sàn đặc 20m.
-    if (feetY >= 8.5 && feetY <= 16.0) {
-      if (Math.abs(x) <= 3.8 && z <= -7.2 && z >= -24.8) {
-        const t = Math.max(0.0, Math.min(1.0, (z - (-24.5)) / 17.0));
-        return 10.0 + t * 5.0;
-      }
-      // Chiếu nghỉ T2 -> T3 từ dưới leo lên
-      if (Math.hypot(x, z - (-7.5)) <= 5.2) {
-        return 15.0;
-      }
-    }
+    let bestFloorY = 0.0; // Sàn Tầng 1 (Y = 0.0m)
 
-    // =========================================================================
-    // 2. CẦU THANG CHỮ Y TẦNG 1 -> TẦNG 2 (Elevation Y = 0.0m -> 10.0m)
-    // =========================================================================
-    // 2.1. Hai vế thang T1 -> T2 (Y = 5.0m -> 10.0m):
-    // CHỈ áp dụng khi người chơi đã leo lên khỏi mặt đất (feetY >= 3.8m).
-    // TUYỆT ĐỐI KHÔNG áp dụng cho người đi dưới gầm thang ở Tầng 1 (feetY ~ 0m).
-    if (feetY >= 3.8 && feetY <= 11.5) {
-      if (x <= -1.5 && x >= -24.5 && z >= 5.0 && z <= 18.5) {
-        const t = Math.max(0.0, Math.min(1.0, (-x - 1.8) / 20.2));
-        return 5.0 + t * 5.0;
-      }
-      if (x >= 1.5 && x <= 24.5 && z >= 5.0 && z <= 18.5) {
-        const t = Math.max(0.0, Math.min(1.0, (x - 1.8) / 20.2));
-        return 5.0 + t * 5.0;
-      }
-    }
-
-    // 2.2. Nhánh trung tâm T1 -> T2 (Y = 0.0m -> 5.0m, Z in [7.2, 24.8]):
-    // Chỉ áp dụng khi người chơi ở Tầng 1 hoặc đang leo nhánh này (feetY <= 6.2m).
-    if (feetY <= 6.2) {
-      if (Math.abs(x) <= 3.8 && z >= 7.2 && z <= 24.8) {
-        const t = Math.max(0.0, Math.min(1.0, (24.5 - z) / 17.0));
-        return t * 5.0;
-      }
-      if (Math.hypot(x, z - 7.5) <= 5.2) {
-        return 5.0;
-      }
-    }
-
-    // =========================================================================
-    // 3. SÀN BÊ TÔNG ĐẶC CÁC TẦNG (HÀNH LANG VÀ PHÒNG TRƯNG BÀY)
-    // =========================================================================
+    // 1. Sàn bê tông đặc Tầng 2 (10.0m) & Tầng 3 (20.0m)
     if (isSolidFloorSlab) {
-      if (feetY >= 15.0) return 20.0; // Tầng 3
-      if (feetY >= 5.0)  return 10.0; // Tầng 2
-      return 0.0;                     // Tầng 1 dưới gầm hành lang
+      if (10.0 <= maxAllowedY && 10.0 > bestFloorY) bestFloorY = 10.0;
+      if (20.0 <= maxAllowedY && 20.0 > bestFloorY) bestFloorY = 20.0;
     }
 
-    // Mặc định: Rơi tự do trong giếng trời xuống mặt sàn Tầng 1 (Y = 0.0m)
-    return 0.0;
+    // 2. 6 vế cầu thang chữ Y bám chính xác đường cong CatmullRomCurve3 & bề rộng thật
+    if (this._stairPolylines) {
+      for (let i = 0; i < this._stairPolylines.length; i++) {
+        const stairY = this._sampleFlightHeightAt(this._stairPolylines[i], x, z);
+        if (stairY !== null && stairY <= maxAllowedY && stairY > bestFloorY) {
+          bestFloorY = stairY;
+        }
+      }
+    }
+
+    // 3. Chiếu nghỉ Tầng 1 -> Tầng 2 (Y = 5.0m tại (0, 7.5), R = 4.95m, chừa rãnh vào vế thang Z > 8.5)
+    if (!(Math.abs(x) < 2.75 && z > 8.5) && Math.hypot(x, z - 7.5) <= 4.95) {
+      if (5.0 <= maxAllowedY && 5.0 > bestFloorY) bestFloorY = 5.0;
+    }
+
+    // 4. Chiếu nghỉ Tầng 2 -> Tầng 3 (Y = 15.0m tại (0, -7.5), R = 4.75m, chừa rãnh vào vế thang Z < -8.5)
+    if (!(Math.abs(x) < 2.55 && z < -8.5) && Math.hypot(x, z + 7.5) <= 4.75) {
+      if (15.0 <= maxAllowedY && 15.0 > bestFloorY) bestFloorY = 15.0;
+    }
+
+    return bestFloorY;
   }
 
   fastTravelTo(targetPos, lookAtTarget, onComplete = null) {
@@ -640,11 +706,36 @@ export class CameraController {
           // 0. Xử lý va chạm trượt mượt mà duy nhất với MuseumHitboxManager (Wall Sliding - Skill: hitbox-collision-architect)
           const hbm = this.hitboxManager || (typeof window !== 'undefined' ? window.__museumHitboxManager : null);
           if (hbm && typeof hbm.resolvePlayerMovement === 'function') {
-            const currentPos = new THREE.Vector3(prevX, this.camera.position.y - this.eyeHeight, prevZ);
-            const targetPos = new THREE.Vector3(this.camera.position.x, this.camera.position.y - this.eyeHeight, this.camera.position.z);
-            const resolved = hbm.resolvePlayerMovement(currentPos, targetPos, this.playerRadius || 0.45, 1.8);
+
+
+            const currFloorY = this.getFloorHeightAt(prevX, prevZ);
+            const targetFloorY = this.getFloorHeightAt(this.camera.position.x, this.camera.position.z);
+            const footY = Math.max(this.camera.position.y - this.eyeHeight, currFloorY);
+            const currentPos = this._resolveStartPos.set(prevX, footY, prevZ);
+            const targetPos = this._resolveTargetPos.set(this.camera.position.x, Math.max(footY, targetFloorY), this.camera.position.z);
+            const resolved = hbm.resolvePlayerMovement(currentPos, targetPos, this.playerRadius || 0.25, 1.8);
             this.camera.position.x = resolved.x;
             this.camera.position.z = resolved.z;
+
+            // Chặn đi từ gầm cầu thang chui ngược vào phần gầm thấp (< 1.8m) rồi trồi lên mặt bậc
+            const currFeetY = this.camera.position.y - this.eyeHeight;
+            const inLowT1UnderStair =
+              currFeetY < 0.35 &&
+              Math.abs(this.camera.position.x) < 2.95 &&
+              this.camera.position.z >= 16.8 &&
+              this.camera.position.z <= 23.2 &&
+              (prevZ < 17.0 || Math.abs(prevX) >= 2.95);
+            const inLowT2UnderStair =
+              currFeetY >= 9.4 &&
+              currFeetY < 10.35 &&
+              Math.abs(this.camera.position.x) < 2.75 &&
+              this.camera.position.z <= -16.8 &&
+              this.camera.position.z >= -23.2 &&
+              (prevZ > -17.0 || Math.abs(prevX) >= 2.75);
+            if (inLowT1UnderStair || inLowT2UnderStair) {
+              this.camera.position.x = prevX;
+              this.camera.position.z = prevZ;
+            }
           } else {
             // Fallback nếu chưa nạp MuseumHitboxManager
             this.handleInteriorObstacleCollision(prevX, prevZ);
@@ -666,6 +757,8 @@ export class CameraController {
           this.camera.position.y = targetMinY;
           this.velocity.y = 0;
           this.isOnGround = true;
+        } else if (this.camera.position.y > targetMinY + 0.35) {
+          this.isOnGround = false;
         }
 
         // 4. Khóa an toàn chống clipping / rơi xuống dưới cao độ sàn thế giới truyện
@@ -696,6 +789,7 @@ export class CameraController {
   handleInteriorObstacleCollision(prevX, prevZ) {
     if (!this.camera || this.camera.position.y > 30.0) return;
     const currX = this.camera.position.x;
+    const currY = this.camera.position.y;
     const currZ = this.camera.position.z;
     if ((currX >= 4000.0 && currZ >= 4000.0) || (typeof window !== 'undefined' && window.__stttRealmActive)) return;
     if (!this.spatialGrid || this.spatialGrid.allObjects.length === 0) return;

@@ -3,6 +3,7 @@ import { DIMENSIONS } from '../config/dimensions.js';
 import { IndochineBalustrades } from './indochineBalustrades.js';
 import { LITERATURE_REGISTRY } from '../config/literatureRegistry.js';
 import * as ProceduralMats from './proceduralMaterials.js';
+import { mergeGroupMeshesByMaterial } from '../utils/geometryMerger.js';
 
 // ============================================================================
 // BỘ CACHE VẬT LIỆU & TEXTURE NỘI BỘ (ĐẢM BẢO < 2MB VRAM & 60+ FPS)
@@ -52,7 +53,7 @@ function getSafePlaqueMaterial(title = 'PHÒNG TRƯNG BÀY', id = 'default') {
     ctx.fillText(String(title).toUpperCase(), w / 2, h / 2);
   });
 
-  const mat = new THREE.MeshLambertMaterial({ map: tex, emissive: 0x261806 });
+  const mat = new THREE.MeshLambertMaterial({ map: tex, emissive: 0x261806, side: THREE.FrontSide });
   ARCH_MAT_CACHE[cacheKey] = mat;
   return mat;
 }
@@ -118,7 +119,7 @@ export class ProceduralArchitecture {
         color: 0x3b241b,
         specular: 0x997a45,
         shininess: 35,
-        side: THREE.DoubleSide
+        side: THREE.FrontSide
       });
       ARCH_MAT_CACHE[name] = mat;
       return mat;
@@ -137,7 +138,7 @@ export class ProceduralArchitecture {
           ctx.stroke();
         }
       }, 10, 2);
-      const mat = new THREE.MeshLambertMaterial({ map: stoneTex, color: 0x736e65, side: THREE.DoubleSide });
+      const mat = new THREE.MeshLambertMaterial({ map: stoneTex, color: 0x736e65, side: THREE.FrontSide });
       ARCH_MAT_CACHE[name] = mat;
       return mat;
     }
@@ -156,7 +157,6 @@ export class ProceduralArchitecture {
       if (aliasMap[name]) {
         const shared = ProceduralMats.getSharedMaterial(aliasMap[name]);
         if (shared) {
-          shared.side = THREE.DoubleSide;
           ARCH_MAT_CACHE[name] = shared;
           return shared;
         }
@@ -165,7 +165,6 @@ export class ProceduralArchitecture {
 
     const fromLib = this.matLib?.get?.(name);
     if (fromLib) {
-      fromLib.side = THREE.DoubleSide;
       ARCH_MAT_CACHE[name] = fromLib;
       return fromLib;
     }
@@ -190,19 +189,19 @@ export class ProceduralArchitecture {
           color: 0xffffff,
           specular: 0xffe6b0,
           shininess: 50,
-          side: THREE.DoubleSide
+          side: THREE.FrontSide
         });
         break;
       }
       case 'wall_marble':
       case 'whiteMarble':
       case 'indochinePlaster':
-        fallbackMat = new THREE.MeshLambertMaterial({ color: 0xf4efe6, side: THREE.DoubleSide });
+        fallbackMat = new THREE.MeshLambertMaterial({ color: 0xf4efe6, side: THREE.FrontSide });
         break;
       case 'dark_wood':
       case 'wainscotWood':
       case 'polishedMahogany':
-        fallbackMat = new THREE.MeshLambertMaterial({ color: 0x2b1810, side: THREE.DoubleSide });
+        fallbackMat = new THREE.MeshLambertMaterial({ color: 0x2b1810, side: THREE.FrontSide });
         break;
       case 'royalGold':
         fallbackMat = new THREE.MeshPhongMaterial({
@@ -210,11 +209,11 @@ export class ProceduralArchitecture {
           emissive: 0x2a1d05,
           specular: 0xffeba8,
           shininess: 85,
-          side: THREE.DoubleSide
+          side: THREE.FrontSide
         });
         break;
       default:
-        fallbackMat = new THREE.MeshLambertMaterial({ color: 0xdcd6cc, side: THREE.DoubleSide });
+        fallbackMat = new THREE.MeshLambertMaterial({ color: 0xdcd6cc, side: THREE.FrontSide });
     }
 
     ARCH_MAT_CACHE[name] = fallbackMat;
@@ -336,6 +335,12 @@ export class ProceduralArchitecture {
       gE.position.set(totalW / 2, elevation - 0.15, 0);
       corridorGroup.add(gE);
 
+      mergeGroupMeshesByMaterial(corridorGroup, {
+        namePrefix: `Merged_Corridor_L${levelId}`,
+        forceNoShadow: true,
+        excludeFromCollision: true,
+        ignoreRaycaster: true
+      });
       this.group.add(corridorGroup);
     });
   }
@@ -503,6 +508,14 @@ export class ProceduralArchitecture {
       extGroup.add(bridgeGoldCap);
     });
 
+    // Gộp toàn bộ cột ngoại thất (352 meshes), mái, cầu đá, tay vịn theo vật liệu
+    mergeGroupMeshesByMaterial(extGroup, {
+      namePrefix: 'Merged_Palace_Exterior',
+      forceNoShadow: true,
+      excludeFromCollision: true,
+      ignoreRaycaster: true
+    });
+
     this.group.add(extGroup);
   }
 
@@ -542,9 +555,10 @@ export class ProceduralArchitecture {
       depthWrite: false
     });
 
-    const skyDome = new THREE.Mesh(new THREE.SphereGeometry(780, 24, 16), skyMat);
+    const skyDome = new THREE.Mesh(new THREE.SphereGeometry(780, 16, 10), skyMat);
     skyDome.name = "Indochine_Sunset_SkyDome";
     skyDome.renderOrder = -10;
+    skyDome.frustumCulled = false;
 
     // Tự động đồng bộ lại màu nền & sương mù ấm áp cho toàn bộ Scene ngay khi vẽ khung hình đầu tiên
     let sceneSynced = false;
@@ -583,28 +597,32 @@ export class ProceduralArchitecture {
       emissive: 0x0b211d,
       specular: 0xffcc88,
       shininess: 75,
-      fog: true
+      fog: true,
+      side: THREE.FrontSide
     });
 
-    const waterMesh = this.createSafeMesh(new THREE.PlaneGeometry(1500, 1500), waterMat, "TrangAn_Emerald_Lake");
+    const waterMesh = this.createSafeMesh(new THREE.PlaneGeometry(1500, 1500, 1, 1), waterMat, "TrangAn_Emerald_Lake");
     waterMesh.rotation.x = -Math.PI / 2;
     waterMesh.position.y = -2.0;
+    waterMesh.matrixAutoUpdate = false;
+    waterMesh.updateMatrix();
     envGroup.add(waterMesh);
 
-    // C. QUẦN THỂ NÚI ĐÁ VÔI TRÀNG AN 2 LỚP (GẦN & XA)
-    // Dùng fog: false với màu sương chiều được pha sẵn để nhìn thấy rõ 100% từ mọi góc nhìn
+    // C. QUẦN THỂ NÚI ĐÁ VÔI TRÀNG AN 2 LỚP (INSTANCED MESH - 2 DRAW CALLS THAY VÌ 120)
     const nearKarstMat = new THREE.MeshLambertMaterial({
       color: 0x3b4d47,
       emissive: 0x161d1b,
       flatShading: true,
-      fog: false
+      fog: false,
+      side: THREE.FrontSide
     });
 
     const farKarstMat = new THREE.MeshLambertMaterial({
       color: 0x6c6874,
       emissive: 0x2c2529,
       flatShading: true,
-      fog: false
+      fog: false,
+      side: THREE.FrontSide
     });
 
     const mistRingMat = new THREE.MeshBasicMaterial({
@@ -613,74 +631,82 @@ export class ProceduralArchitecture {
       opacity: 0.22,
       fog: false,
       depthWrite: false,
-      side: THREE.DoubleSide
+      side: THREE.FrontSide
     });
 
-    // Hàm tạo 1 cụm núi đá vôi Ninh Bình (Gồm đỉnh chính + 2 đỉnh phụ gồ ghề)
-    const SharedPeakGeo = new THREE.ConeGeometry(1, 1, 6, 2);
+    const SharedPeakGeo = new THREE.ConeGeometry(1, 1, 6, 1);
     this.prepareGeometry(SharedPeakGeo);
 
-    const createKarstCluster = (x, z, baseRadius, height, mat, rotY) => {
-      const cluster = new THREE.Group();
-      cluster.position.set(x, -2.2, z);
-      cluster.rotation.y = rotY;
-
-      // Đỉnh chính
-      const mainPeak = new THREE.Mesh(SharedPeakGeo, mat);
-      mainPeak.scale.set(baseRadius, height, baseRadius * 0.85);
-      mainPeak.position.y = height * 0.5;
-      cluster.add(mainPeak);
-
-      // Đỉnh phụ bên trái
-      const subPeak1 = new THREE.Mesh(SharedPeakGeo, mat);
-      subPeak1.scale.set(baseRadius * 0.7, height * 0.68, baseRadius * 0.65);
-      subPeak1.position.set(-baseRadius * 0.55, height * 0.34, baseRadius * 0.2);
-      subPeak1.rotation.y = 0.8;
-      cluster.add(subPeak1);
-
-      // Đỉnh phụ bên phải
-      const subPeak2 = new THREE.Mesh(SharedPeakGeo, mat);
-      subPeak2.scale.set(baseRadius * 0.6, height * 0.52, baseRadius * 0.6);
-      subPeak2.position.set(baseRadius * 0.5, height * 0.26, -baseRadius * 0.15);
-      subPeak2.rotation.y = 1.9;
-      cluster.add(subPeak2);
-
-      return cluster;
+    const nearTransforms = [];
+    const farTransforms = [];
+    const dummy = new THREE.Object3D();
+    const pushCluster = (targetList, x, z, baseRadius, height, rotY) => {
+      const cosR = Math.cos(rotY);
+      const sinR = Math.sin(rotY);
+      const addPeak = (lx, ly, lz, sx, sy, sz, localRotY) => {
+        const wx = x + lx * cosR + lz * sinR;
+        const wz = z - lx * sinR + lz * cosR;
+        dummy.position.set(wx, -2.2 + ly, wz);
+        dummy.rotation.set(0, rotY + localRotY, 0);
+        dummy.scale.set(sx, sy, sz);
+        dummy.updateMatrix();
+        targetList.push(dummy.matrix.clone());
+      };
+      addPeak(0, height * 0.5, 0, baseRadius, height, baseRadius * 0.85, 0);
+      addPeak(-baseRadius * 0.55, height * 0.34, baseRadius * 0.2, baseRadius * 0.7, height * 0.68, baseRadius * 0.65, 0.8);
+      addPeak(baseRadius * 0.5, height * 0.26, -baseRadius * 0.15, baseRadius * 0.6, height * 0.52, baseRadius * 0.6, 1.9);
     };
 
-    // Vòng 1: 18 Cụm núi đá vôi Tràng An gần (Bán kính 145m - 220m, chừa lối cầu đá phía Nam)
     const ring1Count = 18;
     for (let i = 0; i < ring1Count; i++) {
       const angle = (i / ring1Count) * Math.PI * 2;
-      // Chừa góc chính Nam (angle ~ PI/2) cho lối đại lộ dẫn vào cổng chính
       if (Math.abs(angle - Math.PI / 2) < 0.22) continue;
-
       const dist = 155 + ((i * 37) % 55);
-      const mx = Math.cos(angle) * dist;
-      const mz = Math.sin(angle) * dist;
       const radius = 26 + ((i * 19) % 18);
       const height = 65 + ((i * 29) % 55);
-
-      envGroup.add(createKarstCluster(mx, mz, radius, height, nearKarstMat, i * 1.1));
+      pushCluster(nearTransforms, Math.cos(angle) * dist, Math.sin(angle) * dist, radius, height, i * 1.1);
     }
 
-    // Vòng 2: 24 Dãy núi đại ngàn phía chân trời (Bán kính 310m - 420m, cao hùng vĩ)
     const ring2Count = 24;
     for (let i = 0; i < ring2Count; i++) {
       const angle = (i / ring2Count) * Math.PI * 2 + 0.13;
       const dist = 330 + ((i * 43) % 80);
-      const mx = Math.cos(angle) * dist;
-      const mz = Math.sin(angle) * dist;
       const radius = 48 + ((i * 23) % 30);
       const height = 110 + ((i * 41) % 85);
+      pushCluster(farTransforms, Math.cos(angle) * dist, Math.sin(angle) * dist, radius, height, i * 0.7);
+    }
 
-      envGroup.add(createKarstCluster(mx, mz, radius, height, farKarstMat, i * 0.7));
+    const buildKarstInstanced = (transforms, mat, name) => {
+      const inst = new THREE.InstancedMesh(SharedPeakGeo, mat, transforms.length);
+      inst.name = name;
+      inst.castShadow = false;
+      inst.receiveShadow = false;
+      inst.frustumCulled = true;
+      inst.matrixAutoUpdate = false;
+      for (let i = 0; i < transforms.length; i++) {
+        inst.setMatrixAt(i, transforms[i]);
+      }
+      inst.instanceMatrix.needsUpdate = true;
+      inst.computeBoundingBox();
+      inst.computeBoundingSphere();
+      inst.updateMatrix();
+      return inst;
+    };
+
+    if (nearTransforms.length > 0) {
+      envGroup.add(buildKarstInstanced(nearTransforms, nearKarstMat, 'Instanced_Near_Karsts'));
+    }
+    if (farTransforms.length > 0) {
+      envGroup.add(buildKarstInstanced(farTransforms, farKarstMat, 'Instanced_Far_Karsts'));
     }
 
     // Dải sương mù hoàng hôn là là trên mặt nước bao quanh chân núi
-    const mistRing = new THREE.Mesh(new THREE.RingGeometry(115, 380, 24), mistRingMat);
+    const mistRing = new THREE.Mesh(new THREE.RingGeometry(115, 380, 20), mistRingMat);
     mistRing.rotation.x = -Math.PI / 2;
     mistRing.position.y = 0.5;
+    mistRing.frustumCulled = true;
+    mistRing.matrixAutoUpdate = false;
+    mistRing.updateMatrix();
     envGroup.add(mistRing);
 
     this.group.add(envGroup);
@@ -720,7 +746,7 @@ export class ProceduralArchitecture {
 
     const halfW = archWidth / 2;
     const straightH = Math.max(0.5, archHeight - halfW);
-    const frameGeo = new THREE.TorusGeometry(halfW, 0.12, 6, 16, Math.PI);
+    const frameGeo = new THREE.TorusGeometry(halfW, 0.12, 5, 10, Math.PI);
     const archFrame = this.createSafeMesh(frameGeo, goldMat, "Arch_Gold_Frame");
     archFrame.position.set(0, straightH, thickness / 2 + 0.05);
     wallGroup.add(archFrame);
@@ -838,7 +864,7 @@ export class ProceduralArchitecture {
     baseMesh.position.y = 0.425;
     colGroup.add(baseMesh);
 
-    const shaftMesh = this.createSafeMesh(new THREE.CylinderGeometry(0.52, 0.58, height - 1.6, 10), marbleMat, "Perimeter_Col_Shaft");
+    const shaftMesh = this.createSafeMesh(new THREE.CylinderGeometry(0.52, 0.58, height - 1.6, 8), marbleMat, "Perimeter_Col_Shaft");
     shaftMesh.position.y = 0.8 + (height - 1.6) / 2;
     colGroup.add(shaftMesh);
 
@@ -913,6 +939,14 @@ export class ProceduralArchitecture {
       const eastInfill = this.createSafeMesh(new THREE.BoxGeometry(0.6, h, 12), plasterMat, "East_Corridor_Infill");
       eastInfill.position.set(34, y + h / 2, 0);
       tierGroup.add(eastInfill);
+
+      // Gộp toàn bộ tường vòm + tường ngăn tầng theo vật liệu (chỉ giữ mỗi tầng vài draw calls + plaques)
+      mergeGroupMeshesByMaterial(tierGroup, {
+        namePrefix: `Merged_Tier${lvl.id}_Pavilions`,
+        forceNoShadow: true,
+        excludeFromCollision: true,
+        ignoreRaycaster: true
+      });
 
       pavilionsGroup.add(tierGroup);
     });

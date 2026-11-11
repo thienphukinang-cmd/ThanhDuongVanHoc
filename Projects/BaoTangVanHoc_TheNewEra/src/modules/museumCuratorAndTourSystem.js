@@ -1,7 +1,6 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-
-const curatorGltfLoader = new GLTFLoader();
+import { loadGlbCached } from '../utils/modelLoaderHelper.js';
+import { mergeGroupMeshesByMaterial } from '../utils/geometryMerger.js';
 
 /**
  * ============================================================================
@@ -23,6 +22,32 @@ const curatorGltfLoader = new GLTFLoader();
  */
 
 const HERITAGE_TEX_CACHE = {};
+const CURATOR_MAT_CACHE = new Map();
+const _curatorBoxScratch = new THREE.Box3();
+const _curatorVecScratch = new THREE.Vector3();
+
+function getCuratorMat(key, factory) {
+  if (CURATOR_MAT_CACHE.has(key)) return CURATOR_MAT_CACHE.get(key);
+  const mat = factory();
+  CURATOR_MAT_CACHE.set(key, mat);
+  return mat;
+}
+
+function disposeCuratorBranch(branch) {
+  if (!branch) return;
+  const cachedMats = new Set(CURATOR_MAT_CACHE.values());
+  branch.traverse((obj) => {
+    if (obj.geometry && typeof obj.geometry.dispose === 'function') {
+      obj.geometry.dispose();
+    }
+    const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+    mats.forEach((m) => {
+      if (m && !cachedMats.has(m) && typeof m.dispose === 'function') {
+        m.dispose();
+      }
+    });
+  });
+}
 
 function getHeritageCanvasTexture(key, w, h, drawFn) {
   if (HERITAGE_TEX_CACHE[key]) return HERITAGE_TEX_CACHE[key];
@@ -35,6 +60,8 @@ function getHeritageCanvasTexture(key, w, h, drawFn) {
   drawFn(ctx, w, h);
 
   const tex = new THREE.CanvasTexture(canvas);
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
   if ('colorSpace' in tex && THREE.SRGBColorSpace) {
     tex.colorSpace = THREE.SRGBColorSpace;
   }
@@ -71,11 +98,12 @@ export function createLotusHeritagePedestal({
 
   // 1. Chân đế bát giác đá xanh Thanh Hóa (Octagonal Carved Stone Base)
   const baseGeo = new THREE.CylinderGeometry(baseRadius * 0.94, baseRadius * 1.12, height * 0.22, 8);
-  const stoneMat = new THREE.MeshStandardMaterial({
+  const stoneMat = getCuratorMat('curator_stone_base', () => new THREE.MeshStandardMaterial({
     color: 0x1e293b,
     roughness: 0.5,
-    metalness: 0.2
-  });
+    metalness: 0.2,
+    side: THREE.FrontSide
+  }));
   const baseMesh = new THREE.Mesh(baseGeo, stoneMat);
   baseMesh.position.y = height * 0.11;
   baseMesh.userData.ignoreRaycaster = true;
@@ -89,27 +117,29 @@ export function createLotusHeritagePedestal({
   proceduralHolder.add(stepMesh);
 
   // 2. Thân trụ chạm khắc sơn son thếp vàng & gỗ trắc cổ
-  const columnGeo = new THREE.CylinderGeometry(baseRadius * 0.54, baseRadius * 0.65, height * 0.52, 16);
-  const lacquerMat = new THREE.MeshStandardMaterial({
+  const columnGeo = new THREE.CylinderGeometry(baseRadius * 0.54, baseRadius * 0.65, height * 0.52, 10);
+  const lacquerMat = getCuratorMat('curator_lacquer_red', () => new THREE.MeshStandardMaterial({
     color: 0x661010,
     roughness: 0.25,
-    metalness: 0.45
-  });
+    metalness: 0.45,
+    side: THREE.FrontSide
+  }));
   const columnMesh = new THREE.Mesh(columnGeo, lacquerMat);
   columnMesh.position.y = height * 0.51;
   columnMesh.userData.ignoreRaycaster = true;
   proceduralHolder.add(columnMesh);
 
   // Vành chỉ vàng quanh eo trụ
-  const ringGoldMat = new THREE.MeshStandardMaterial({
+  const ringGoldMat = getCuratorMat(`curator_ring_gold_${accentColor}`, () => new THREE.MeshStandardMaterial({
     color: accentColor,
     roughness: 0.2,
     metalness: 0.88,
     emissive: 0x713f12,
-    emissiveIntensity: 0.35
-  });
+    emissiveIntensity: 0.35,
+    side: THREE.FrontSide
+  }));
   const waistRing = new THREE.Mesh(
-    new THREE.TorusGeometry(baseRadius * 0.59, 0.028, 12, 24),
+    new THREE.TorusGeometry(baseRadius * 0.59, 0.028, 6, 14),
     ringGoldMat
   );
   waistRing.rotation.x = Math.PI / 2;
@@ -119,10 +149,12 @@ export function createLotusHeritagePedestal({
 
   // 3. Đài sen vàng 12 cánh sen xếp vòng đối xứng bằng InstancedMesh
   const petalCount = 12;
-  const petalGeo = new THREE.ConeGeometry(0.24, 0.46, 5);
+  const petalGeo = new THREE.ConeGeometry(0.24, 0.46, 4);
   petalGeo.scale(1.0, 1.0, 0.36);
 
   const petalInstanced = new THREE.InstancedMesh(petalGeo, ringGoldMat, petalCount);
+  petalInstanced.castShadow = false;
+  petalInstanced.receiveShadow = false;
   petalInstanced.userData.ignoreRaycaster = true;
   const dummy = new THREE.Object3D();
   const ringRadius = baseRadius * 0.68;
@@ -144,19 +176,21 @@ export function createLotusHeritagePedestal({
 
   // 4. Mặt gương đồng / mâm vàng đặt hiện vật trên đỉnh
   const topPlate = new THREE.Mesh(
-    new THREE.CylinderGeometry(baseRadius * 0.80, baseRadius * 0.68, height * 0.15, 24),
+    new THREE.CylinderGeometry(baseRadius * 0.80, baseRadius * 0.68, height * 0.15, 12),
     ringGoldMat
   );
   topPlate.position.y = height * 0.92;
   topPlate.userData.ignoreRaycaster = true;
   proceduralHolder.add(topPlate);
 
-  // 5. Tự động nạp bệ sen hoa đá Blender PBR (lotus_pedestal_high.glb)
+  // 5. Tự động nạp bệ sen hoa đá Blender PBR qua cache dùng chung (lotus_pedestal_high.glb)
   if (useHighPolyGlb && typeof window !== 'undefined') {
-    curatorGltfLoader.load(
-      glbUrl,
-      (gltf) => {
-        const glbScene = gltf.scene;
+    loadGlbCached([glbUrl], {
+      maxTextureSize: 512,
+      disableMipmaps: true,
+      clone: true
+    })
+      .then((glbScene) => {
         glbScene.name = 'Blender_Lotus_Pedestal_PBR';
         glbScene.traverse((c) => {
           if (c.isMesh) {
@@ -164,19 +198,28 @@ export function createLotusHeritagePedestal({
             c.receiveShadow = false;
             c.frustumCulled = true;
             c.userData.ignoreRaycaster = true;
-            if (c.material?.map && 'colorSpace' in c.material.map && THREE.SRGBColorSpace) {
-              c.material.map.colorSpace = THREE.SRGBColorSpace;
-            }
+            const mats = Array.isArray(c.material) ? c.material : [c.material];
+            mats.forEach((m) => {
+              if (!m) return;
+              if (!m.transparent && !m.alphaTest) m.side = THREE.FrontSide;
+              if (m.map && 'colorSpace' in m.map && THREE.SRGBColorSpace && m.map.colorSpace !== THREE.SRGBColorSpace) {
+                m.map.colorSpace = THREE.SRGBColorSpace;
+                m.map.needsUpdate = true;
+              }
+            });
           }
         });
-        const box = new THREE.Box3().setFromObject(glbScene);
-        const sz = new THREE.Vector3();
-        box.getSize(sz);
-        const s = height / Math.max(sz.y, 0.001);
+        glbScene.updateMatrixWorld(true);
+        _curatorBoxScratch.setFromObject(glbScene);
+        _curatorBoxScratch.getSize(_curatorVecScratch);
+        const s = height / Math.max(_curatorVecScratch.y, 0.001);
         glbScene.scale.set(s, s, s);
         glbScene.position.set(0, 0, 0);
         pedestalGroup.add(glbScene);
-        proceduralHolder.visible = false;
+
+        // Giải phóng hoàn toàn các mesh procedural dự phòng khỏi scene & GPU memory
+        pedestalGroup.remove(proceduralHolder);
+        disposeCuratorBranch(proceduralHolder);
 
         pedestalGroup.updateMatrixWorld(true);
         if (typeof window !== 'undefined' && window.__museumHitboxManager) {
@@ -185,10 +228,8 @@ export function createLotusHeritagePedestal({
             tag: 'Lotus_Pedestal_Blender_PBR'
           });
         }
-      },
-      undefined,
-      () => {}
-    );
+      })
+      .catch(() => {});
   }
 
   return pedestalGroup;
@@ -224,26 +265,29 @@ export function createTraditionalArchwayEntrance({
   archGroup.add(proceduralFrame);
 
   const pillarOffset = archWidth * 0.5 + 0.35;
-  const pillarGeo = new THREE.CylinderGeometry(0.32, 0.38, archHeight + 0.6, 16);
-  const lacquerWoodMat = new THREE.MeshStandardMaterial({
+  const pillarGeo = new THREE.CylinderGeometry(0.32, 0.38, archHeight + 0.6, 10);
+  const lacquerWoodMat = getCuratorMat('curator_arch_lacquer', () => new THREE.MeshStandardMaterial({
     color: 0x580c0c, // Sơn son thẫm truyền thống
     roughness: 0.32,
-    metalness: 0.35
-  });
+    metalness: 0.35,
+    side: THREE.FrontSide
+  }));
 
-  const stonePlinthMat = new THREE.MeshStandardMaterial({
+  const stonePlinthMat = getCuratorMat('curator_stone_base', () => new THREE.MeshStandardMaterial({
     color: 0x1e293b,
     roughness: 0.55,
-    metalness: 0.15
-  });
+    metalness: 0.15,
+    side: THREE.FrontSide
+  }));
 
-  const goldAccentMat = new THREE.MeshStandardMaterial({
+  const goldAccentMat = getCuratorMat('curator_arch_gold', () => new THREE.MeshStandardMaterial({
     color: 0xfacc15,
     metalness: 0.88,
     roughness: 0.2,
     emissive: 0x713f12,
-    emissiveIntensity: 0.35
-  });
+    emissiveIntensity: 0.35,
+    side: THREE.FrontSide
+  }));
 
   // Hai cột gỗ lim sơn son + Bệ đá hoa sen đỡ chân cột
   [-pillarOffset, pillarOffset].forEach((xPos) => {
@@ -260,7 +304,7 @@ export function createTraditionalArchwayEntrance({
     proceduralFrame.add(pillar);
 
     // Vành đồng bọc đầu cột
-    const capital = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.34, 0.22, 16), goldAccentMat);
+    const capital = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.34, 0.22, 10), goldAccentMat);
     capital.position.set(xPos, archHeight + 0.55, 0);
     capital.userData.ignoreRaycaster = true;
     proceduralFrame.add(capital);
@@ -278,7 +322,7 @@ export function createTraditionalArchwayEntrance({
 
   // Vòm khuyết lượn cong mềm mại phía dưới xà
   const archInner = new THREE.Mesh(
-    new THREE.TorusGeometry(archWidth * 0.46, 0.12, 8, 24, Math.PI),
+    new THREE.TorusGeometry(archWidth * 0.46, 0.12, 6, 14, Math.PI),
     goldAccentMat
   );
   archInner.position.set(0, archHeight - 0.12, 0.05);
@@ -287,13 +331,15 @@ export function createTraditionalArchwayEntrance({
 
   // Mái ngói mũi hài truyền thống (Roof Eaves with Curve)
   const roofWidth = archWidth + 2.8;
+  const roofTileMat = getCuratorMat('curator_arch_roof', () => new THREE.MeshStandardMaterial({
+    color: 0x3f1609, // Ngói nung sẫm
+    roughness: 0.48,
+    metalness: 0.4,
+    side: THREE.FrontSide
+  }));
   const roofSlab = new THREE.Mesh(
     new THREE.BoxGeometry(roofWidth, 0.36, 1.65),
-    new THREE.MeshStandardMaterial({
-      color: 0x3f1609, // Ngói nung sẫm
-      roughness: 0.48,
-      metalness: 0.4
-    })
+    roofTileMat
   );
   roofSlab.position.set(0, archHeight + 0.82, 0);
   roofSlab.userData.ignoreRaycaster = true;
@@ -311,7 +357,7 @@ export function createTraditionalArchwayEntrance({
   // Hai đầu đao cong vút mạ vàng ở hai bên mái (Curved Eave Horns)
   [-1, 1].forEach((dir) => {
     const eaveHorn = new THREE.Mesh(
-      new THREE.ConeGeometry(0.28, 1.25, 8),
+      new THREE.ConeGeometry(0.28, 1.25, 6),
       goldAccentMat
     );
     eaveHorn.position.set(dir * (roofWidth * 0.5 + 0.25), archHeight + 1.25, 0);
@@ -321,7 +367,7 @@ export function createTraditionalArchwayEntrance({
 
     // Kìm nóc ở góc mái
     const ridgeTip = new THREE.Mesh(
-      new THREE.SphereGeometry(0.18, 12, 10),
+      new THREE.SphereGeometry(0.18, 6, 5),
       goldAccentMat
     );
     ridgeTip.position.set(dir * (roofWidth * 0.41), archHeight + 1.22, 0);
@@ -329,12 +375,14 @@ export function createTraditionalArchwayEntrance({
     proceduralFrame.add(ridgeTip);
   });
 
-  // Tự động nạp Cổng Tam Quan Mái Đao Blender (mai_dao_archway.glb)
+  // Tự động nạp Cổng Tam Quan Mái Đao Blender qua cache dùng chung (mai_dao_archway.glb)
   if (useGlbArchway && typeof window !== 'undefined') {
-    curatorGltfLoader.load(
-      glbUrl,
-      (gltf) => {
-        const archGlb = gltf.scene;
+    loadGlbCached([glbUrl], {
+      maxTextureSize: 512,
+      disableMipmaps: true,
+      clone: true
+    })
+      .then((archGlb) => {
         archGlb.name = 'Blender_Mai_Dao_Archway_GLB';
         archGlb.traverse((c) => {
           if (c.isMesh) {
@@ -342,29 +390,40 @@ export function createTraditionalArchwayEntrance({
             c.receiveShadow = false;
             c.frustumCulled = true;
             c.userData.ignoreRaycaster = true;
-            if (c.material?.map && 'colorSpace' in c.material.map && THREE.SRGBColorSpace) {
-              c.material.map.colorSpace = THREE.SRGBColorSpace;
-            }
+            const mats = Array.isArray(c.material) ? c.material : [c.material];
+            mats.forEach((m) => {
+              if (!m) return;
+              if (!m.transparent && !m.alphaTest) m.side = THREE.FrontSide;
+              if (m.map && 'colorSpace' in m.map && THREE.SRGBColorSpace && m.map.colorSpace !== THREE.SRGBColorSpace) {
+                m.map.colorSpace = THREE.SRGBColorSpace;
+                m.map.needsUpdate = true;
+              }
+            });
           }
         });
-        const box = new THREE.Box3().setFromObject(archGlb);
-        const sz = new THREE.Vector3();
-        box.getSize(sz);
-        const sx = (archWidth + 1.6) / Math.max(sz.x, 0.001);
-        const sy = (archHeight + 1.2) / Math.max(sz.y, 0.001);
+        archGlb.updateMatrixWorld(true);
+        _curatorBoxScratch.setFromObject(archGlb);
+        _curatorBoxScratch.getSize(_curatorVecScratch);
+        const sx = (archWidth + 1.6) / Math.max(_curatorVecScratch.x, 0.001);
+        const sy = (archHeight + 1.2) / Math.max(_curatorVecScratch.y, 0.001);
         const szScale = sx;
         archGlb.scale.set(sx, sy, szScale);
         archGlb.position.set(0, 0, 0);
         archGroup.add(archGlb);
-        proceduralFrame.visible = false;
-      },
-      undefined,
-      () => {}
-    );
+
+        // Giải phóng hoàn toàn khung cổng procedural dự phòng
+        archGroup.remove(proceduralFrame);
+        disposeCuratorBranch(proceduralFrame);
+      })
+      .catch(() => {});
   }
 
-  // Bức Hoành Phi Sơn Son Thếp Vàng (Lacquer Gold Plaque)
-  const plaqueTex = getHeritageCanvasTexture(`plaque_${roomTitle}`, 1024, 256, (ctx, w, h) => {
+  // Bức Hoành Phi Sơn Son Thếp Vàng (downscale 1024x256 -> 512x128)
+  const plaqueTex = getHeritageCanvasTexture(`plaque_${roomTitle}`, 512, 128, (ctx) => {
+    ctx.save();
+    ctx.scale(0.5, 0.5);
+    const w = 1024;
+    const h = 256;
     // Nền sơn mài đỏ thẫm
     ctx.fillStyle = '#450a0a';
     ctx.fillRect(0, 0, w, h);
@@ -386,6 +445,7 @@ export function createTraditionalArchwayEntrance({
     ctx.shadowColor = '#facc15';
     ctx.shadowBlur = 18;
     ctx.fillText(roomTitle, w / 2, h / 2);
+    ctx.restore();
   });
 
   const plaqueMesh = new THREE.Mesh(
@@ -396,14 +456,18 @@ export function createTraditionalArchwayEntrance({
   plaqueMesh.userData.ignoreRaycaster = true;
   archGroup.add(plaqueMesh);
 
-  // Đôi Câu Đối chữ quốc ngữ thư pháp treo dọc 2 bên cột sơn son
+  // Đôi Câu Đối chữ quốc ngữ thư pháp treo dọc 2 bên cột sơn son (downscale 256x1280 -> 128x640)
   const couplets = [
     { text: leftCouplet, x: -pillarOffset, key: `couplet_L_${roomTitle}` },
     { text: rightCouplet, x: pillarOffset, key: `couplet_R_${roomTitle}` }
   ];
 
   couplets.forEach((c) => {
-    const cTex = getHeritageCanvasTexture(c.key, 256, 1280, (ctx, w, h) => {
+    const cTex = getHeritageCanvasTexture(c.key, 128, 640, (ctx) => {
+      ctx.save();
+      ctx.scale(0.5, 0.5);
+      const w = 256;
+      const h = 1280;
       ctx.fillStyle = '#580c0c';
       ctx.fillRect(0, 0, w, h);
 
@@ -426,6 +490,7 @@ export function createTraditionalArchwayEntrance({
       words.forEach((word, idx) => {
         ctx.fillText(word, w / 2, startY + idx * step);
       });
+      ctx.restore();
     });
 
     const coupletMesh = new THREE.Mesh(
@@ -513,54 +578,68 @@ export function createCuratedArtifactStation({
     }
   }
 
-  // 3. Hàng rào 4 cọc vàng căng dây nhung đỏ bảo vệ (Bán kính đúng 1.65m)
+  // 3. Hàng rào 4 cọc vàng căng dây nhung đỏ bảo vệ (Bán kính đúng 1.65m) - Gộp thành 2 Draw Calls
   const stanchionRadius = 1.65;
   const postAngles = [Math.PI * 0.25, Math.PI * 0.75, Math.PI * 1.25, Math.PI * 1.75];
-  const goldStanchionMat = new THREE.MeshStandardMaterial({
+  const goldStanchionMat = getCuratorMat('curator_stanchion_gold', () => new THREE.MeshStandardMaterial({
     color: 0xfacc15,
     metalness: 0.88,
-    roughness: 0.18
-  });
+    roughness: 0.18,
+    side: THREE.FrontSide
+  }));
+
+  const barrierGroup = new THREE.Group();
+  barrierGroup.name = 'Curated_Barrier_Stanchions';
+  barrierGroup.userData.ignoreRaycaster = true;
 
   postAngles.forEach((ang) => {
     const px = Math.cos(ang) * stanchionRadius;
     const pz = Math.sin(ang) * stanchionRadius;
 
     // Chân đế tròn cọc chắn
-    const baseP = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.16, 0.06, 16), goldStanchionMat);
+    const baseP = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.16, 0.06, 10), goldStanchionMat);
     baseP.position.set(px, 0.03, pz);
     baseP.userData.ignoreRaycaster = true;
-    stationGroup.add(baseP);
+    barrierGroup.add(baseP);
 
     // Thân cọc vàng
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.045, 0.86, 12), goldStanchionMat);
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.045, 0.86, 8), goldStanchionMat);
     post.position.set(px, 0.46, pz);
     post.userData.ignoreRaycaster = true;
-    stationGroup.add(post);
+    barrierGroup.add(post);
 
     // Núm cầu vàng đỉnh cọc
-    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.068, 12, 12), goldStanchionMat);
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.068, 8, 6), goldStanchionMat);
     ball.position.set(px, 0.91, pz);
     ball.userData.ignoreRaycaster = true;
-    stationGroup.add(ball);
+    barrierGroup.add(ball);
   });
 
   // Dây nhung đỏ căng võng giữa các cọc (hình vòng cung 270 độ, chừa lối đọc bảng mặt trước)
-  const velvetRopeMat = new THREE.MeshStandardMaterial({
+  const velvetRopeMat = getCuratorMat('curator_velvet_rope', () => new THREE.MeshStandardMaterial({
     color: 0x991b1b, // Đỏ nhung bảo tàng
     roughness: 0.65,
-    metalness: 0.1
-  });
+    metalness: 0.1,
+    side: THREE.FrontSide
+  }));
 
   const ropeRing = new THREE.Mesh(
-    new THREE.TorusGeometry(stanchionRadius, 0.026, 8, 36, Math.PI * 1.5),
+    new THREE.TorusGeometry(stanchionRadius, 0.026, 6, 18, Math.PI * 1.5),
     velvetRopeMat
   );
   ropeRing.rotation.x = Math.PI / 2;
   ropeRing.rotation.z = Math.PI * 0.75;
   ropeRing.position.y = 0.76;
   ropeRing.userData.ignoreRaycaster = true;
-  stationGroup.add(ropeRing);
+  barrierGroup.add(ropeRing);
+
+  barrierGroup.updateMatrixWorld(true);
+  mergeGroupMeshesByMaterial(barrierGroup, {
+    disposeSources: true,
+    castShadow: false,
+    receiveShadow: false
+  });
+  stationGroup.add(barrierGroup);
 
   // 4. Bảng thông tin nghiêng 20° đúng tầm mắt (Y = 1.05m)
   const placardTex = getHeritageCanvasTexture(`curator_placard_${loreKey}`, 512, 256, (ctx, w, h) => {
@@ -599,10 +678,12 @@ export function createCuratedArtifactStation({
 
   // Chân đỡ bảng nghiêng
   const standMesh = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.024, 0.03, 1.05, 8),
+    new THREE.CylinderGeometry(0.024, 0.03, 1.05, 6),
     goldStanchionMat
   );
   standMesh.position.set(0, -0.52, 0);
+  standMesh.castShadow = false;
+  standMesh.receiveShadow = false;
   standMesh.userData.ignoreRaycaster = true;
   placardGroup.add(standMesh);
 
@@ -611,6 +692,8 @@ export function createCuratedArtifactStation({
     new THREE.PlaneGeometry(0.96, 0.48),
     new THREE.MeshBasicMaterial({ map: placardTex, side: THREE.DoubleSide })
   );
+  placardMesh.castShadow = false;
+  placardMesh.receiveShadow = false;
   placardMesh.userData.loreKey = loreKey;
   placardMesh.userData.isLoreArtifact = true;
   placardGroup.add(placardMesh);
@@ -632,7 +715,7 @@ export function createCuratedArtifactStation({
 
   // 5. Phễu sáng Spotlight chiếu điểm từ trần xuống hiện vật
   const spotCone = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.24, 1.55, 6.2, 20, 1, true),
+    new THREE.CylinderGeometry(0.24, 1.55, 6.2, 12, 1, true),
     new THREE.MeshBasicMaterial({
       color: accentColor,
       transparent: true,
@@ -643,23 +726,27 @@ export function createCuratedArtifactStation({
     })
   );
   spotCone.position.set(0, 4.2, 0);
+  spotCone.castShadow = false;
+  spotCone.receiveShadow = false;
   spotCone.userData.ignoreRaycaster = true;
   stationGroup.add(spotCone);
 
   // Vòng sáng hào quang trên sàn quanh chân bệ
   const floorGlow = new THREE.Mesh(
-    new THREE.RingGeometry(0.85, 1.62, 32),
+    new THREE.RingGeometry(0.85, 1.62, 20),
     new THREE.MeshBasicMaterial({
       color: accentColor,
       transparent: true,
       opacity: 0.28,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
-      side: THREE.DoubleSide
+      side: THREE.FrontSide
     })
   );
   floorGlow.rotation.x = -Math.PI / 2;
   floorGlow.position.y = 0.02;
+  floorGlow.castShadow = false;
+  floorGlow.receiveShadow = false;
   floorGlow.userData.ignoreRaycaster = true;
   stationGroup.add(floorGlow);
 

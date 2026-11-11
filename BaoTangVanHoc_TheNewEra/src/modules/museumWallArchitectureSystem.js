@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { mergeGroupMeshesByMaterial } from '../utils/geometryMerger.js';
 
 const WALL_TEXTURE_CACHE = new Map();
+const WALL_MAT_CACHE = new Map();
 const GLB_MODEL_CACHE = new Map();
 
 /**
@@ -24,12 +26,22 @@ function loadHeritageGlbModel(url) {
             child.userData.ignoreRaycaster = true;
             const mats = Array.isArray(child.material) ? child.material : [child.material];
             mats.forEach((m) => {
-              if (m?.map && 'colorSpace' in m.map && THREE.SRGBColorSpace) {
+              if (m && !m.transparent && !m.alphaTest) {
+                m.side = THREE.FrontSide;
+              }
+              if (m?.map && 'colorSpace' in m.map && THREE.SRGBColorSpace && m.map.colorSpace !== THREE.SRGBColorSpace) {
                 m.map.colorSpace = THREE.SRGBColorSpace;
                 m.map.needsUpdate = true;
               }
             });
           }
+        });
+        // Gộp các sub-primitives tĩnh có chung vật liệu (VD: wall_dong_son_medallion.glb 32 prims -> vài draw calls)
+        mergeGroupMeshesByMaterial(gltf.scene, {
+          namePrefix: 'Merged_WallHeritage',
+          forceNoShadow: true,
+          excludeFromCollision: true,
+          ignoreRaycaster: true
         });
         resolve(gltf.scene);
       },
@@ -138,12 +150,12 @@ export function generateRichWallMaterialMaps(themeKey = 'truyenKieu') {
   const profile = WALL_THEME_PROFILES[themeKey] || WALL_THEME_PROFILES.truyenKieu;
 
   const colorCanvas = document.createElement('canvas');
-  const bumpCanvas = document.createElement('canvas');
-  colorCanvas.width = bumpCanvas.width = 2048;
-  colorCanvas.height = bumpCanvas.height = 1024;
+  colorCanvas.width = 512;
+  colorCanvas.height = 256;
 
   const cCtx = colorCanvas.getContext('2d');
-  const bCtx = bumpCanvas.getContext('2d');
+  cCtx.save();
+  cCtx.scale(0.25, 0.25);
 
   const w = 2048;
   const h = 1024;
@@ -156,15 +168,9 @@ export function generateRichWallMaterialMaps(themeKey = 'truyenKieu') {
   cCtx.fillStyle = bgGrad;
   cCtx.fillRect(0, 0, w, h);
 
-  // Nền Bump Map
-  bCtx.fillStyle = 'rgb(40, 40, 40)';
-  bCtx.fillRect(0, 0, w, h);
-
   // --- VÂN LỤA GẤM & HỌA TIẾT NỀN CHÌM ---
   cCtx.strokeStyle = 'rgba(253, 224, 71, 0.16)';
   cCtx.lineWidth = 2;
-  bCtx.strokeStyle = 'rgb(105, 105, 105)';
-  bCtx.lineWidth = 3;
 
   const gridStep = 128;
   for (let x = gridStep / 2; x < w; x += gridStep) {
@@ -175,25 +181,18 @@ export function generateRichWallMaterialMaps(themeKey = 'truyenKieu') {
           const px = x + Math.cos(ang) * 22;
           const py = y + Math.sin(ang) * 22;
           cCtx.beginPath(); cCtx.arc(px, py, 14, 0, Math.PI * 2); cCtx.stroke();
-          bCtx.beginPath(); bCtx.arc(px, py, 14, 0, Math.PI * 2); bCtx.stroke();
         }
         cCtx.beginPath(); cCtx.arc(x, y, 6, 0, Math.PI * 2); cCtx.stroke();
-        bCtx.beginPath(); bCtx.arc(x, y, 6, 0, Math.PI * 2); bCtx.stroke();
       } else if (profile.motifType === 'wavesAndMountains') {
         for (let r = 18; r <= 54; r += 18) {
           cCtx.beginPath(); cCtx.arc(x, y + 20, r, Math.PI, 0); cCtx.stroke();
-          bCtx.beginPath(); bCtx.arc(x, y + 20, r, Math.PI, 0); bCtx.stroke();
         }
         cCtx.beginPath();
         cCtx.moveTo(x - 24, y + 24); cCtx.lineTo(x, y - 28); cCtx.lineTo(x + 24, y + 24);
         cCtx.stroke();
-        bCtx.beginPath();
-        bCtx.moveTo(x - 24, y + 24); bCtx.lineTo(x, y - 28); bCtx.lineTo(x + 24, y + 24);
-        bCtx.stroke();
       } else if (profile.motifType === 'coLoaSpiral') {
         for (let r = 10; r <= 46; r += 12) {
           cCtx.beginPath(); cCtx.arc(x, y, r, 0, Math.PI * 1.65); cCtx.stroke();
-          bCtx.beginPath(); bCtx.arc(x, y, r, 0, Math.PI * 1.65); bCtx.stroke();
         }
         cCtx.beginPath();
         for (let s = 0; s < 6; s++) {
@@ -208,17 +207,10 @@ export function generateRichWallMaterialMaps(themeKey = 'truyenKieu') {
         cCtx.moveTo(x - 32, y - 32); cCtx.lineTo(x + 32, y + 32);
         cCtx.moveTo(x + 32, y - 32); cCtx.lineTo(x - 32, y + 32);
         cCtx.stroke();
-        bCtx.beginPath();
-        bCtx.moveTo(x - 32, y - 32); bCtx.lineTo(x + 32, y + 32);
-        bCtx.moveTo(x + 32, y - 32); bCtx.lineTo(x - 32, y + 32);
-        bCtx.stroke();
         cCtx.beginPath(); cCtx.arc(x, y, 22, Math.PI, 0); cCtx.stroke();
-        bCtx.beginPath(); bCtx.arc(x, y, 22, Math.PI, 0); bCtx.stroke();
       } else {
         cCtx.strokeRect(x - 28, y - 28, 56, 56);
-        bCtx.strokeRect(x - 28, y - 28, 56, 56);
         cCtx.beginPath(); cCtx.arc(x, y, 16, 0, Math.PI * 2); cCtx.stroke();
-        bCtx.beginPath(); bCtx.arc(x, y, 16, 0, Math.PI * 2); bCtx.stroke();
       }
     }
   }
@@ -228,33 +220,27 @@ export function generateRichWallMaterialMaps(themeKey = 'truyenKieu') {
   cCtx.fillRect(0, 0, w, 130);
   cCtx.strokeStyle = profile.goldStroke;
   cCtx.lineWidth = 6;
-  bCtx.strokeStyle = 'rgb(245, 245, 245)';
-  bCtx.lineWidth = 8;
 
   cCtx.beginPath(); cCtx.moveTo(0, 130); cCtx.lineTo(w, 130); cCtx.stroke();
-  bCtx.beginPath(); bCtx.moveTo(0, 130); bCtx.lineTo(w, 130); bCtx.stroke();
 
   for (let fx = 20; fx < w; fx += 96) {
     cCtx.strokeRect(fx, 28, 64, 64);
     cCtx.strokeRect(fx + 16, 44, 32, 32);
-    bCtx.strokeRect(fx, 28, 64, 64);
-    bCtx.strokeRect(fx + 16, 44, 32, 32);
   }
+  cCtx.restore();
 
   const colorMap = new THREE.CanvasTexture(colorCanvas);
-  const bumpMap = new THREE.CanvasTexture(bumpCanvas);
-
-  [colorMap, bumpMap].forEach((t) => {
-    t.wrapS = THREE.RepeatWrapping;
-    t.wrapT = THREE.ClampToEdgeWrapping;
-    t.needsUpdate = true;
-  });
+  colorMap.wrapS = THREE.RepeatWrapping;
+  colorMap.wrapT = THREE.ClampToEdgeWrapping;
+  colorMap.generateMipmaps = false;
+  colorMap.minFilter = THREE.LinearFilter;
+  colorMap.needsUpdate = true;
 
   if ('colorSpace' in colorMap && THREE.SRGBColorSpace) {
     colorMap.colorSpace = THREE.SRGBColorSpace;
   }
 
-  const result = { colorMap, bumpMap };
+  const result = { colorMap, bumpMap: null };
   WALL_TEXTURE_CACHE.set(cacheKey, result);
   return result;
 }
@@ -275,11 +261,13 @@ export function createWallReliefFrame({
   group.name = `Wall_Relief_${title}`;
   group.userData.ignoreRaycaster = true;
 
-  // 1. Mặt tranh sơn mài thư pháp
+  // 1. Mặt tranh sơn mài thư pháp (downscale 1024x512 -> 512x256)
   const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 512;
+  canvas.width = 512;
+  canvas.height = 256;
   const ctx = canvas.getContext('2d');
+  ctx.save();
+  ctx.scale(0.5, 0.5);
 
   const g = ctx.createLinearGradient(0, 0, 1024, 512);
   g.addColorStop(0.0, profile.baseTop);
@@ -312,8 +300,11 @@ export function createWallReliefFrame({
   ctx.fillStyle = '#fef9c3';
   ctx.font = 'italic 28px "Times New Roman", serif';
   ctx.fillText(subtitle, 512, 310);
+  ctx.restore();
 
   const tex = new THREE.CanvasTexture(canvas);
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
   if ('colorSpace' in tex && THREE.SRGBColorSpace) {
     tex.colorSpace = THREE.SRGBColorSpace;
   }
@@ -321,20 +312,27 @@ export function createWallReliefFrame({
   // Tấm canvas tranh nằm áp sát tường tại Z = 0.015
   const facePlane = new THREE.Mesh(
     new THREE.PlaneGeometry(width * 0.90, height * 0.86),
-    new THREE.MeshBasicMaterial({ map: tex })
+    new THREE.MeshBasicMaterial({ map: tex, side: THREE.FrontSide })
   );
   facePlane.position.z = 0.015;
+  facePlane.castShadow = false;
+  facePlane.receiveShadow = false;
   facePlane.userData.ignoreRaycaster = true;
   group.add(facePlane);
 
   // 2. Khung viền mỏng dát vàng dự phòng (procedural fallback thanh mảnh dày 3cm)
   const fallbackBorder = new THREE.Group();
   fallbackBorder.userData.ignoreRaycaster = true;
-  const goldBorderMat = new THREE.MeshStandardMaterial({
-    color: 0xfacc15,
-    metalness: 0.88,
-    roughness: 0.20
-  });
+  let goldBorderMat = WALL_MAT_CACHE.get('wall_gold_border');
+  if (!goldBorderMat) {
+    goldBorderMat = new THREE.MeshStandardMaterial({
+      color: 0xfacc15,
+      metalness: 0.88,
+      roughness: 0.20,
+      side: THREE.FrontSide
+    });
+    WALL_MAT_CACHE.set('wall_gold_border', goldBorderMat);
+  }
 
   // 4 thanh nẹp viền mỏng ốp sát tường
   const railTop = new THREE.Mesh(new THREE.BoxGeometry(width, 0.10, 0.03), goldBorderMat);
@@ -354,6 +352,12 @@ export function createWallReliefFrame({
   stileR.userData.ignoreRaycaster = true;
 
   fallbackBorder.add(railTop, railBot, stileL, stileR);
+  fallbackBorder.updateMatrixWorld(true);
+  mergeGroupMeshesByMaterial(fallbackBorder, {
+    disposeSources: true,
+    castShadow: false,
+    receiveShadow: false
+  });
   group.add(fallbackBorder);
 
   // 3. Khung viền mỏng dát vàng mỹ thuật truyền thống (hoàn toàn phẳng áp sát tường)
@@ -372,30 +376,50 @@ export function createBacklitLatticeWallScreen({
   screenGroup.userData.ignoreRaycaster = true;
 
   // 1. Tấm lụa phát sáng dịu hắt sáng lên tường phía sau
-  const silkGlow = new THREE.Mesh(
-    new THREE.PlaneGeometry(width * 0.95, height * 0.95),
-    new THREE.MeshBasicMaterial({
+  const silkMatKey = `wall_silk_glow_${backlightColor}`;
+  let silkGlowMat = WALL_MAT_CACHE.get(silkMatKey);
+  if (!silkGlowMat) {
+    silkGlowMat = new THREE.MeshBasicMaterial({
       color: backlightColor,
       transparent: true,
       opacity: 0.18,
-      blending: THREE.AdditiveBlending
-    })
+      blending: THREE.AdditiveBlending,
+      side: THREE.FrontSide
+    });
+    WALL_MAT_CACHE.set(silkMatKey, silkGlowMat);
+  }
+  const silkGlow = new THREE.Mesh(
+    new THREE.PlaneGeometry(width * 0.95, height * 0.95),
+    silkGlowMat
   );
   silkGlow.position.z = 0.005;
+  silkGlow.castShadow = false;
+  silkGlow.receiveShadow = false;
   silkGlow.userData.ignoreRaycaster = true;
+  silkGlow.userData.preventMerge = true;
   screenGroup.add(silkGlow);
 
   // 2. Nan gỗ song thưa thanh mảnh áp sát tường (chiều sâu tối đa 2cm, tuyệt đối không chìa ngang)
-  const woodMat = new THREE.MeshStandardMaterial({
-    color: 0x3d0c0c,
-    roughness: 0.35,
-    metalness: 0.25
-  });
-  const goldMat = new THREE.MeshStandardMaterial({
-    color: 0xfacc15,
-    roughness: 0.22,
-    metalness: 0.85
-  });
+  let woodMat = WALL_MAT_CACHE.get('wall_lattice_wood');
+  if (!woodMat) {
+    woodMat = new THREE.MeshStandardMaterial({
+      color: 0x3d0c0c,
+      roughness: 0.35,
+      metalness: 0.25,
+      side: THREE.FrontSide
+    });
+    WALL_MAT_CACHE.set('wall_lattice_wood', woodMat);
+  }
+  let goldMat = WALL_MAT_CACHE.get('wall_lattice_gold');
+  if (!goldMat) {
+    goldMat = new THREE.MeshStandardMaterial({
+      color: 0xfacc15,
+      roughness: 0.22,
+      metalness: 0.85,
+      side: THREE.FrontSide
+    });
+    WALL_MAT_CACHE.set('wall_lattice_gold', goldMat);
+  }
 
   // 2 thanh đố dọc ngoài cùng
   [-width * 0.5 + 0.04, width * 0.5 - 0.04].forEach((x) => {
@@ -422,11 +446,17 @@ export function createBacklitLatticeWallScreen({
   }
 
   // Vòng nguyệt vàng ở chính giữa
-  const centerRing = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.02, 8, 32), goldMat);
+  const centerRing = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.02, 5, 16), goldMat);
   centerRing.position.set(0, 0, 0.02);
   centerRing.userData.ignoreRaycaster = true;
   screenGroup.add(centerRing);
 
+  screenGroup.updateMatrixWorld(true);
+  mergeGroupMeshesByMaterial(screenGroup, {
+    disposeSources: true,
+    castShadow: false,
+    receiveShadow: false
+  });
   return screenGroup;
 }
 
@@ -449,9 +479,21 @@ export function upgradeRoomWallArchitecture(roomGroup, {
   }
 
   const profile = WALL_THEME_PROFILES[themeKey] || WALL_THEME_PROFILES.truyenKieu;
-  const { colorMap, bumpMap } = generateRichWallMaterialMaps(themeKey);
+  const { colorMap } = generateRichWallMaterialMaps(themeKey);
 
-  // 1. Nâng cấp vật liệu của các mảng tường hiện có trong phòng sang PBR Bump-Mapped
+  const wallMatKey = `wall_theme_mat_${themeKey}`;
+  let wallMat = WALL_MAT_CACHE.get(wallMatKey);
+  if (!wallMat) {
+    wallMat = new THREE.MeshStandardMaterial({
+      map: colorMap,
+      roughness: 0.36,
+      metalness: 0.22,
+      side: THREE.FrontSide
+    });
+    WALL_MAT_CACHE.set(wallMatKey, wallMat);
+  }
+
+  // 1. Nâng cấp vật liệu của các mảng tường hiện có trong phòng sang vật liệu chia sẻ
   roomGroup.traverse((child) => {
     if (!child.isMesh) return;
     const isWallMesh =
@@ -459,13 +501,9 @@ export function upgradeRoomWallArchitecture(roomGroup, {
       (child.geometry?.type === 'BoxGeometry' && child.position.y > 2.0 && child.position.y < 7.0);
 
     if (isWallMesh && !child.userData?.isBookPortal && !child.userData?.isSignMesh) {
-      child.material = new THREE.MeshStandardMaterial({
-        map: colorMap,
-        bumpMap: bumpMap,
-        bumpScale: 0.05,
-        roughness: 0.36,
-        metalness: 0.22
-      });
+      child.material = wallMat;
+      child.castShadow = false;
+      child.receiveShadow = false;
       child.userData.ignoreRaycaster = true;
     }
   });
@@ -491,6 +529,13 @@ export function upgradeRoomWallArchitecture(roomGroup, {
           med.position.set(...slot.pos);
           med.rotation.y = slot.rotY;
           med.userData.ignoreRaycaster = true;
+          med.traverse((m) => {
+            if (m.isMesh) {
+              m.castShadow = false;
+              m.receiveShadow = false;
+              m.frustumCulled = true;
+            }
+          });
           wallDecorGroup.add(med);
         });
       })
@@ -507,11 +552,16 @@ export function upgradeRoomWallArchitecture(roomGroup, {
   const halfD = roomDepth * 0.5 - 0.08;
 
   // 2. Ốp Phào Chỉ Chân Tường (Y = 1.35m) & Phào Cổ Trần (Y = 8.05m) Thếp Vàng 3D
-  const moldingMat = new THREE.MeshStandardMaterial({
-    color: 0xfacc15,
-    metalness: 0.88,
-    roughness: 0.20
-  });
+  let moldingMat = WALL_MAT_CACHE.get('wall_gold_border');
+  if (!moldingMat) {
+    moldingMat = new THREE.MeshStandardMaterial({
+      color: 0xfacc15,
+      metalness: 0.88,
+      roughness: 0.20,
+      side: THREE.FrontSide
+    });
+    WALL_MAT_CACHE.set('wall_gold_border', moldingMat);
+  }
 
   const wallRuns = [
     { pos: [0, 0, -halfD], len: roomWidth - 0.2, rotY: 0 },
@@ -575,6 +625,12 @@ export function upgradeRoomWallArchitecture(roomGroup, {
     });
   }
 
+  wallDecorGroup.updateMatrixWorld(true);
+  mergeGroupMeshesByMaterial(wallDecorGroup, {
+    disposeSources: true,
+    castShadow: false,
+    receiveShadow: false
+  });
   roomGroup.add(wallDecorGroup);
   return wallDecorGroup;
 }

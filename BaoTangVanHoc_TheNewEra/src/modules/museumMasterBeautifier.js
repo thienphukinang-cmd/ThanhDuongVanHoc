@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { prepareUnlitVividGlbModel } from '../utils/modelLoaderHelper.js';
 
 /**
  * ============================================================================
@@ -107,6 +108,9 @@ function getCachedCanvasTexture(key, w, h, drawFn) {
   if ('colorSpace' in tex && THREE.SRGBColorSpace) {
     tex.colorSpace = THREE.SRGBColorSpace;
   }
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
   tex.needsUpdate = true;
   BEAUTIFIER_CACHE[key] = tex;
   return tex;
@@ -114,9 +118,8 @@ function getCachedCanvasTexture(key, w, h, drawFn) {
 
 /**
  * KỸ NĂNG 1 & 5: CHUẨN HÓA MÔ HÌNH .GLB & TÔ MÀU SỐNG ĐỘNG
- * - Giữ nguyên độ nét của Texture gốc (SRGBColorSpace)
- * - Tự động hòa sắc bằng tintColor / color với độ chuẩn xác cao
- * - Căn chuẩn chiều cao theo trục Y (fitAxis: 'y'), căn tâm và ground đáy tại Y = 0
+ * - Ủy quyền cho modelLoaderHelper.prepareUnlitVividGlbModel để chia sẻ cache vật liệu & texture
+ * - Bật frustumCulled = true, tắt castShadow/receiveShadow, downscale texture <= 1024px
  */
 export function styleAndNormalizeGlbModel(rootScene, {
   targetSpan = 3.4,
@@ -127,114 +130,28 @@ export function styleAndNormalizeGlbModel(rootScene, {
   centerXZ = true,
   opacity = 1.0,
   castShadow = false,
-  receiveShadow = false
+  receiveShadow = false,
+  frustumCulled = true,
+  doubleSided = undefined,
+  maxTextureSize = 1024,
+  materialMode = 'unlit'
 } = {}) {
-  if (!rootScene) return new THREE.Group();
-
-  const effectiveTint = color || tintColor;
-
-  rootScene.traverse((child) => {
-    if (!child.isMesh) return;
-    child.castShadow = Boolean(castShadow);
-    child.receiveShadow = Boolean(receiveShadow);
-    child.frustumCulled = false;
-
-    // Tách khỏi Raycaster mặc định để tránh click nhầm vào tượng/núi làm giật camera
-    child.userData.ignoreRaycaster = true;
-
-    // Quét làm sạch buffer hình học NaN/Infinity
-    if (child.geometry) {
-      const geo = child.geometry;
-      const cleanAttr = (attr) => {
-        if (!attr || !attr.array) return;
-        const arr = attr.array;
-        let dirty = false;
-        for (let i = 0; i < arr.length; i++) {
-          if (Number.isNaN(arr[i]) || !Number.isFinite(arr[i])) {
-            arr[i] = 0;
-            dirty = true;
-          }
-        }
-        if (dirty) attr.needsUpdate = true;
-      };
-      if (geo.attributes.position) cleanAttr(geo.attributes.position);
-      if (geo.attributes.normal) cleanAttr(geo.attributes.normal);
-      if (geo.attributes.uv) cleanAttr(geo.attributes.uv);
-      if (!geo.attributes.normal) geo.computeVertexNormals();
-    }
-
-    const hasVertexColors = Boolean(child.geometry && child.geometry.attributes.color);
-    const origMats = Array.isArray(child.material) ? child.material : [child.material];
-
-    const styledMats = origMats.map((mat) => {
-      const tex = mat?.map || mat?.emissiveMap || null;
-      if (tex) {
-        if ('colorSpace' in tex && THREE.SRGBColorSpace) {
-          tex.colorSpace = THREE.SRGBColorSpace;
-        }
-        tex.needsUpdate = true;
-      }
-
-      let baseColor;
-      if (effectiveTint !== null && effectiveTint !== undefined) {
-        baseColor = new THREE.Color(effectiveTint);
-      } else if (tex) {
-        baseColor = new THREE.Color(0xffffff);
-      } else if (mat?.color) {
-        baseColor = mat.color.clone();
-      } else {
-        baseColor = new THREE.Color(0xd4af37);
-      }
-
-      return new THREE.MeshBasicMaterial({
-        map: tex,
-        color: baseColor,
-        vertexColors: hasVertexColors,
-        transparent: Boolean(mat?.transparent) || opacity < 1.0,
-        opacity: (mat?.opacity ?? 1.0) * opacity,
-        side: THREE.DoubleSide,
-        fog: false
-      });
-    });
-
-    child.material = styledMats.length === 1 ? styledMats[0] : styledMats;
+  return prepareUnlitVividGlbModel(rootScene, {
+    targetSpan,
+    fitAxis,
+    materialMode,
+    color,
+    tintColor,
+    groundY,
+    centerXZ,
+    opacity,
+    castShadow,
+    receiveShadow,
+    frustumCulled,
+    doubleSided,
+    maxTextureSize,
+    ignoreRaycaster: true
   });
-
-  const wrapper = new THREE.Group();
-  rootScene.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(rootScene);
-  const size = new THREE.Vector3();
-  box.getSize(size);
-
-  let refDim = Math.max(size.y, 0.001);
-  if (fitAxis === 'maxHorizontal') {
-    refDim = Math.max(size.x, size.z, 0.001);
-  } else if (fitAxis === 'maxDim') {
-    refDim = Math.max(size.x, size.y, size.z, 0.001);
-  } else if (fitAxis === 'x') {
-    refDim = Math.max(size.x, 0.001);
-  } else if (fitAxis === 'z') {
-    refDim = Math.max(size.z, 0.001);
-  }
-
-  const scale = targetSpan / refDim;
-  rootScene.scale.multiplyScalar(scale);
-  rootScene.updateMatrixWorld(true);
-
-  const scaledBox = new THREE.Box3().setFromObject(rootScene);
-  const scaledCenter = new THREE.Vector3();
-  scaledBox.getCenter(scaledCenter);
-
-  if (centerXZ) {
-    rootScene.position.x -= scaledCenter.x;
-    rootScene.position.z -= scaledCenter.z;
-  }
-  if (groundY) {
-    rootScene.position.y -= scaledBox.min.y;
-  }
-
-  wrapper.add(rootScene);
-  return wrapper;
 }
 
 /**
@@ -270,7 +187,7 @@ export function createDetailedInstancedParticles(themeKey = 'truyenKieu', count 
   const instancedMesh = new THREE.InstancedMesh(geometry, material, count);
   instancedMesh.castShadow = false;
   instancedMesh.receiveShadow = false;
-  instancedMesh.frustumCulled = false;
+  instancedMesh.frustumCulled = true;
 
   const dummy = new THREE.Object3D();
   const particleState = [];
@@ -300,6 +217,10 @@ export function createDetailedInstancedParticles(themeKey = 'truyenKieu', count 
   }
 
   instancedMesh.instanceMatrix.needsUpdate = true;
+  instancedMesh.boundingSphere = new THREE.Sphere(
+    new THREE.Vector3(0, maxHeight * 0.5, 0),
+    Math.hypot(spreadRadius * 1.45, maxHeight * 0.6)
+  );
 
   const update = (arg1, arg2) => {
     const timeSec = (typeof arg2 === 'number')
@@ -324,6 +245,10 @@ export function createDetailedInstancedParticles(themeKey = 'truyenKieu', count 
       instancedMesh.setMatrixAt(i, dummy.matrix);
     }
     instancedMesh.instanceMatrix.needsUpdate = true;
+  instancedMesh.boundingSphere = new THREE.Sphere(
+    new THREE.Vector3(0, maxHeight * 0.5, 0),
+    Math.hypot(spreadRadius * 1.45, maxHeight * 0.6)
+  );
   };
 
   const container = new THREE.Group();
@@ -391,7 +316,7 @@ export function createInstancedSilkLanterns(positions = [], lanternColor = 0xf47
 export function createDetailedMandalaFloorDecal(themeKey = 'truyenKieu', radius = 4.5) {
   const palette = ROOM_PALETTES[themeKey] || ROOM_PALETTES.truyenKieu;
 
-  const tex = getCachedCanvasTexture(`mandala_floor_${themeKey}`, 1024, 1024, (ctx, w, h) => {
+  const tex = getCachedCanvasTexture(`mandala_floor_${themeKey}`, 512, 512, (ctx, w, h) => {
     const cx = w / 2;
     const cy = h / 2;
 
@@ -432,13 +357,13 @@ export function createDetailedMandalaFloorDecal(themeKey = 'truyenKieu', radius 
   });
 
   const mesh = new THREE.Mesh(
-    new THREE.CircleGeometry(radius, 48),
+    new THREE.CircleGeometry(radius, 32),
     new THREE.MeshBasicMaterial({
       map: tex,
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
-      side: THREE.DoubleSide,
+      side: THREE.FrontSide,
       fog: false
     })
   );
@@ -497,8 +422,10 @@ export function createArtisticSkyDomeAndGodRays(themeKey = 'truyenKieu', domeRad
     ctx.fillRect(0, 0, w, h);
   });
 
+  const godRayGeo = new THREE.CylinderGeometry(1.2, 7.5, 28, 16, 1, true);
+  godRayGeo.computeBoundingSphere();
   const godRayMesh = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.2, 7.5, 28, 24, 1, true),
+    godRayGeo,
     new THREE.MeshBasicMaterial({
       map: rayTex,
       color: palette.godRayColor,
@@ -511,7 +438,7 @@ export function createArtisticSkyDomeAndGodRays(themeKey = 'truyenKieu', domeRad
     })
   );
   godRayMesh.position.set(0, 14, 0);
-  godRayMesh.frustumCulled = false;
+  godRayMesh.frustumCulled = true;
   envGroup.add(godRayMesh);
 
   return envGroup;

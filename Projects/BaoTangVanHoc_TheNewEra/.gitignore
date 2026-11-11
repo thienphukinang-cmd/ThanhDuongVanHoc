@@ -1,4 +1,4 @@
-node_modules/ 
-dist/ 
-*.blend 
-*.blend1
+node_modules/
+dist/
+*.blend
+.DS_Store

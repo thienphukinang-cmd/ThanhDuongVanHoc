@@ -19,16 +19,14 @@ export function initMuseumUIEnhancer() {
 
     /* --- THANH HUD TRẠNG THÁI PHÍA TRÊN --- */
     #top-hud-bar, .top-header-bar {
-      background: rgba(10, 22, 38, 0.82) !important;
-      backdrop-filter: blur(10px);
+      background: rgba(10, 22, 38, 0.92) !important;
       border-bottom: 2px solid rgba(0, 216, 255, 0.35) !important;
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
     }
 
     /* --- BẢNG ĐIỀU KHIỂN BÊN TRÁI (CONTROLS PANEL) --- */
     #control-panel, .sidebar-panel, div[class*="control"] {
-      background: rgba(12, 22, 35, 0.88) !important;
-      backdrop-filter: blur(12px);
+      background: rgba(12, 22, 35, 0.94) !important;
       border: 1px solid rgba(0, 216, 255, 0.28) !important;
       border-radius: 12px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
@@ -44,7 +42,7 @@ export function initMuseumUIEnhancer() {
       padding: 8px 14px;
       font-weight: 600;
       cursor: pointer;
-      transition: all 0.25s ease;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
       box-shadow: 0 0 10px rgba(0, 216, 255, 0.2);
     }
 
@@ -57,8 +55,7 @@ export function initMuseumUIEnhancer() {
 
     /* --- THANH ĐIỀU HƯỚNG / TRỢ GIÚP DƯỚI ĐÁY MÀN HÌNH --- */
     #footer-instructions, .bottom-nav-bar {
-      background: rgba(8, 16, 28, 0.85) !important;
-      backdrop-filter: blur(8px);
+      background: rgba(8, 16, 28, 0.92) !important;
       border-top: 1px solid rgba(255, 255, 255, 0.15);
       color: #ffd15c !important;
       font-weight: 500;

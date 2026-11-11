@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { loadGlbCached } from '../utils/modelLoaderHelper.js';
 import { mergeGroupMeshesByMaterial, mergeAllMeshesIntoSingleUnifiedMesh, disposeHierarchy } from '../utils/geometryMerger.js';
 
 // Tọa độ gốc độc lập của Thế giới Truyện Kiều trong Scene riêng biệt (truyenKieuScene - Multi-Scene Architecture)
@@ -468,6 +468,7 @@ export class TruyenKieuStoryWorld {
     this.zone3Group.name = 'Zone3_DoanhTraiTuHai';
     this.zone3Group.position.copy(REALM_ZONES.ZONE_3.offset);
 
+    this.zoneInteractables = { 1: [], 2: [], 3: [] };
     this.worldGroup.add(this.zone1Group, this.zone2Group, this.zone3Group);
 
     // Cài đặt Fog & Background mặc định cho truyenKieuScene
@@ -479,6 +480,14 @@ export class TruyenKieuStoryWorld {
     this.initZone1VuonThuy();
     this.initZone2LauNgungBich();
     this.initZone3DoanhTraiTuHai();
+
+    // Cô lập ban đầu: chỉ bật Zone 1 (ẩn Zone 2 & Zone 3 để giảm ánh sáng + draw calls)
+    this.zone1Group.visible = true;
+    this.zone2Group.visible = false;
+    this.zone3Group.visible = false;
+    if (this.zone1Lights) this.zone1Lights.visible = true;
+    if (this.zone2Lights) this.zone2Lights.visible = false;
+    if (this.zone3Lights) this.zone3Lights.visible = false;
     this.initFloatingRealmNavigatorHUD();
     this.createWarpOverlayUI();
     this.initSpatialSoundSynth();
@@ -515,7 +524,7 @@ export class TruyenKieuStoryWorld {
         
         const mats = Array.isArray(c.material) ? c.material : [c.material];
         mats.forEach(mat => {
-          if (mat && !isThinSurface && mat.side === THREE.DoubleSide) {
+          if (mat && !isThinSurface && !mat.transparent && !(mat.alphaTest > 0) && mat.side === THREE.DoubleSide) {
             mat.side = THREE.FrontSide;
             mat.needsUpdate = true;
           }
@@ -559,6 +568,10 @@ export class TruyenKieuStoryWorld {
       { name: 'Bia đá thơ Doanh Trại Từ Hải', isWorld: true, box: new THREE.Box3(new THREE.Vector3(133.0, 0.0, 6.0), new THREE.Vector3(134.6, 3.5, 7.4)) },
       { name: 'Cổng quy hồi sảnh P01 (Z3)', isWorld: true, box: new THREE.Box3(new THREE.Vector3(144.4, 0.0, 7.4), new THREE.Vector3(145.6, 3.5, 8.6)) }
     ];
+
+    if (typeof window !== 'undefined' && window.__museumHitboxManager) {
+      window.__museumHitboxManager.registerRealmHitboxes('truyen_kieu', hitboxes);
+    }
 
     if (this.cameraController?.registerHitboxes) {
       this.cameraController.registerHitboxes(hitboxes);
@@ -636,7 +649,7 @@ export class TruyenKieuStoryWorld {
     groundGeo.computeVertexNormals();
 
     const groundMesh = new THREE.Mesh(groundGeo, ThanhMinhMaterials.ground);
-    groundMesh.receiveShadow = true;
+    groundMesh.receiveShadow = false;
     group.add(groundMesh);
 
     // 2. MẶT NƯỚC SUỐI TRONG NGỌC BÍCH
@@ -664,6 +677,7 @@ export class TruyenKieuStoryWorld {
     const rightRail = new THREE.Mesh(new THREE.BoxGeometry(9.0, 0.14, 0.14), railMat);
     rightRail.position.set(0, 1.15, 1.2);
     bridgeGroup.add(leftRail, rightRail);
+    mergeGroupMeshesByMaterial(bridgeGroup);
     group.add(bridgeGroup);
 
     // 4. MỘ ĐẠM TIÊN CỔ KÍNH ("Sè sè nấm đất bên đường")
@@ -683,7 +697,7 @@ export class TruyenKieuStoryWorld {
     tombGroup.add(mound, stele);
     group.add(tombGroup);
 
-    // 5. CÂY CỔ THỤ HOA LÊ & ĐÀO HỒNG (5 Cây cách điệu Low-poly ~200 vertices)
+    // 5. CÂY CỔ THỤ HOA LÊ & ĐÀO HỒNG (5 Cây cách điệu Low-poly - Merged theo vật liệu: 3 Draw Calls)
     const treePositions = [
       { x: -9.5, z: -8.0, mat: ThanhMinhMaterials.pearBlossom, s: 1.2 },
       { x: -11.0, z: 9.0, mat: ThanhMinhMaterials.peachBlossom, s: 1.1 },
@@ -694,6 +708,7 @@ export class TruyenKieuStoryWorld {
 
     const trunkGeo = new THREE.CylinderGeometry(0.35, 0.65, 4.2, 8);
     const canopyGeo = new THREE.IcosahedronGeometry(2.4, 1);
+    const treesGroup = new THREE.Group();
 
     treePositions.forEach((tp) => {
       const tree = new THREE.Group();
@@ -709,8 +724,10 @@ export class TruyenKieuStoryWorld {
       canopy.scale.set(1.3, 0.9, 1.3);
 
       tree.add(trunk, canopy);
-      group.add(tree);
+      treesGroup.add(tree);
     });
+    mergeGroupMeshesByMaterial(treesGroup);
+    group.add(treesGroup);
 
     // 6. ĐÁ CUỘI SUỐI (12 hòn đá low-poly) - OPTIMIZED: InstancedMesh (1 Draw Call thay vì 12)
     const rockGeo = new THREE.DodecahedronGeometry(0.55, 0);
@@ -787,6 +804,7 @@ export class TruyenKieuStoryWorld {
     returnPortalZone1.position.set(6.0, 0.0, 8.0);
     returnPortalZone1.rotation.y = -Math.PI / 4;
     this.zone1Group.add(returnPortalZone1);
+    this.zoneInteractables[1].push(portalToZone2, portalToZone3, returnPortalZone1);
 
     const pCount = 90; // PERFORMANCE: Giảm 50% số hạt hoa rơi (180 -> 90)
     const pGeo = new THREE.BufferGeometry();
@@ -908,70 +926,80 @@ export class TruyenKieuStoryWorld {
       let cv = null;
       if (typeof document !== 'undefined') {
         cv = document.createElement('canvas');
-        cv.width = 1536;
-        cv.height = 900;
+        cv.width = 768;
+        cv.height = 450;
         const ctx = cv.getContext('2d');
         const w = 1536, h = 900;
+        if (ctx) {
+          ctx.save();
+          ctx.scale(0.5, 0.5);
 
-        const bgG = ctx.createLinearGradient(0, 0, w, h);
-        bgG.addColorStop(0.0, 'rgba(28, 12, 38, 0.95)');
-        bgG.addColorStop(0.5, 'rgba(42, 16, 52, 0.92)');
-        bgG.addColorStop(1.0, 'rgba(20, 8, 28, 0.97)');
-        ctx.fillStyle = bgG;
-        ctx.fillRect(0, 0, w, h);
+          const bgG = ctx.createLinearGradient(0, 0, w, h);
+          bgG.addColorStop(0.0, 'rgba(28, 12, 38, 0.95)');
+          bgG.addColorStop(0.5, 'rgba(42, 16, 52, 0.92)');
+          bgG.addColorStop(1.0, 'rgba(20, 8, 28, 0.97)');
+          ctx.fillStyle = bgG;
+          ctx.fillRect(0, 0, w, h);
 
-        ctx.strokeStyle = '#f472b6';
-        ctx.lineWidth = 7;
-        ctx.strokeRect(16, 16, w - 32, h - 32);
+          ctx.strokeStyle = '#f472b6';
+          ctx.lineWidth = 7;
+          ctx.strokeRect(16, 16, w - 32, h - 32);
 
-        ctx.strokeStyle = '#fde047';
-        ctx.lineWidth = 10;
-        const corner = 60;
-        ctx.beginPath(); ctx.moveTo(16, 16 + corner); ctx.lineTo(16, 16); ctx.lineTo(16 + corner, 16); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(w - 16 - corner, 16); ctx.lineTo(w - 16, 16); ctx.lineTo(w - 16, 16 + corner); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(16, h - 16 - corner); ctx.lineTo(16, h - 16); ctx.lineTo(16 + corner, h - 16); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(w - 16 - corner, h - 16); ctx.lineTo(w - 16, h - 16); ctx.lineTo(w - 16, h - 16 - corner); ctx.stroke();
+          ctx.strokeStyle = '#fde047';
+          ctx.lineWidth = 10;
+          const corner = 60;
+          ctx.beginPath(); ctx.moveTo(16, 16 + corner); ctx.lineTo(16, 16); ctx.lineTo(16 + corner, 16); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(w - 16 - corner, 16); ctx.lineTo(w - 16, 16); ctx.lineTo(w - 16, 16 + corner); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(16, h - 16 - corner); ctx.lineTo(16, h - 16); ctx.lineTo(16 + corner, h - 16); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(w - 16 - corner, h - 16); ctx.lineTo(w - 16, h - 16); ctx.lineTo(w - 16, h - 16 - corner); ctx.stroke();
 
-        ctx.strokeStyle = 'rgba(244, 114, 182, 0.65)';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(120, 115);
-        ctx.lineTo(w - 120, 115);
-        ctx.stroke();
-
-        ctx.fillStyle = '#fde047';
-        ctx.font = 'bold 44px "Segoe UI", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.fillText(`❖ BẢNG 0${sIdx + 1}: ${titles[sIdx]} ❖`, w / 2, 45);
-
-        ctx.textAlign = 'left';
-        const lines = screenLines[sIdx];
-        const startY = 175;
-        const lineSpacing = 102;
-
-        lines.forEach((line, i) => {
-          const parts = line.split(':');
-          const label = parts[0] + ':';
-          const desc = parts.slice(1).join(':');
-
-          ctx.fillStyle = '#f472b6';
+          ctx.strokeStyle = 'rgba(244, 114, 182, 0.65)';
+          ctx.lineWidth = 3;
           ctx.beginPath();
-          ctx.arc(80, startY + i * lineSpacing + 16, 7, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.moveTo(120, 115);
+          ctx.lineTo(w - 120, 115);
+          ctx.stroke();
 
           ctx.fillStyle = '#fde047';
-          ctx.font = 'bold 30px "Segoe UI", sans-serif';
-          ctx.fillText(label, 110, startY + i * lineSpacing);
+          ctx.font = 'bold 44px "Segoe UI", sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+          ctx.fillText(`❖ BẢNG 0${sIdx + 1}: ${titles[sIdx]} ❖`, w / 2, 45);
 
-          const labelW = ctx.measureText(label).width;
-          ctx.fillStyle = '#f1f5f9';
-          ctx.font = '28px "Segoe UI", sans-serif';
-          ctx.fillText(desc, 110 + labelW + 14, startY + i * lineSpacing);
-        });
+          ctx.textAlign = 'left';
+          const lines = screenLines[sIdx];
+          const startY = 175;
+          const lineSpacing = 102;
+
+          lines.forEach((line, i) => {
+            const parts = line.split(':');
+            const label = parts[0] + ':';
+            const desc = parts.slice(1).join(':');
+
+            ctx.fillStyle = '#f472b6';
+            ctx.beginPath();
+            ctx.arc(80, startY + i * lineSpacing + 16, 7, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#fde047';
+            ctx.font = 'bold 30px "Segoe UI", sans-serif';
+            ctx.fillText(label, 110, startY + i * lineSpacing);
+
+            const labelW = ctx.measureText(label).width;
+            ctx.fillStyle = '#f1f5f9';
+            ctx.font = '28px "Segoe UI", sans-serif';
+            ctx.fillText(desc, 110 + labelW + 14, startY + i * lineSpacing);
+          });
+          ctx.restore();
+        }
       }
 
       const tex = cv ? new THREE.CanvasTexture(cv) : null;
+      if (tex) {
+        tex.generateMipmaps = false;
+        tex.minFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+      }
       const mat = new THREE.MeshBasicMaterial({
         map: tex,
         color: tex ? 0xffffff : 0x221133,
@@ -1048,91 +1076,57 @@ export class TruyenKieuStoryWorld {
     vanPed.position.set(8.5, 0.0, -1.0);
     overlookGroup.add(vanPed);
 
-    const gltfLoader = new GLTFLoader();
-    gltfLoader.load(
-      '/model/kimtrongthuykieu.glb',
-      (gltf) => {
-        const raw = gltf.scene;
-        raw.traverse((c) => {
-          if (c.isMesh) {
-            c.castShadow = false;
-            c.receiveShadow = false;
-            if (c.material) {
-              const orig = c.material;
-              c.material = new THREE.MeshBasicMaterial({
-                map: orig.map || null,
-                color: orig.color ? orig.color.clone() : new THREE.Color(0xffffff)
-              });
-            }
-          }
-        });
-        const box = new THREE.Box3().setFromObject(raw);
-        const size = new THREE.Vector3(); box.getSize(size);
-        const scale = 2.85 / Math.max(size.y, 0.001);
-        raw.scale.multiplyScalar(scale);
-        raw.position.y = 0.32;
-        kimPed.add(raw);
-      },
-      undefined,
-      () => {}
-    );
+    loadGlbCached(['/model/kimtrongthuykieu.glb'], {
+      maxTextureSize: 1024,
+      disableMipmaps: true,
+      prepareOptions: {
+        targetSpan: 2.85,
+        fitAxis: 'y',
+        groundY: true,
+        centerXZ: true
+      }
+    })
+      .then((wrapped) => {
+        if (!wrapped) return;
+        wrapped.position.y = 0.32;
+        kimPed.add(wrapped);
+      })
+      .catch(() => {});
 
-    gltfLoader.load(
-      '/model/thuykieu.glb',
-      (gltf) => {
-        const raw = gltf.scene;
-        raw.traverse((c) => {
-          if (c.isMesh) {
-            c.castShadow = false;
-            c.receiveShadow = false;
-            if (c.material) {
-              const orig = c.material;
-              c.material = new THREE.MeshBasicMaterial({
-                map: orig.map || null,
-                color: orig.color ? orig.color.clone() : new THREE.Color(0xffffff)
-              });
-            }
-          }
-        });
-        const box = new THREE.Box3().setFromObject(raw);
-        const size = new THREE.Vector3(); box.getSize(size);
-        const scale = 2.85 / Math.max(size.y, 0.001);
-        raw.scale.multiplyScalar(scale);
-        raw.position.y = 0.32;
-        kieuPed.add(raw);
-      },
-      undefined,
-      () => {}
-    );
+    loadGlbCached(['/model/thuykieu.glb'], {
+      maxTextureSize: 1024,
+      disableMipmaps: true,
+      prepareOptions: {
+        targetSpan: 2.85,
+        fitAxis: 'y',
+        groundY: true,
+        centerXZ: true
+      }
+    })
+      .then((wrapped) => {
+        if (!wrapped) return;
+        wrapped.position.y = 0.32;
+        kieuPed.add(wrapped);
+      })
+      .catch(() => {});
 
-    gltfLoader.load(
-      '/model/thuykieu.glb',
-      (gltf) => {
-        const raw = gltf.scene;
-        raw.traverse((c) => {
-          if (c.isMesh) {
-            c.castShadow = false;
-            c.receiveShadow = false;
-            if (c.material) {
-              const orig = c.material;
-              const mat = new THREE.MeshBasicMaterial({
-                map: orig.map || null,
-                color: orig.color ? orig.color.clone().multiply(new THREE.Color(0xffe680)) : new THREE.Color(0xffe680)
-              });
-              c.material = mat;
-            }
-          }
-        });
-        const box = new THREE.Box3().setFromObject(raw);
-        const size = new THREE.Vector3(); box.getSize(size);
-        const scale = 2.75 / Math.max(size.y, 0.001);
-        raw.scale.multiplyScalar(scale);
-        raw.position.y = 0.32;
-        vanPed.add(raw);
-      },
-      undefined,
-      () => {}
-    );
+    loadGlbCached(['/model/thuykieu.glb'], {
+      maxTextureSize: 1024,
+      disableMipmaps: true,
+      prepareOptions: {
+        targetSpan: 2.75,
+        fitAxis: 'y',
+        groundY: true,
+        centerXZ: true,
+        color: 0xffe680
+      }
+    })
+      .then((wrapped) => {
+        if (!wrapped) return;
+        wrapped.position.y = 0.32;
+        vanPed.add(wrapped);
+      })
+      .catch(() => {});
   }
 
   initZone2LauNgungBich() {
@@ -1283,16 +1277,22 @@ export class TruyenKieuStoryWorld {
     lanternInstanced.frustumCulled = true;
     pavilionGroup.add(lanternInstanced);
 
+    mergeGroupMeshesByMaterial(pavilionGroup);
     this.zone2Group.add(pavilionGroup);
 
     this.sailboats = [];
+    const sharedBoatHullMat = new THREE.MeshLambertMaterial({ color: 0x3d2b1f });
+    const sharedBoatSailMat = new THREE.MeshLambertMaterial({
+      color: 0xdfd4be,
+      side: THREE.DoubleSide
+    });
     const createSailboat = (bx, by, bz, scale, rotY) => {
       const boatGroup = new THREE.Group();
       boatGroup.position.set(bx, by, bz);
       boatGroup.rotation.y = rotY;
 
       const hullGeo = new THREE.BoxGeometry(1.6 * scale, 0.5 * scale, 4.2 * scale);
-      const hull = new THREE.Mesh(hullGeo, new THREE.MeshLambertMaterial({ color: 0x3d2b1f }));
+      const hull = new THREE.Mesh(hullGeo, sharedBoatHullMat);
       boatGroup.add(hull);
 
       const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.06 * scale, 0.08 * scale, 3.2 * scale, 8), colMat);
@@ -1300,11 +1300,7 @@ export class TruyenKieuStoryWorld {
       boatGroup.add(mast);
 
       const sailGeo = new THREE.PlaneGeometry(1.8 * scale, 2.4 * scale);
-      const sailMat = new THREE.MeshLambertMaterial({
-        color: 0xdfd4be,
-        side: THREE.DoubleSide
-      });
-      const sail = new THREE.Mesh(sailGeo, sailMat);
+      const sail = new THREE.Mesh(sailGeo, sharedBoatSailMat);
       sail.position.set(0, 1.8 * scale, 0.3 * scale);
       sail.rotation.y = 0.25;
       boatGroup.add(sail);
@@ -1365,6 +1361,7 @@ export class TruyenKieuStoryWorld {
     returnPortalZone2.position.set(4.0, 4.5, 4.0);
     returnPortalZone2.rotation.y = -Math.PI / 3;
     this.zone2Group.add(returnPortalZone2);
+    this.zoneInteractables[2].push(portalToZone1, portalToZone3, returnPortalZone2);
   }
 
   // =========================================================================
@@ -1487,7 +1484,9 @@ export class TruyenKieuStoryWorld {
     mapScroll.position.set(0, 1.3, 0.4);
     tentGroup.add(mapScroll);
 
-    this.zone3Group.add(tentGroup);
+    const zone3StaticProps = new THREE.Group();
+    zone3StaticProps.name = 'Zone3_Static_Merged_Props';
+    zone3StaticProps.add(tentGroup);
 
     const daoGroup = new THREE.Group();
     daoGroup.position.set(4.8, 0.5, -4.5);
@@ -1504,7 +1503,7 @@ export class TruyenKieuStoryWorld {
     const blade = new THREE.Mesh(bladeGeo, bladeMat);
     blade.position.set(0, 3.4, 0.12);
     daoGroup.add(blade);
-    this.zone3Group.add(daoGroup);
+    zone3StaticProps.add(daoGroup);
 
     const drumMat = new THREE.MeshLambertMaterial({ color: 0x8a241c });
     const drumHeadMat = new THREE.MeshLambertMaterial({ color: 0xe5ceaa });
@@ -1525,49 +1524,67 @@ export class TruyenKieuStoryWorld {
       head.position.set(0, 1.5, 0.56);
       drumGroup.add(head);
 
-      this.zone3Group.add(drumGroup);
+      zone3StaticProps.add(drumGroup);
     });
 
     this.flags = [];
+    this.flagTimeUniform = { value: 0 };
+    const sharedTextFlagMats = new Map();
+    const attachFlagWaveShader = (mat, keySuffix) => {
+      mat.onBeforeCompile = (shader) => {
+        shader.uniforms.uTime = this.flagTimeUniform;
+        shader.vertexShader = 'uniform float uTime;\n' + shader.vertexShader;
+        shader.vertexShader = shader.vertexShader.replace(
+          '#include <begin_vertex>',
+          `#include <begin_vertex>
+          float flagWaveFactor = transformed.x / 2.4;
+          transformed.z += sin(uTime * 5.5 + transformed.x * 3.0) * 0.18 * flagWaveFactor;`
+        );
+      };
+      mat.customProgramCacheKey = () => `tkw_flag_wave_${keySuffix}`;
+      return mat;
+    };
+
+    const flagGeo = new THREE.PlaneGeometry(2.4, 1.6, 8, 4);
+    const poleGeo = new THREE.CylinderGeometry(0.08, 0.10, 6.8, 8);
     const createFlag = (fx, fz, colorHex, flagText = '') => {
-      const flagGroup = new THREE.Group();
-      flagGroup.position.set(fx, 0.5, fz);
+      const pole = new THREE.Mesh(poleGeo, fenceMat);
+      pole.position.set(fx, 0.5 + 3.4, fz);
+      zone3StaticProps.add(pole);
 
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.10, 6.8, 8), fenceMat);
-      pole.position.y = 3.4;
-      flagGroup.add(pole);
-
-      const flagGeo = new THREE.PlaneGeometry(2.4, 1.6, 12, 6);
       let flagMat;
       if (flagText) {
-        const fcanvas = document.createElement('canvas');
-        fcanvas.width = 512;
-        fcanvas.height = 340;
-        const fctx = fcanvas.getContext('2d');
-        fctx.fillStyle = '#8b1818';
-        fctx.fillRect(0, 0, 512, 340);
-        fctx.strokeStyle = '#ffd700';
-        fctx.lineWidth = 14;
-        fctx.strokeRect(16, 16, 480, 308);
-        fctx.fillStyle = '#ffd700';
-        fctx.font = 'bold 180px serif';
-        fctx.textAlign = 'center';
-        fctx.fillText(flagText, 256, 235);
-        const ftex = new THREE.CanvasTexture(fcanvas);
-        ftex.generateMipmaps = false;
-        ftex.minFilter = THREE.LinearFilter;
-        flagMat = new THREE.MeshLambertMaterial({ map: ftex, side: THREE.DoubleSide });
+        if (sharedTextFlagMats.has(flagText)) {
+          flagMat = sharedTextFlagMats.get(flagText);
+        } else {
+          const fcanvas = document.createElement('canvas');
+          fcanvas.width = 512;
+          fcanvas.height = 340;
+          const fctx = fcanvas.getContext('2d');
+          fctx.fillStyle = '#8b1818';
+          fctx.fillRect(0, 0, 512, 340);
+          fctx.strokeStyle = '#ffd700';
+          fctx.lineWidth = 14;
+          fctx.strokeRect(16, 16, 480, 308);
+          fctx.fillStyle = '#ffd700';
+          fctx.font = 'bold 180px serif';
+          fctx.textAlign = 'center';
+          fctx.fillText(flagText, 256, 235);
+          const ftex = new THREE.CanvasTexture(fcanvas);
+          ftex.generateMipmaps = false;
+          ftex.minFilter = THREE.LinearFilter;
+          flagMat = attachFlagWaveShader(new THREE.MeshLambertMaterial({ map: ftex, side: THREE.DoubleSide }), 'tex');
+          sharedTextFlagMats.set(flagText, flagMat);
+        }
       } else {
-        flagMat = new THREE.MeshLambertMaterial({ color: colorHex, side: THREE.DoubleSide });
+        flagMat = attachFlagWaveShader(new THREE.MeshLambertMaterial({ color: colorHex, side: THREE.DoubleSide }), 'col');
       }
 
       const flagMesh = new THREE.Mesh(flagGeo, flagMat);
-      flagMesh.position.set(1.2, 5.8, 0);
-      flagGroup.add(flagMesh);
-
-      flagMesh.userData.origPositions = flagGeo.attributes.position.clone();
+      flagMesh.name = 'zone3_flag_banner';
+      flagMesh.position.set(fx + 1.2, 0.5 + 5.8, fz);
       this.flags.push(flagMesh);
-      this.zone3Group.add(flagGroup);
+      this.zone3Group.add(flagMesh);
     };
 
     createFlag(-6.8, -4.5, 0x8b1818, '徐');
@@ -1576,6 +1593,9 @@ export class TruyenKieuStoryWorld {
     createFlag(14.0, 4.0, 0x1b4f72);
     createFlag(-11.0, 11.0, 0x196f3d);
     createFlag(11.0, 11.0, 0x212f3d);
+
+    mergeGroupMeshesByMaterial(zone3StaticProps);
+    this.zone3Group.add(zone3StaticProps);
 
     const fireGroup = new THREE.Group();
     fireGroup.position.set(0, 0.5, 4.0);
@@ -1632,11 +1652,11 @@ export class TruyenKieuStoryWorld {
       dummyBz.updateMatrix();
       flamesInstanced.setMatrixAt(i, dummyBz.matrix);
 
-      // Nguồn sáng PointLight không bóng đổ
+      // Nguồn sáng PointLight không bóng đổ (gắn vào zone3Lights để tự tắt khi chuyển Zone)
       const bLight = new THREE.PointLight(0xff7711, 2.0, 10);
       bLight.position.set(tx, 2.9, tz);
       bLight.castShadow = false; // GPU SAVER: PointLight shadow = 6 render passes
-      this.zone3Group.add(bLight);
+      this.zone3Lights.add(bLight);
     });
 
     standsInstanced.instanceMatrix.needsUpdate = true;
@@ -1708,6 +1728,7 @@ export class TruyenKieuStoryWorld {
     returnPortalZone3.position.set(-6.0, 0.0, 7.5);
     returnPortalZone3.rotation.y = Math.PI / 4;
     this.zone3Group.add(returnPortalZone3);
+    this.zoneInteractables[3].push(portalToZone1, portalToZone2, returnPortalZone3);
   }
 
   // =========================================================================
@@ -2258,6 +2279,14 @@ export class TruyenKieuStoryWorld {
 
     this.currentZoneId = targetZoneId;
 
+    // Cô lập render & lighting: CHỈ hiển thị phân cảnh đang hoạt động
+    if (this.zone1Group) this.zone1Group.visible = targetZoneId === 1;
+    if (this.zone2Group) this.zone2Group.visible = targetZoneId === 2;
+    if (this.zone3Group) this.zone3Group.visible = targetZoneId === 3;
+    if (this.zone1Lights) this.zone1Lights.visible = targetZoneId === 1;
+    if (this.zone2Lights) this.zone2Lights.visible = targetZoneId === 2;
+    if (this.zone3Lights) this.zone3Lights.visible = targetZoneId === 3;
+
     const worldCamPos = new THREE.Vector3().copy(KIEU_WORLD_ORIGIN).add(zoneData.offset).add(zoneData.cameraPos);
     const worldTargetPos = new THREE.Vector3().copy(KIEU_WORLD_ORIGIN).add(zoneData.offset).add(zoneData.targetPos);
 
@@ -2478,7 +2507,9 @@ export class TruyenKieuStoryWorld {
       mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
 
       raycaster.setFromCamera(mouse, this.camera);
-      const intersects = raycaster.intersectObjects(this.worldGroup.children, true);
+      const targets = this.zoneInteractables?.[this.currentZoneId] || [];
+      if (targets.length === 0) return;
+      const intersects = raycaster.intersectObjects(targets, true);
 
       for (let i = 0; i < intersects.length; i++) {
         let obj = intersects[i].object;
@@ -2498,14 +2529,17 @@ export class TruyenKieuStoryWorld {
       }
     });
 
-    // Hover raycaster đổi con trỏ pointer khi rà trúng vật phẩm quy hồi hoặc cổng dịch chuyển
+    // Hover raycaster đổi con trỏ pointer (CHỈ raycast các cổng tương tác thuộc phân cảnh hiện tại)
     window.addEventListener('pointermove', (e) => {
-      if (!this.isInsideWorld || this.isWarping) return;
+      if (!this.isInsideWorld || !this.worldGroup.visible || this.isWarping) return;
+      const targets = this.zoneInteractables?.[this.currentZoneId] || [];
+      if (targets.length === 0) return;
+
       mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
       mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
 
       raycaster.setFromCamera(mouse, this.camera);
-      const intersects = raycaster.intersectObjects(this.worldGroup.children, true);
+      const intersects = raycaster.intersectObjects(targets, true);
       let hitInteractive = false;
 
       for (let i = 0; i < intersects.length; i++) {
@@ -2564,88 +2598,77 @@ export class TruyenKieuStoryWorld {
 
     const twoFrameDelta = delta * 2.0;
 
-    // 1. Chuyển động hoa rơi ở Zone 1
-    if (this.particlesZone1) {
-      const pos = this.particlesZone1.geometry.attributes.position;
-      for (let i = 0; i < pos.count; i++) {
-        let y = pos.getY(i) - 0.55 * twoFrameDelta;
-        let x = pos.getX(i) + Math.sin(elapsedTime + i) * 0.25 * twoFrameDelta;
-        if (y < 0.2) y = 12.0;
-        pos.setXY(i, x, y);
-      }
-      pos.needsUpdate = true;
-    }
-
-    // 2. Chuyển động khói hương mộ Đạm Tiên
-    if (this.smokeZone1 && this.smokeData) {
-      const pos = this.smokeZone1.geometry.attributes.position;
-      for (let i = 0; i < this.smokeData.length; i++) {
-        const s = this.smokeData[i];
-        s.y += s.speed * twoFrameDelta;
-        if (s.y > 3.2) s.y = 0.5;
-        const driftX = Math.sin(elapsedTime * 2.0 + s.phase) * 0.15 * ((s.y - 0.5) / 2.7);
-        const driftZ = Math.cos(elapsedTime * 1.5 + s.phase) * 0.12 * ((s.y - 0.5) / 2.7);
-        pos.setXYZ(i, 5.2 + driftX, s.y, -4.5 + driftZ);
-      }
-      pos.needsUpdate = true;
-    }
-
-    // 3. Thuyền buồm nhấp nhô trên sóng biển Zone 2 (Lầu Ngưng Bích)
-    if (this.sailboats) {
-      this.sailboats.forEach((b) => {
-        b.position.y = (b.userData.baseY || 0.1) + Math.sin(elapsedTime * 1.2 + b.userData.bobPhase) * 0.12;
-        b.rotation.z = Math.sin(elapsedTime * 0.9 + b.userData.bobPhase) * 0.04;
-        b.updateMatrix();
-      });
-    }
-
-    // 4. Bụi cát vàng cuộn theo gió ở Zone 2
-    if (this.particlesZone2) {
-      const pos = this.particlesZone2.geometry.attributes.position;
-      for (let i = 0; i < pos.count; i++) {
-        let x = pos.getX(i) + 1.8 * delta;
-        let y = pos.getY(i) + Math.sin(elapsedTime * 2.5 + i) * 0.1 * delta;
-        if (x > 22) x = -22;
-        pos.setXY(i, x, y);
-      }
-      pos.needsUpdate = true;
-    }
-
-    // 5. Cờ xí ngũ sắc tung bay trong gió chiến chinh Zone 3 (Doanh Trại Từ Hải)
-    if (this.flags) {
-      this.flags.forEach((f) => {
-        const geo = f.geometry;
-        const pos = geo.attributes.position;
-        const orig = f.userData.origPositions;
+    if (this.currentZoneId === 1) {
+      // 1. Chuyển động hoa rơi ở Zone 1
+      if (this.particlesZone1) {
+        const pos = this.particlesZone1.geometry.attributes.position;
         for (let i = 0; i < pos.count; i++) {
-          const ox = orig.getX(i);
-          const oy = orig.getY(i);
-          const oz = orig.getZ(i);
-          const waveFactor = (ox / 2.4);
-          const zWave = Math.sin(elapsedTime * 5.5 + ox * 3.0) * 0.18 * waveFactor;
-          pos.setXYZ(i, ox, oy, oz + zWave);
+          let y = pos.getY(i) - 0.55 * twoFrameDelta;
+          let x = pos.getX(i) + Math.sin(elapsedTime + i) * 0.25 * twoFrameDelta;
+          if (y < 0.2) y = 12.0;
+          pos.setXY(i, x, y);
         }
         pos.needsUpdate = true;
-      });
-    }
-
-    // 6. Ánh lửa trại nhấp nháy sống động Zone 3
-    if (this.fireLight) {
-      this.fireLight.intensity = 3.6 + Math.sin(elapsedTime * 12.0) * 0.45 + Math.cos(elapsedTime * 17.0) * 0.35;
-    }
-
-    // 7. Tàn tro lửa than bay cuộn lên trời đêm Zone 3
-    if (this.particlesZone3 && this.sparkData) {
-      const pos = this.particlesZone3.geometry.attributes.position;
-      for (let i = 0; i < this.sparkData.length; i++) {
-        const sp = this.sparkData[i];
-        sp.y += sp.speed * delta;
-        if (sp.y > 8.5) sp.y = 0.8;
-        const sx = Math.sin(elapsedTime * sp.driftSpeed + sp.angle) * 0.6;
-        const sz = 4.0 + Math.cos(elapsedTime * sp.driftSpeed + sp.angle) * 0.6;
-        pos.setXYZ(i, sx, sp.y, sz);
       }
-      pos.needsUpdate = true;
+
+      // 2. Chuyển động khói hương mộ Đạm Tiên
+      if (this.smokeZone1 && this.smokeData) {
+        const pos = this.smokeZone1.geometry.attributes.position;
+        for (let i = 0; i < this.smokeData.length; i++) {
+          const s = this.smokeData[i];
+          s.y += s.speed * twoFrameDelta;
+          if (s.y > 3.2) s.y = 0.5;
+          const driftX = Math.sin(elapsedTime * 2.0 + s.phase) * 0.15 * ((s.y - 0.5) / 2.7);
+          const driftZ = Math.cos(elapsedTime * 1.5 + s.phase) * 0.12 * ((s.y - 0.5) / 2.7);
+          pos.setXYZ(i, 5.2 + driftX, s.y, -4.5 + driftZ);
+        }
+        pos.needsUpdate = true;
+      }
+    } else if (this.currentZoneId === 2) {
+      // 3. Thuyền buồm nhấp nhô trên sóng biển Zone 2 (Lầu Ngưng Bích)
+      if (this.sailboats) {
+        this.sailboats.forEach((b) => {
+          b.position.y = (b.userData.baseY || 0.1) + Math.sin(elapsedTime * 1.2 + b.userData.bobPhase) * 0.12;
+          b.rotation.z = Math.sin(elapsedTime * 0.9 + b.userData.bobPhase) * 0.04;
+          b.updateMatrix();
+        });
+      }
+
+      // 4. Bụi cát vàng cuộn theo gió ở Zone 2
+      if (this.particlesZone2) {
+        const pos = this.particlesZone2.geometry.attributes.position;
+        for (let i = 0; i < pos.count; i++) {
+          let x = pos.getX(i) + 1.8 * twoFrameDelta;
+          let y = pos.getY(i) + Math.sin(elapsedTime * 2.5 + i) * 0.1 * twoFrameDelta;
+          if (x > 22) x = -22;
+          pos.setXY(i, x, y);
+        }
+        pos.needsUpdate = true;
+      }
+    } else if (this.currentZoneId === 3) {
+      // 5. Cờ xí ngũ sắc tung bay trong gió chiến chinh Zone 3 (GPU vertex shader)
+      if (this.flagTimeUniform) {
+        this.flagTimeUniform.value = elapsedTime;
+      }
+
+      // 6. Ánh lửa trại nhấp nháy sống động Zone 3
+      if (this.fireLight) {
+        this.fireLight.intensity = 3.6 + Math.sin(elapsedTime * 12.0) * 0.45 + Math.cos(elapsedTime * 17.0) * 0.35;
+      }
+
+      // 7. Tàn tro lửa than bay cuộn lên trời đêm Zone 3
+      if (this.particlesZone3 && this.sparkData) {
+        const pos = this.particlesZone3.geometry.attributes.position;
+        for (let i = 0; i < this.sparkData.length; i++) {
+          const sp = this.sparkData[i];
+          sp.y += sp.speed * twoFrameDelta;
+          if (sp.y > 8.5) sp.y = 0.8;
+          const sx = Math.sin(elapsedTime * sp.driftSpeed + sp.angle) * 0.6;
+          const sz = 4.0 + Math.cos(elapsedTime * sp.driftSpeed + sp.angle) * 0.6;
+          pos.setXYZ(i, sx, sp.y, sz);
+        }
+        pos.needsUpdate = true;
+      }
     }
 
     // 8. Đảm bảo cao độ an toàn cho Walker (Multi-Scene: Tọa độ gốc Y=0)

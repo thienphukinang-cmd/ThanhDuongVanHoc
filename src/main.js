@@ -5,7 +5,6 @@ import { ModelCreator } from './modules/modelCreator.js';
 import { BifurcatedStaircase } from './modules/bifurcatedStaircase.js';
 import { RoomGenerator } from './modules/RoomGenerator.js';
 import { PortalInteraction } from './modules/PortalInteraction.js';
-import { ArtDirectorLighting } from './modules/artDirectorLighting.js';
 import { ExteriorVista } from './modules/exteriorVista.js';
 import { ProceduralVFX } from './modules/proceduralVfx.js';
 import { PostProcessingManager } from './modules/postprocessingManager.js';
@@ -23,6 +22,7 @@ import { buildSonTinhThuyTinhExhibition, setupSonTinhThuyTinhRoom } from './modu
 import { buildNamQuocSonHaExhibition } from './modules/namQuocSonHaRoomDecorator.js';
 import { buildAnDuongVuongExhibition } from './modules/anDuongVuongRoomDecorator.js';
 import { buildVoNhatExhibition } from './modules/voNhatRoomDecorator.js';
+import { buildTatDenExhibition } from './modules/tatDenRoomDecorator.js';
 import { decorateMuseumGrandLobbyAndCorridors } from './modules/museumLobbyCorridorDecorator.js';
 import { replaceAllMuseumCarpetsWithTimelinePattern } from './modules/museumCarpetReplacer.js';
 import { createMuseumImmersionSystem } from './modules/museumImmersionSystem.js';
@@ -64,12 +64,13 @@ class LiteratureCathedralApp {
   initRenderer() {
     try {
       this.renderer = new THREE.WebGLRenderer({
-        antialias: true,
+        antialias: false,
         powerPreference: 'high-performance',
         stencil: false,
       });
       this.renderer.setSize(window.innerWidth, window.innerHeight);
-      this.renderer.setPixelRatio(0.85); // Khóa pixelRatio = 0.85 (tối ưu 28% fillrate cho GPU NVIDIA GTX 1050 2GB)
+      const initialDpr = Math.min(window.devicePixelRatio || 1, 0.85);
+      this.renderer.setPixelRatio(initialDpr);
 
       this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
       this.renderer.toneMappingExposure = 1.0;
@@ -124,6 +125,27 @@ class LiteratureCathedralApp {
     this.voNhatScene.fog = new THREE.FogExp2(0x2a1a0d, 0.0018);
     window.__voNhatScene = this.voNhatScene;
 
+    // 6. Scene Thế Giới Tắt Đèn Độc Lập Hoàn Toàn (Cõi Làng Đông Xá Đêm Sưu Thuế)
+    this.tatDenScene = new THREE.Scene();
+    this.tatDenScene.name = "TatDen_Universe";
+    this.tatDenScene.background = new THREE.Color(0x040407);
+    this.tatDenScene.fog = new THREE.FogExp2(0x040407, 0.0135);
+    window.__tatDenScene = this.tatDenScene;
+
+    // 7. Scene Thế Giới Nam Quốc Sơn Hà Độc Lập (Cõi Đêm Sông Như Nguyệt)
+    this.namQuocSonHaScene = new THREE.Scene();
+    this.namQuocSonHaScene.name = "NamQuocSonHa_Universe";
+    this.namQuocSonHaScene.background = new THREE.Color(0x060d1c);
+    this.namQuocSonHaScene.fog = new THREE.FogExp2(0x0b1528, 0.0115);
+    window.__namQuocSonHaScene = this.namQuocSonHaScene;
+
+    // 8. Scene Thế Giới Thánh Gióng Độc Lập (Chiến Trường Giặc Ân & Đỉnh Núi Sóc Sơn)
+    this.thanhGiongScene = new THREE.Scene();
+    this.thanhGiongScene.name = "ThanhGiong_Universe";
+    this.thanhGiongScene.background = new THREE.Color(0x140b08);
+    this.thanhGiongScene.fog = new THREE.FogExp2(0x28120a, 0.0085);
+    window.__thanhGiongScene = this.thanhGiongScene;
+
     // 5. Biến quản lý Scene đang Active (Mặc định: Sảnh Bảo Tàng)
     this.activeScene = this.mainScene;
     window.__activeScene = this.activeScene;
@@ -142,10 +164,12 @@ class LiteratureCathedralApp {
 
     const thanhGiongRoom = buildThanhGiongExhibition({
       roomCenter: new THREE.Vector3(-48.0, 0.0, 19.0), // Khớp chính xác với Tầng 1 (Y = 0.0m) Hiên Tây - Nam theo LITERATURE_REGISTRY
-      targetHeight: 4.2 // Chuẩn hóa Thánh Gióng 4.2m trên Bệ Đá Núi Sóc cao 1.6m theo thiết kế Đông Sơn rực lửa
+      mainScene: this.scene,
+      realmScene: this.thanhGiongScene
     });
     this.scene.add(thanhGiongRoom);
     this.thanhGiongRoom = thanhGiongRoom;
+    window.__thanhGiongRoom = thanhGiongRoom;
 
     const sonTinhThuyTinhRoom = setupSonTinhThuyTinhRoom(this.scene, {
       roomCenter: new THREE.Vector3(-48.0, 0.0, -19.0), // Khớp chính xác với Tầng 1 (Y = 0.0m) Cánh Tây - Bắc theo LITERATURE_REGISTRY
@@ -157,10 +181,13 @@ class LiteratureCathedralApp {
     this.sonTinhThuyTinhRoom = sonTinhThuyTinhRoom;
 
     const namQuocSonHaRoom = buildNamQuocSonHaExhibition({
-      roomCenter: new THREE.Vector3(-48.0, 10.0, -19.0) // Khớp chính xác với Tầng 2 (Y = 10.0m) Cánh Tây - Bắc theo LITERATURE_REGISTRY
+      roomCenter: new THREE.Vector3(-48.0, 10.0, -19.0), // Khớp chính xác với Tầng 2 (Y = 10.0m) Cánh Tây - Bắc theo LITERATURE_REGISTRY
+      mainScene: this.scene,
+      realmScene: this.namQuocSonHaScene
     });
     this.scene.add(namQuocSonHaRoom);
     this.namQuocSonHaRoom = namQuocSonHaRoom;
+    window.__namQuocSonHaRoom = namQuocSonHaRoom;
 
     const anDuongVuongRoom = buildAnDuongVuongExhibition({
       roomCenter: new THREE.Vector3(0.0, 0.0, -48.0), // Khớp chính xác với Tầng 1 (Y = 0.0m) Cánh Bắc - Đại Gian theo LITERATURE_REGISTRY
@@ -177,6 +204,15 @@ class LiteratureCathedralApp {
     this.scene.add(voNhatRoom);
     this.voNhatRoom = voNhatRoom;
     window.__voNhatRoom = voNhatRoom;
+
+    const tatDenRoom = buildTatDenExhibition({
+      roomCenter: new THREE.Vector3(-48.0, 20.0, -19.0),
+      mainScene: this.scene,
+      realmScene: this.tatDenScene
+    });
+    this.scene.add(tatDenRoom);
+    this.tatDenRoom = tatDenRoom;
+    window.__tatDenRoom = tatDenRoom;
 
     const aspect = window.innerWidth / (window.innerHeight || 1);
     // Căn chỉnh Z-Buffer: near = 1.0, far = 5000
@@ -195,17 +231,35 @@ class LiteratureCathedralApp {
     this.scene.fog = this.mainScene.fog;
   }
 
+  _getCachedSceneStyle(key, bgHex, fogHex, fogDensity) {
+    this._sceneStyles = this._sceneStyles || new Map();
+    let entry = this._sceneStyles.get(key);
+    if (!entry) {
+      entry = {
+        background: new THREE.Color(bgHex),
+        fog: new THREE.FogExp2(fogHex, fogDensity)
+      };
+      this._sceneStyles.set(key, entry);
+    }
+    return entry;
+  }
+
   /**
    * CƠ CHẾ HOÁN ĐỔI SCENE (SCENE SWAPPING):
-   * Chuyển đổi giữa Sảnh Chính và Thế Giới Truyện Kiều trong vòng lặp render
+   * Chuyển đổi giữa Sảnh Chính và các Thế Giới Tác Phẩm trong vòng lặp render
    */
   setActiveScene(scene) {
-    if (!scene || this.activeScene === scene) return;
+    if (!scene) return;
+    scene.visible = true; // Bảo đảm scene đích luôn visible (khắc phục lỗi mainScene.visible=false khi thoát cõi khác)
+    if (this.activeScene === scene) return;
     this.activeScene = scene;
     window.__activeScene = scene;
+    if (scene) scene.visible = true;
+
     if (scene === this.mainScene) {
-      this.mainScene.background = new THREE.Color(0xdca878);
-      this.mainScene.fog = new THREE.FogExp2(0xdca878, 0.00075);
+      const style = this._getCachedSceneStyle('main', 0xdca878, 0xdca878, 0.00075);
+      this.mainScene.background = style.background;
+      this.mainScene.fog = style.fog;
       if (this.exteriorVista?.group) this.exteriorVista.group.visible = true;
       if (this.truyenKieuStoryWorld?.worldGroup) this.truyenKieuStoryWorld.worldGroup.visible = false;
       if (this.kieuWorld?.group) this.kieuWorld.group.visible = false;
@@ -215,12 +269,15 @@ class LiteratureCathedralApp {
       if (this.namQuocSonHaRoom) this.namQuocSonHaRoom.visible = true;
       if (this.anDuongVuongRoom) this.anDuongVuongRoom.visible = true;
       if (this.voNhatRoom) this.voNhatRoom.visible = true;
+      if (this.tatDenRoom) this.tatDenRoom.visible = true;
       if (this.museumCrowd?.crowdGroup) this.museumCrowd.crowdGroup.visible = true;
+      this._lastCullCamPos?.set(Infinity, Infinity, Infinity);
     } else if (scene === this.truyenKieuScene) {
       if (this.kieuWorld) this.kieuWorld.setVisible?.(false);
       if (this.truyenKieuStoryWorld?.worldGroup) this.truyenKieuStoryWorld.worldGroup.visible = false;
-      this.truyenKieuScene.background = new THREE.Color(0x090314);
-      this.truyenKieuScene.fog = new THREE.FogExp2(0x160729, 0.0038);
+      const style = this._getCachedSceneStyle('truyenKieu', 0x090314, 0x160729, 0.0038);
+      this.truyenKieuScene.background = style.background;
+      this.truyenKieuScene.fog = style.fog;
       if (this.exteriorVista?.group) this.exteriorVista.group.visible = false;
       if (this.truyenKieuRoom) this.truyenKieuRoom.visible = false;
       if (this.thanhGiongRoom) this.thanhGiongRoom.visible = false;
@@ -228,10 +285,12 @@ class LiteratureCathedralApp {
       if (this.namQuocSonHaRoom) this.namQuocSonHaRoom.visible = false;
       if (this.anDuongVuongRoom) this.anDuongVuongRoom.visible = false;
       if (this.voNhatRoom) this.voNhatRoom.visible = false;
+      if (this.tatDenRoom) this.tatDenRoom.visible = false;
       if (this.museumCrowd?.crowdGroup) this.museumCrowd.crowdGroup.visible = false;
     } else if (scene === this.sonTinhThuyTinhScene) {
-      this.sonTinhThuyTinhScene.background = new THREE.Color(0x050b14);
-      this.sonTinhThuyTinhScene.fog = new THREE.FogExp2(0x0c1e33, 0.002);
+      const style = this._getCachedSceneStyle('sonTinh', 0x050b14, 0x0c1e33, 0.002);
+      this.sonTinhThuyTinhScene.background = style.background;
+      this.sonTinhThuyTinhScene.fog = style.fog;
       this.sonTinhThuyTinhScene.position.set(0, 0, 0);
       if (this.sonTinhThuyTinhRoom?.battleRealm) this.sonTinhThuyTinhRoom.battleRealm.visible = true;
       if (this.sonTinhThuyTinhRoom?.userData?.battleRealm) this.sonTinhThuyTinhRoom.userData.battleRealm.visible = true;
@@ -244,9 +303,11 @@ class LiteratureCathedralApp {
       if (this.anDuongVuongRoom) this.anDuongVuongRoom.visible = false;
       if (this.museumCrowd?.crowdGroup) this.museumCrowd.crowdGroup.visible = false;
       if (this.voNhatRoom) this.voNhatRoom.visible = false;
+      if (this.tatDenRoom) this.tatDenRoom.visible = false;
     } else if (scene === this.anDuongVuongScene) {
-      this.anDuongVuongScene.background = new THREE.Color(0x031210);
-      this.anDuongVuongScene.fog = new THREE.FogExp2(0x072a24, 0.0012);
+      const style = this._getCachedSceneStyle('anDuongVuong', 0x031210, 0x072a24, 0.0012);
+      this.anDuongVuongScene.background = style.background;
+      this.anDuongVuongScene.fog = style.fog;
       if (this.exteriorVista?.group) this.exteriorVista.group.visible = false;
       if (this.truyenKieuRoom) this.truyenKieuRoom.visible = false;
       if (this.thanhGiongRoom) this.thanhGiongRoom.visible = false;
@@ -255,9 +316,11 @@ class LiteratureCathedralApp {
       if (this.anDuongVuongRoom) this.anDuongVuongRoom.visible = false;
       if (this.museumCrowd?.crowdGroup) this.museumCrowd.crowdGroup.visible = false;
       if (this.voNhatRoom) this.voNhatRoom.visible = false;
+      if (this.tatDenRoom) this.tatDenRoom.visible = false;
     } else if (scene === this.voNhatScene) {
-      this.voNhatScene.background = new THREE.Color(0x181008);
-      this.voNhatScene.fog = new THREE.FogExp2(0x2a1a0d, 0.0018);
+      const style = this._getCachedSceneStyle('voNhat', 0x181008, 0x2a1a0d, 0.0018);
+      this.voNhatScene.background = style.background;
+      this.voNhatScene.fog = style.fog;
       if (this.exteriorVista?.group) this.exteriorVista.group.visible = false;
       if (this.truyenKieuRoom) this.truyenKieuRoom.visible = false;
       if (this.thanhGiongRoom) this.thanhGiongRoom.visible = false;
@@ -265,6 +328,46 @@ class LiteratureCathedralApp {
       if (this.namQuocSonHaRoom) this.namQuocSonHaRoom.visible = false;
       if (this.anDuongVuongRoom) this.anDuongVuongRoom.visible = false;
       if (this.voNhatRoom) this.voNhatRoom.visible = false;
+      if (this.tatDenRoom) this.tatDenRoom.visible = false;
+      if (this.museumCrowd?.crowdGroup) this.museumCrowd.crowdGroup.visible = false;
+    } else if (scene === this.tatDenScene) {
+      const style = this._getCachedSceneStyle('tatDen', 0x040407, 0x040407, 0.0135);
+      this.tatDenScene.background = style.background;
+      this.tatDenScene.fog = style.fog;
+      if (this.exteriorVista?.group) this.exteriorVista.group.visible = false;
+      if (this.truyenKieuRoom) this.truyenKieuRoom.visible = false;
+      if (this.thanhGiongRoom) this.thanhGiongRoom.visible = false;
+      if (this.sonTinhThuyTinhRoom) this.sonTinhThuyTinhRoom.visible = false;
+      if (this.namQuocSonHaRoom) this.namQuocSonHaRoom.visible = false;
+      if (this.anDuongVuongRoom) this.anDuongVuongRoom.visible = false;
+      if (this.voNhatRoom) this.voNhatRoom.visible = false;
+      if (this.tatDenRoom) this.tatDenRoom.visible = false;
+      if (this.museumCrowd?.crowdGroup) this.museumCrowd.crowdGroup.visible = false;
+    } else if (scene === this.namQuocSonHaScene) {
+      const style = this._getCachedSceneStyle('namQuocSonHa', 0x060d1c, 0x0b1528, 0.0115);
+      this.namQuocSonHaScene.background = style.background;
+      this.namQuocSonHaScene.fog = style.fog;
+      if (this.exteriorVista?.group) this.exteriorVista.group.visible = false;
+      if (this.truyenKieuRoom) this.truyenKieuRoom.visible = false;
+      if (this.thanhGiongRoom) this.thanhGiongRoom.visible = false;
+      if (this.sonTinhThuyTinhRoom) this.sonTinhThuyTinhRoom.visible = false;
+      if (this.namQuocSonHaRoom) this.namQuocSonHaRoom.visible = false;
+      if (this.anDuongVuongRoom) this.anDuongVuongRoom.visible = false;
+      if (this.voNhatRoom) this.voNhatRoom.visible = false;
+      if (this.tatDenRoom) this.tatDenRoom.visible = false;
+      if (this.museumCrowd?.crowdGroup) this.museumCrowd.crowdGroup.visible = false;
+    } else if (scene === this.thanhGiongScene) {
+      const style = this._getCachedSceneStyle('thanhGiong', 0x140b08, 0x28120a, 0.0085);
+      this.thanhGiongScene.background = style.background;
+      this.thanhGiongScene.fog = style.fog;
+      if (this.exteriorVista?.group) this.exteriorVista.group.visible = false;
+      if (this.truyenKieuRoom) this.truyenKieuRoom.visible = false;
+      if (this.thanhGiongRoom) this.thanhGiongRoom.visible = false;
+      if (this.sonTinhThuyTinhRoom) this.sonTinhThuyTinhRoom.visible = false;
+      if (this.namQuocSonHaRoom) this.namQuocSonHaRoom.visible = false;
+      if (this.anDuongVuongRoom) this.anDuongVuongRoom.visible = false;
+      if (this.voNhatRoom) this.voNhatRoom.visible = false;
+      if (this.tatDenRoom) this.tatDenRoom.visible = false;
       if (this.museumCrowd?.crowdGroup) this.museumCrowd.crowdGroup.visible = false;
     } else {
       if (this.exteriorVista?.group) this.exteriorVista.group.visible = false;
@@ -273,7 +376,15 @@ class LiteratureCathedralApp {
       if (this.sonTinhThuyTinhRoom) this.sonTinhThuyTinhRoom.visible = false;
       if (this.namQuocSonHaRoom) this.namQuocSonHaRoom.visible = false;
       if (this.anDuongVuongRoom) this.anDuongVuongRoom.visible = false;
+      if (this.voNhatRoom) this.voNhatRoom.visible = false;
+      if (this.tatDenRoom) this.tatDenRoom.visible = false;
       if (this.museumCrowd?.crowdGroup) this.museumCrowd.crowdGroup.visible = false;
+    }
+
+    if (scene !== this.mainScene && this.renderer && this.camera) {
+      try {
+        this.renderer.compile(scene, this.camera);
+      } catch (e) {}
     }
     console.log(`%c[MULTI-SCENE ARCHITECTURE] Active Scene Swapped ➔ ${scene.name}`, "color: #39e58c; font-weight: bold; font-size: 14px;");
   }
@@ -302,7 +413,7 @@ class LiteratureCathedralApp {
         scene: this.scene,
         camera: this.camera,
         cameraRig: this.camera,
-        walkableFloors: [this.atriumGroup]
+        walkableFloors: [this.atriumGroup, this.namQuocSonHaRoom, this.thanhGiongRoom].filter(Boolean)
       });
       window.__museumImmersion = this.immersionSystem;
       window.__spatialAudio = this.immersionSystem.spatialAudio;
@@ -355,7 +466,6 @@ class LiteratureCathedralApp {
       this.roomGenerator = new RoomGenerator(this.matLib);
       if (this.roomGenerator?.getGroup()) {
         this.atriumGroup.add(this.roomGenerator.getGroup());
-        this.roomGenerator.setAllRoomsVisible?.(true);
       }
     } catch (err) {
       console.error("[SELF-HEALING] Lỗi tạo RoomGenerator:", err);
@@ -421,17 +531,9 @@ class LiteratureCathedralApp {
       this.proceduralVfx = { update: () => {}, setVisible: () => {} };
     }
 
-    // 7.1. GIAI ĐOẠN 3: THẾ GIỚI TỰ SỰ TRUYỆN KIỀU (TIẾT THANH MINH TRONG TRUYENKIEUSCENE)
-    try {
-      this.kieuWorld = new KieuWorld(this.truyenKieuScene, this.matLib, this.camera);
-      window.__kieuWorld = this.kieuWorld;
-      if (this.kieuWorld && this.audioManager) {
-        this.kieuWorld.setAudioManager(this.audioManager);
-      }
-    } catch (err) {
-      console.error("[SELF-HEALING] Lỗi tạo KieuWorld:", err);
-      this.kieuWorld = null;
-    }
+    // 7.1. GIAI ĐOẠN 3: THẾ GIỚI TỰ SỰ TRUYỆN KIỀU (LAZY-INIT KIEUWORLD CHỈ KHI DÙNG FALLBACK WORLDMANAGER)
+    this.kieuWorld = null;
+    window.__kieuWorld = null;
 
     // 8. Post-processing Cinematic Look Dev (SSAO, Bloom, Exposure protection)
     try {
@@ -462,9 +564,6 @@ class LiteratureCathedralApp {
       if (this.cameraManager && this.hitboxManager) {
         this.cameraManager.setHitboxManager(this.hitboxManager);
       }
-
-      // Thay thế toàn bộ thảm trong bảo tàng sang thảm trục thời gian (giữ nguyên kiến trúc & sàn)
-      replaceAllMuseumCarpetsWithTimelinePattern(this.scene);
     } catch (err) {
       console.error("[SELF-HEALING] Lỗi khởi tạo CameraManager:", err);
     }
@@ -498,6 +597,7 @@ class LiteratureCathedralApp {
         this.cameraManager,
         {
           app: this,
+          ensureKieuWorld: () => this.getOrCreateKieuWorld(),
           atriumGroup: this.atriumGroup,
           kieuWorld: this.kieuWorld,
           audioManager: this.audioManager
@@ -531,6 +631,15 @@ class LiteratureCathedralApp {
       }
       if (this.directorPanel && this.voNhatRoom) {
         this.directorPanel.setVoNhatRoom?.(this.voNhatRoom);
+      }
+      if (this.directorPanel && this.tatDenRoom) {
+        this.directorPanel.setTatDenRoom?.(this.tatDenRoom);
+      }
+      if (this.directorPanel && this.namQuocSonHaRoom) {
+        this.directorPanel.setNamQuocSonHaRoom?.(this.namQuocSonHaRoom);
+      }
+      if (this.directorPanel && this.thanhGiongRoom) {
+        this.directorPanel.setThanhGiongRoom?.(this.thanhGiongRoom);
       }
     } catch (err) {
       console.error("[SELF-HEALING] Lỗi khởi tạo DirectorPanel:", err);
@@ -596,7 +705,7 @@ class LiteratureCathedralApp {
       if (this.worldManager) {
         this.worldManager.portalInteraction = this.portalInteraction;
       }
-      this.portalInteraction.loadNarrativeWorld = (worldId, coords, meta) => {
+      const dispatchNarrativeWorld = (worldId, coords, meta) => {
         if (worldId === 'son_tinh' || worldId === 'son_tinh_thuy_tinh' || meta?.targetRealm === 'SON_TINH_THUY_TINH_REALM') {
           if (this.sonTinhThuyTinhRoom?.enterRealm) {
             this.sonTinhThuyTinhRoom.enterRealm();
@@ -615,9 +724,15 @@ class LiteratureCathedralApp {
             return true;
           }
         }
-        if (worldId === 'vo_nhat' || meta?.targetRealm === 'VO_NHAT_REALM') {
-          if (this.voNhatRoom?.enterRealm) {
-            this.voNhatRoom.enterRealm();
+        if (worldId === 'nam_quoc_son_ha' || worldId === 'namquocsonha' || meta?.targetRealm === 'NAM_QUOC_SON_HA_REALM') {
+          if (this.namQuocSonHaRoom?.enterRealm) {
+            this.namQuocSonHaRoom.enterRealm('namquocsonha');
+            return true;
+          }
+        }
+        if (worldId === 'thanh_giong' || worldId === 'thanhgiong' || meta?.targetRealm === 'THANH_GIONG_REALM') {
+          if (this.thanhGiongRoom?.enterRealm) {
+            this.thanhGiongRoom.enterRealm('thanhgiong');
             return true;
           }
         }
@@ -634,32 +749,8 @@ class LiteratureCathedralApp {
         }
         return false;
       };
-      window.loadNarrativeWorld = (worldId, coords, meta) => {
-        if (worldId === 'son_tinh' || worldId === 'son_tinh_thuy_tinh' || meta?.targetRealm === 'SON_TINH_THUY_TINH_REALM') {
-          if (this.sonTinhThuyTinhRoom?.enterRealm) {
-            this.sonTinhThuyTinhRoom.enterRealm();
-            return true;
-          }
-        }
-        if (worldId === 'an_duong_vuong' || meta?.targetRealm === 'AN_DUONG_VUONG_REALM') {
-          if (this.anDuongVuongRoom?.enterRealm) {
-            this.anDuongVuongRoom.enterRealm();
-            return true;
-          }
-        }
-        if (worldId === 'truyen_kieu') {
-          if (this.truyenKieuStoryWorld) {
-            if (!this.truyenKieuStoryWorld.isInsideWorld) {
-              this.truyenKieuStoryWorld.enterStoryWorldWithWarp(meta?.targetZoneId || 1);
-            }
-            return true;
-          } else if (this.worldManager) {
-            this.worldManager.transitionTo?.(WORLD_STATES.KIEU_WORLD);
-            return true;
-          }
-        }
-        return false;
-      };
+      this.portalInteraction.loadNarrativeWorld = dispatchNarrativeWorld;
+      window.loadNarrativeWorld = dispatchNarrativeWorld;
 
       // Đăng ký Sách Cổ Phòng Truyện Kiều vào PortalInteraction kích hoạt trực tiếp enterRealm()
       if (this.truyenKieuRoom) {
@@ -740,6 +831,26 @@ class LiteratureCathedralApp {
         }
       }
 
+      // Đăng ký Cổng Dịch Chuyển Phòng Nam Quốc Sơn Hà vào PortalInteraction
+      if (this.namQuocSonHaRoom) {
+        const nqshPortal = this.namQuocSonHaRoom.teleportBook || this.namQuocSonHaRoom;
+        if (nqshPortal) {
+          this.portalInteraction.registerInteractiveBook(nqshPortal, new THREE.Vector3(0, 2.9, 25.5), {
+            id: 'nam_quoc_son_ha',
+            title: 'NAM QUỐC SƠN HÀ • CHIẾN TUYẾN NHƯ NGUYỆT',
+            author: 'Thái úy Lý Thường Kiệt (1019 – 1105)',
+            genre: 'Thơ ca Trung đại • Thời Lý (1077)',
+            quote: '“Nam quốc sơn hà Nam đế cư, tiệt nhiên định phận tại thiên thư...”',
+            themeColor: 0xd4af37,
+            targetRealm: 'NAM_QUOC_SON_HA_REALM',
+            portalReady: true,
+            onActivate: () => {
+              this.namQuocSonHaRoom.enterRealm?.('namquocsonha');
+            }
+          });
+        }
+      }
+
       // Kết nối Context toàn diện cho Phòng Truyện Kiều (Cõi Thơ Đoạn Trường Tân Thanh)
       if (this.truyenKieuRoom?.setupContext) {
         this.truyenKieuRoom.setupContext({
@@ -795,6 +906,71 @@ class LiteratureCathedralApp {
           atriumGroup: this.atriumGroup
         });
       }
+
+      // Kết nối Context toàn diện cho Phòng Tắt Đèn (Cõi Làng Đông Xá Đêm Sưu Thuế)
+      if (this.tatDenRoom?.setupContext) {
+        this.tatDenRoom.setupContext({
+          scene: this.scene,
+          realmScene: this.tatDenScene,
+          camera: this.camera,
+          renderer: this.renderer,
+          cameraManager: this.cameraManager,
+          hitboxManager: this.hitboxManager,
+          loreGuide: this.immersionSystem?.loreGuide || window.__loreGuide,
+          spatialAudio: this.immersionSystem?.spatialAudio || window.__spatialAudio,
+          portalInteraction: this.portalInteraction,
+          immersionSystem: this.immersionSystem
+        });
+      }
+
+      // Kết nối Context toàn diện cho Phòng Nam Quốc Sơn Hà (Cõi Đêm Sông Như Nguyệt)
+      if (this.namQuocSonHaRoom?.setupContext) {
+        this.namQuocSonHaRoom.setupContext({
+          scene: this.scene,
+          realmScene: this.namQuocSonHaScene,
+          camera: this.camera,
+          renderer: this.renderer,
+          cameraManager: this.cameraManager,
+          hitboxManager: this.hitboxManager,
+          loreGuide: this.immersionSystem?.loreGuide || window.__loreGuide,
+          spatialAudio: this.immersionSystem?.spatialAudio || window.__spatialAudio,
+          portalInteraction: this.portalInteraction,
+          immersionSystem: this.immersionSystem
+        });
+      }
+
+      // Kết nối Context toàn diện cho Phòng Thánh Gióng (Chiến Trường & Đỉnh Núi Sóc Sơn)
+      if (this.thanhGiongRoom?.setupContext) {
+        this.thanhGiongRoom.setupContext({
+          scene: this.scene,
+          realmScene: this.thanhGiongScene,
+          camera: this.camera,
+          renderer: this.renderer,
+          cameraManager: this.cameraManager,
+          hitboxManager: this.hitboxManager,
+          loreGuide: this.immersionSystem?.loreGuide || window.__loreGuide,
+          spatialAudio: this.immersionSystem?.spatialAudio || window.__spatialAudio,
+          portalInteraction: this.portalInteraction,
+          immersionSystem: this.immersionSystem
+        });
+      }
+      if (typeof window !== 'undefined') {
+        window.enterRealm = (realmName) => {
+          if (realmName === 'namquocsonha' || realmName === 'nam_quoc_son_ha') {
+            this.namQuocSonHaRoom?.enterRealm?.('namquocsonha');
+            return true;
+          }
+          if (realmName === 'tatden' || realmName === 'tat_den') {
+            this.tatDenRoom?.enterRealm?.();
+            return true;
+          }
+          if (realmName === 'thanhgiong' || realmName === 'thanh_giong') {
+            this.thanhGiongRoom?.enterRealm?.('thanhgiong');
+            return true;
+          }
+          return false;
+        };
+      }
     } catch (err) {
       console.error("[SELF-HEALING] Lỗi khởi tạo PortalInteraction:", err);
     }
@@ -802,55 +978,50 @@ class LiteratureCathedralApp {
     // 10.1. HỆ THỐNG XỬ LÝ VA CHẠM 3D & CẦU THANG (COLLISION DETECTION & STAIR RAYCASTING)
     try {
       this.initCollisionSystem();
+      const interactiveRoomCtx = {
+        camera: this.camera,
+        renderer: this.renderer,
+        hitboxManager: this.hitboxManager,
+        loreGuide: this.immersionSystem?.loreGuide || window.__loreGuide,
+        spatialAudio: this.immersionSystem?.spatialAudio || window.__spatialAudio,
+        cameraManager: this.cameraManager,
+        portalInteraction: this.portalInteraction,
+        immersionSystem: this.immersionSystem
+      };
+      this.tatDenRoom?.userData?.wireInteractiveSystems?.(interactiveRoomCtx);
+      this.namQuocSonHaRoom?.userData?.wireInteractiveSystems?.(interactiveRoomCtx);
+      this.thanhGiongRoom?.userData?.wireInteractiveSystems?.(interactiveRoomCtx);
+      this.thanhGiongRoom?.userData?.registerHitboxes?.(this.hitboxManager);
+      if (this.hitboxManager) {
+        this.collisionObjects = this.hitboxManager.solidBoxes.map(s => s.box);
+        this.cameraManager?.setCollisionObjects(this.collisionObjects, this.stairObjects);
+      }
     } catch (err) {
       console.error("[SELF-HEALING] Lỗi khởi tạo Collision System:", err);
     }
 
-    // 11. VÒNG LẶP ÉP KIỂU TOÀN CỤC & TỐI ƯU HÓA FRUSTUM CULLING (PERFORMANCE & NaN SANITIZATION)
+    // 11. VÒNG LẶP TỐI ƯU HÓA FRUSTUM CULLING & NaN SANITIZATION (KHÔNG ÉP DOUBLESIDE TOÀN CỤC)
     try {
       this.sanitizeSceneGeometries();
 
       let overriddenCount = 0;
-      const scenesToCull = [this.mainScene, this.truyenKieuScene, this.sonTinhThuyTinhScene, this.anDuongVuongScene, this.voNhatScene];
+      const scenesToCull = [
+        this.mainScene,
+        this.truyenKieuScene,
+        this.sonTinhThuyTinhScene,
+        this.anDuongVuongScene,
+        this.voNhatScene,
+        this.tatDenScene,
+        this.namQuocSonHaScene,
+        this.thanhGiongScene
+      ];
       scenesToCull.forEach((targetScene) => {
         if (!targetScene) return;
-        targetScene.traverse((child) => {
-          if (child.isLight) {
-            child.castShadow = false; // TRIỆT TIÊU TOÀN BỘ ĐÈN CAST SHADOW
-          }
-          if (child.isMesh) {
-            child.castShadow = false; // TRIỆT TIÊU BÓNG ĐỔ TRÊN TOÀN BỘ MESH
-            child.receiveShadow = false;
-            child.frustumCulled = true; // KÍCH HOẠT FRUSTUM CULLING TOÀN DIỆN
-            child.renderOrder = 0;
-            if (child.geometry) {
-              if (!child.geometry.boundingBox) child.geometry.computeBoundingBox();
-              if (!child.geometry.boundingSphere) child.geometry.computeBoundingSphere();
-            }
-            if (child.material) {
-              const applyMatOpt = (mat) => {
-                if (!mat) return;
-                mat.side = THREE.DoubleSide; // Ép render 2 mặt
-                // Chỉ ép depthWrite cho vật liệu đặc, giữ nguyên depthWrite = false cho vật liệu trong suốt (như tia sáng, bụi vàng)
-                if (!mat.transparent) {
-                  mat.depthWrite = true;
-                }
-                mat.depthTest = true;
-                mat.needsUpdate = true;
-              };
-              if (Array.isArray(child.material)) {
-                child.material.forEach(applyMatOpt);
-              } else {
-                applyMatOpt(child.material);
-              }
-            }
-            overriddenCount++;
-          }
-        });
+        overriddenCount += this.optimizeSubtree(targetScene);
       });
-      console.log(`%c[PERFORMANCE & RENDER] Đã bật Frustum Culling (frustumCulled=true) và tối ưu hóa ${overriddenCount} meshes trên toàn bộ các Scene!`, "color: #39e58c; font-weight: bold;");
+      console.log(`%c[PERFORMANCE & RENDER] Đã bật Frustum Culling (frustumCulled=true, FrontSide giữ nguyên) cho ${overriddenCount} meshes trên toàn bộ các Scene!`, "color: #39e58c; font-weight: bold;");
     } catch (e) {
-      console.warn("[SELF-HEALING] Lỗi traverse ép kiểu toàn cục:", e);
+      console.warn("[SELF-HEALING] Lỗi traverse tối ưu toàn cục:", e);
     }
 
     // 12. TIÊU DIỆT LIGHT HELPER & BÓNG ĐÈN ẢO TRONG TOÀN BỘ SCENE (Senior Lighting Director)
@@ -880,17 +1051,21 @@ class LiteratureCathedralApp {
     }
 
     // 13.1. KHỞI CHẠY ĐỘNG CƠ TÁI THIẾT KẾ TOÀN DIỆN BẢO TÀNG (BLENDER + WEB GLB + 12 SKILLS)
+    let overhaulPromise = Promise.resolve();
     try {
       this.totalOverhaulEngine = new MuseumTotalOverhaulEngine(this);
-      this.totalOverhaulEngine.initialize();
+      overhaulPromise = Promise.resolve(this.totalOverhaulEngine.initialize()).catch((err) => {
+        console.warn("[SELF-HEALING] Overhaul initialize warning:", err);
+      });
       window.__totalOverhaulEngine = this.totalOverhaulEngine;
     } catch (err) {
       console.error("[SELF-HEALING] Lỗi khởi tạo MuseumTotalOverhaulEngine:", err);
     }
 
     // 13.2. KHỞI CHẠY ĐỒNG BỘ 16 KỸ NĂNG TỐI THƯỢNG (ULTIMATE 16-SKILLS ORCHESTRATOR)
+    let skillsPromise = Promise.resolve();
     try {
-      applyAll16SkillsToMuseum({
+      skillsPromise = applyAll16SkillsToMuseum({
         scene: this.scene,
         camera: this.camera,
         renderer: this.renderer,
@@ -923,6 +1098,52 @@ class LiteratureCathedralApp {
       console.error("[SELF-HEALING] Lỗi gọi applyAll16SkillsToMuseum:", err);
     }
 
+    // 13.3. KHỞI TẠO HỆ THỐNG CULLING PHÒNG, ĐÈN POOL CỐ ĐỊNH VÀ PREWARM SHADER/TEXTURE
+    this.initRoomCullingRegistry();
+    this.collectSceneLightsAndCullTargets();
+    this.freezeStaticMatrices();
+    this.prewarmSceneShaders(this.mainScene);
+    this.updateRoomCullingAndLayers(true);
+
+    // Chờ Overhaul + 16-Skills + GLB đợt đầu nạp xong để pre-compile shader & texture trước khi xoay camera
+    this._postLoadPrewarmPending = false;
+    const runPostLoadPrewarm = () => {
+      if (this._isPostLoadPrewarming) return;
+      this._isPostLoadPrewarming = true;
+      try {
+        this.cleanupLightHelpers();
+        this.optimizeSubtree(this.mainScene);
+        this.collectSceneLightsAndCullTargets();
+        this.freezeStaticMatrices();
+        this.prewarmSceneShaders(this.mainScene);
+        this.updateRoomCullingAndLayers(true);
+      } finally {
+        this._isPostLoadPrewarming = false;
+        this.performanceOptimizer?.resetSampling?.(2000);
+      }
+    };
+
+    const prevDefaultOnLoad = THREE.DefaultLoadingManager.onLoad;
+    THREE.DefaultLoadingManager.onLoad = () => {
+      if (typeof prevDefaultOnLoad === 'function') {
+        try { prevDefaultOnLoad(); } catch (e) {}
+      }
+      runPostLoadPrewarm();
+    };
+
+    Promise.allSettled([overhaulPromise, skillsPromise]).then(() => {
+      runPostLoadPrewarm();
+    });
+    setTimeout(runPostLoadPrewarm, 1800);
+
+    if (typeof document !== 'undefined') {
+      const loader = document.getElementById('museum-boot-loader');
+      if (loader) {
+        loader.classList.add('hidden');
+        setTimeout(() => loader.remove(), 300);
+      }
+    }
+
     console.log("%c✓ Đã kích hoạt Phòng Mẫu 01 (Sách Ma Thuật & Cổng Dịch Chuyển Truyện Kiều) thành công!", "color: #39e58c; font-weight: bold;");
 
     // 14. TỰ ĐỘNG THEO DÕI FPS >= 60 KHI KHỞI ĐỘNG BẢO TÀNG (5 GIÂY LIÊN TỤC)
@@ -933,13 +1154,28 @@ class LiteratureCathedralApp {
     }, 700);
   }
 
+  getOrCreateKieuWorld() {
+    if (this.kieuWorld) return this.kieuWorld;
+    try {
+      this.kieuWorld = new KieuWorld(this.truyenKieuScene, this.matLib, this.camera);
+      window.__kieuWorld = this.kieuWorld;
+      if (this.kieuWorld && this.audioManager) {
+        this.kieuWorld.setAudioManager(this.audioManager);
+      }
+      this.optimizeSubtree(this.kieuWorld.group);
+    } catch (err) {
+      console.error("[SELF-HEALING] Lỗi lazy-init KieuWorld:", err);
+      this.kieuWorld = null;
+    }
+    return this.kieuWorld;
+  }
+
 
   /**
-   * CẤU HÌNH HỆ THỐNG ÁNH SÁNG 3 ĐIỂM SIÊU NHẸ (ZERO VRAM OVERHEAD)
-   * Đúng 3 nguồn sáng toàn cục không đổ bóng (castShadow = false)
+   * CẤU HÌNH HỆ THỐNG ÁNH SÁNG 3 ĐIỂM + POOL 3 POINTLIGHT CỐ ĐỊNH (ZERO RUNTIME RECOMPILE)
    */
   initThreePointLighting() {
-    // 1. Quét và loại bỏ sạch sẽ mọi PointLight/SpotLight nhỏ lẻ gây lag
+    // 1. Quét và loại bỏ sạch sẽ mọi PointLight/SpotLight nhỏ lẻ trong atriumGroup
     const lightsToRemove = [];
     this.atriumGroup.traverse((child) => {
       if (child.isPointLight || child.isSpotLight) {
@@ -949,40 +1185,51 @@ class LiteratureCathedralApp {
     lightsToRemove.forEach((light) => {
       if (light.parent) light.parent.remove(light);
     });
+    if (this.roomGenerator?.localizedLights) {
+      this.roomGenerator.localizedLights.length = 0;
+    }
 
     // 2. Nhóm ánh sáng 3 điểm toàn cục
     this.lightingGroup = new THREE.Group();
     this.lightingGroup.name = "Global_ThreePoint_Lighting_Group";
 
-    // 1. HemisphereLight(0xfff6ea, 0x524235, 0.98):
-    // Vòm trần sáng ấm, sàn và gầm cầu thang chữ Y đón ánh phản xạ gỗ mun/đất nung Indochine ấm áp, triệt tiêu góc tối đen
     this.hemiLight = new THREE.HemisphereLight(0xfff6ea, 0x524235, 0.98);
     this.hemiLight.name = "Global_HemisphereLight";
     this.hemiLight.position.set(0, 60, 0);
     this.lightingGroup.add(this.hemiLight);
 
-    // 2. Key DirectionalLight(0xfff1e0, 0.78) đặt ở góc nghiêng (30, 60, 40):
-    // Key Light rọi nắng ấm qua giếng trời, tạo độ tương phản thị giác sắc nét cho vòm cột và đại sảnh
     this.keyLight = new THREE.DirectionalLight(0xfff1e0, 0.78);
     this.keyLight.name = "Key_DirectionalLight";
     this.keyLight.position.set(30, 60, 40);
-    this.keyLight.castShadow = false; // Tuyệt đối không đổ bóng
+    this.keyLight.castShadow = false;
     this.lightingGroup.add(this.keyLight);
 
-    // 3. Fill DirectionalLight(0xded2be, 0.48) chiếu ngược từ (-32, 28, -36):
-    // Fill Light bù sáng tông ngà ấm, chiếu sáng dịu dàng các góc khuất cầu thang, hành lang và hốc vòm
     this.fillLight = new THREE.DirectionalLight(0xded2be, 0.48);
     this.fillLight.name = "Fill_DirectionalLight";
     this.fillLight.position.set(-32, 28, -36);
-    this.fillLight.castShadow = false; // Tuyệt đối không đổ bóng
+    this.fillLight.castShadow = false;
     this.lightingGroup.add(this.fillLight);
 
     this.atriumGroup.add(this.lightingGroup);
 
-    // 4. THÊM CHIỀU SÂU KHÔNG KHÍ BẰNG FOG HOÀNG HÔN ẤM ÁP (TINH TẾ & KHÔNG CHE KHUẤT TRÀNG AN)
-    this.mainScene.background = new THREE.Color(0xdca878);
+    // 3. Pool cố định 3 PointLight luôn visible = true (chỉ đổi intensity/position/color -> NUM_POINT_LIGHTS luôn = 3)
+    if (!this._roomLightPool) {
+      this._roomLightPool = [];
+      for (let i = 0; i < 3; i++) {
+        const pLight = new THREE.PointLight(0xfff1e0, 0.0, 24.0, 1.5);
+        pLight.name = `Pooled_Room_PointLight_${i}`;
+        pLight.castShadow = false;
+        pLight.visible = true;
+        this.mainScene.add(pLight);
+        this._roomLightPool.push(pLight);
+      }
+    }
+
+    // 4. THÊM CHIỀU SÂU KHÔNG KHÍ BẰNG FOG HOÀNG HÔN ẤM ÁP
+    const mainStyle = this._getCachedSceneStyle('main', 0xdca878, 0xdca878, 0.00075);
+    this.mainScene.background = mainStyle.background;
     this.scene.background = this.mainScene.background;
-    this.mainScene.fog = new THREE.FogExp2(0xdca878, 0.00075);
+    this.mainScene.fog = mainStyle.fog;
     this.scene.fog = this.mainScene.fog;
 
     // Giữ đối tượng artDirector tương thích với PerformanceOptimizer
@@ -992,7 +1239,7 @@ class LiteratureCathedralApp {
       update: () => {}
     };
 
-    console.log("%c✓ [3-POINT LIGHTING & FOG] Cấu hình 3 nguồn sáng Indochine ấm áp & FogExp2(0xdca878, 0.00075) hoàn tất!", "color: #39e58c; font-weight: bold;");
+    console.log("%c✓ [3-POINT LIGHTING & POOL] Cấu hình 3 đèn toàn cục + Pool 3 PointLight cố định hoàn tất!", "color: #39e58c; font-weight: bold;");
   }
 
   /**
@@ -1141,83 +1388,516 @@ class LiteratureCathedralApp {
   }
 
   /**
-   * KÍCH HOẠT FRUSTUM CULLING TOÀN DIỆN CHO MỌI MESH TRONG MỘT NHÓM/MÔ HÌNH
+   * KÍCH HOẠT FRUSTUM CULLING & TẮT SHADOW CHO MỌI MESH TRONG SUBTREE (GIỮ NGUYÊN FRONTSIDE)
    */
-  enforceFrustumCulling(root) {
-    if (!root) return;
+  optimizeSubtree(root) {
+    if (!root) return 0;
+    let count = 0;
     root.traverse((child) => {
-      if (child.isMesh) {
+      if (child.isLight) {
+        child.castShadow = false;
+      }
+      if (child.isMesh || child.isPoints || child.isSprite) {
         child.frustumCulled = true;
         child.castShadow = false;
         child.receiveShadow = false;
+        if (child.isMesh) {
+          child.renderOrder = 0;
+        }
         if (child.geometry) {
           if (!child.geometry.boundingBox) child.geometry.computeBoundingBox();
           if (!child.geometry.boundingSphere) child.geometry.computeBoundingSphere();
         }
+        if (child.material) {
+          const applyMatOpt = (mat) => {
+            if (!mat) return;
+            if (!mat.transparent) {
+              mat.depthWrite = true;
+            }
+            mat.depthTest = true;
+          };
+          if (Array.isArray(child.material)) {
+            child.material.forEach(applyMatOpt);
+          } else {
+            applyMatOpt(child.material);
+          }
+        }
+        count++;
       }
     });
+    return count;
+  }
+
+  enforceFrustumCulling(root) {
+    return this.optimizeSubtree(root);
   }
 
   /**
    * 1. HỆ THỐNG XỬ LÝ VA CHẠM THỰC THỂ (CLEANED PERIMETER WALLS ONLY)
-   * Chỉ đưa vào mảng collisionObjects: Các bức tường cố định bao quanh không gian.
-   * CẤM TUYỆT ĐỐI đưa cây đào, bình gốm, đèn lồng, bàn ghế, bục sách vào danh sách va chạm.
    */
   initCollisionSystem() {
     this.collisionObjects = [];
     this.stairObjects = [];
 
-    // XÓA HẾT MỌI HITBOX CŨ VÀ TÁI THIẾT LẬP TOÀN BỘ THEO KỸ NĂNG hitbox-collision-architect
     if (this.hitboxManager) {
       this.hitboxManager.rebuildAllMuseumHitboxes();
       this.collisionObjects = this.hitboxManager.solidBoxes.map(s => s.box);
     }
 
-    // Chuyển danh sách tường chuẩn xác cho CameraController
     this.cameraManager?.setCollisionObjects(this.collisionObjects, this.stairObjects);
-
     console.log(`%c[COLLISION SYSTEM] Đã làm mới 100% hitbox bảo tàng: ${this.collisionObjects.length} vật cản chuẩn hóa O(1).`, "color: #39e58c; font-weight: bold;");
   }
 
   registerDynamicCollisionObject(model) {
-    // Cấm tuyệt đối đưa các mô hình trang trí GLB (cây đào, bình gốm, đèn lồng, bàn ghế, bục sách) vào danh sách va chạm
+    // Cấm tuyệt đối đưa các mô hình trang trí GLB vào danh sách va chạm
+  }
+
+  initRoomCullingRegistry() {
+    this._lastCullCamPos = new THREE.Vector3(Infinity, Infinity, Infinity);
+    this._lobbyCenter = new THREE.Vector3(0, 2.0, 0);
+    this._lobbyLightSpecs = [];
+    this._collectedLights = new WeakSet();
+    this._prewarmedTextures = new WeakSet();
+    this._tempLightPos = new THREE.Vector3();
+    this._lastPrewarmedMeshCount = -1;
+    this._roomEntries = [
+      {
+        key: 'truyenKieu',
+        room: this.truyenKieuRoom,
+        center: new THREE.Vector3(-48.0, 10.0, 19.0),
+        lightSpecs: [],
+        cullableProps: [],
+        shouldUpdate: true,
+        propsVisible: true,
+        updateFn: (d, et, c) => (this.truyenKieuRoom?.update || this.roomDecorator?.update)?.(d, et, c)
+      },
+      {
+        key: 'thanhGiong',
+        room: this.thanhGiongRoom,
+        center: new THREE.Vector3(-48.0, 0.0, 19.0),
+        lightSpecs: [],
+        cullableProps: [],
+        shouldUpdate: true,
+        propsVisible: true,
+        updateFn: (d, et, c) => (this.thanhGiongRoom?.update || this.thanhGiongRoom?.userData?.update)?.(d, et, c)
+      },
+      {
+        key: 'sonTinh',
+        room: this.sonTinhThuyTinhRoom,
+        center: new THREE.Vector3(-48.0, 0.0, -19.0),
+        lightSpecs: [],
+        cullableProps: [],
+        shouldUpdate: true,
+        propsVisible: true,
+        updateFn: (d, et, c) => this.sonTinhThuyTinhRoom?.update?.(d, et, c)
+      },
+      {
+        key: 'namQuocSonHa',
+        room: this.namQuocSonHaRoom,
+        center: new THREE.Vector3(-48.0, 10.0, -19.0),
+        lightSpecs: [],
+        cullableProps: [],
+        shouldUpdate: true,
+        propsVisible: true,
+        updateFn: (d, et, c) => this.namQuocSonHaRoom?.update?.(d, et, c)
+      },
+      {
+        key: 'anDuongVuong',
+        room: this.anDuongVuongRoom,
+        center: new THREE.Vector3(0.0, 0.0, -48.0),
+        lightSpecs: [],
+        cullableProps: [],
+        shouldUpdate: true,
+        propsVisible: true,
+        updateFn: (d, et, c) => this.anDuongVuongRoom?.update?.(d, et, c)
+      },
+      {
+        key: 'voNhat',
+        room: this.voNhatRoom,
+        center: new THREE.Vector3(48.0, 20.0, -19.0),
+        lightSpecs: [],
+        cullableProps: [],
+        shouldUpdate: true,
+        propsVisible: true,
+        updateFn: (d, et, c) => this.voNhatRoom?.update?.(d, et, c)
+      },
+      {
+        key: 'tatDen',
+        room: this.tatDenRoom,
+        center: new THREE.Vector3(-48.0, 20.0, -19.0),
+        lightSpecs: [],
+        cullableProps: [],
+        shouldUpdate: true,
+        propsVisible: true,
+        updateFn: (d, et, c) => this.tatDenRoom?.userData?.update?.(d, et, c)
+      }
+    ];
+  }
+
+  _isStructuralShellNode(node) {
+    if (!node || node.isLight || node.isPoints || node.isSprite) return false;
+    const lowerName = (node.name || '').toLowerCase();
+    if (!lowerName) return false;
+
+    // Loại trừ rõ ràng các vật thể nội thất dù tên có chứa từ khóa kiến trúc (vd: floorCarpet, SideWallPanels, wallRelief)
+    if (
+      lowerName.includes('carpet') ||
+      lowerName.includes('halo') ||
+      lowerName.includes('warmring') ||
+      lowerName.includes('floor_inlay') ||
+      lowerName.includes('sidewallpanel') ||
+      lowerName.includes('wallpanel') ||
+      lowerName.includes('wallrelief') ||
+      lowerName.includes('spear') ||
+      lowerName.includes('plinth') ||
+      lowerName.includes('pedestal') ||
+      lowerName.includes('thatch') ||
+      lowerName.includes('mural')
+    ) {
+      return false;
+    }
+
+    return (
+      lowerName.includes('wall') ||
+      lowerName.includes('enclosure') ||
+      lowerName.includes('floor') ||
+      lowerName.includes('ceiling') ||
+      lowerName.includes('canopy') ||
+      lowerName.includes('roof') ||
+      lowerName.includes('arch') ||
+      lowerName.includes('gate') ||
+      lowerName.includes('lintel') ||
+      lowerName.includes('pier') ||
+      lowerName.includes('door')
+    );
+  }
+
+  collectSceneLightsAndCullTargets() {
+    if (!this.mainScene || !this._roomEntries) return;
+
+    const roomMap = new Map();
+    for (let i = 0; i < this._roomEntries.length; i++) {
+      const entry = this._roomEntries[i];
+      for (let p = 0; p < entry.cullableProps.length; p++) {
+        const oldProp = entry.cullableProps[p];
+        if (oldProp) oldProp.visible = true;
+      }
+      entry.cullableProps.length = 0;
+      if (entry.room) roomMap.set(entry.room, entry);
+    }
+
+    const poolSet = new Set(this._roomLightPool || []);
+    const lightsToDetach = [];
+
+    // 1. Ghi nhận thông số đèn phòng/sảnh và tách khỏi scene (chỉ dùng Pool 3 PointLight cố định)
+    this.mainScene.traverse((child) => {
+      if (!child.isLight) return;
+      child.castShadow = false;
+      if (poolSet.has(child)) {
+        child.visible = true;
+        return;
+      }
+
+      let p = child.parent;
+      let inGlobalLighting = false;
+      let ownerEntry = null;
+      while (p) {
+        if (p === this.lightingGroup) {
+          inGlobalLighting = true;
+          break;
+        }
+        if (!ownerEntry && roomMap.has(p)) {
+          ownerEntry = roomMap.get(p);
+        }
+        p = p.parent;
+      }
+      if (inGlobalLighting) {
+        child.visible = true;
+        return;
+      }
+
+      if (!this._collectedLights.has(child)) {
+        this._collectedLights.add(child);
+        if (child.isPointLight || child.isSpotLight) {
+          child.updateWorldMatrix(true, false);
+          child.getWorldPosition(this._tempLightPos);
+          const intensity = child.intensity ?? 1.0;
+          const spec = {
+            worldPos: this._tempLightPos.clone(),
+            color: child.color?.getHex?.() ?? 0xfff1e0,
+            intensity: Math.min(intensity, 6.5),
+            distance: child.distance > 0 ? child.distance : 24.0,
+            decay: child.decay ?? 1.5,
+            priority: (child.isSpotLight ? 2.0 : 1.0) * intensity
+          };
+          if (ownerEntry) {
+            ownerEntry.lightSpecs.push(spec);
+            ownerEntry.lightSpecs.sort((a, b) => b.priority - a.priority);
+          } else {
+            this._lobbyLightSpecs.push(spec);
+            this._lobbyLightSpecs.sort((a, b) => b.priority - a.priority);
+          }
+        }
+      }
+
+      child.visible = false;
+      lightsToDetach.push(child);
+    });
+
+    for (let i = 0; i < lightsToDetach.length; i++) {
+      const l = lightsToDetach[i];
+      if (l.parent) l.parent.remove(l);
+    }
+
+    // 2. Chừa 100% lớp vỏ kiến trúc phòng (tường/sàn/trần/cửa vòm/cổng) + cha của chúng, cull toàn bộ nội thất còn lại
+    for (let i = 0; i < this._roomEntries.length; i++) {
+      const entry = this._roomEntries[i];
+      if (!entry.room) continue;
+
+      entry.room.visible = true;
+      const shellNodes = new Set();
+      const structuralAncestors = new Set();
+
+      const markStructural = (node) => {
+        if (!node) return false;
+        if (node !== entry.room && this._isStructuralShellNode(node)) {
+          shellNodes.add(node);
+          return true;
+        }
+        let hasShellChild = false;
+        const children = node.children;
+        if (children && children.length > 0) {
+          for (let c = 0; c < children.length; c++) {
+            if (markStructural(children[c])) {
+              hasShellChild = true;
+            }
+          }
+        }
+        if (hasShellChild) {
+          structuralAncestors.add(node);
+        }
+        return hasShellChild;
+      };
+
+      const collectCullNodes = (node) => {
+        if (!node || shellNodes.has(node)) return;
+        if (node !== entry.room && !structuralAncestors.has(node)) {
+          entry.cullableProps.push(node);
+          if (node.visible !== entry.propsVisible) {
+            node.visible = Boolean(entry.propsVisible);
+          }
+          return;
+        }
+        const children = node.children;
+        if (children && children.length > 0) {
+          for (let c = 0; c < children.length; c++) {
+            collectCullNodes(children[c]);
+          }
+        }
+      };
+
+      markStructural(entry.room);
+      shellNodes.forEach((n) => { n.visible = true; });
+      structuralAncestors.forEach((n) => { n.visible = true; });
+      collectCullNodes(entry.room);
+    }
+  }
+
+  freezeStaticMatrices() {
+    if (!this.mainScene) return;
+    const freezePureStatic = (root) => {
+      if (!root) return;
+      root.updateMatrixWorld(true);
+      root.traverse((obj) => {
+        if (obj.isLight || obj.isCamera || obj.isPoints || obj.userData?.isDynamic) return;
+        const lower = (obj.name || '').toLowerCase();
+        if (lower.includes('book') || lower.includes('flame') || lower.includes('lantern') || lower.includes('water') || lower.includes('cloud') || lower.includes('crowd') || lower.includes('portal')) {
+          return;
+        }
+        obj.updateMatrix();
+        obj.matrixAutoUpdate = false;
+        if (obj.children.length === 0) {
+          obj.matrixWorldAutoUpdate = false;
+        }
+      });
+    };
+
+    try {
+      if (this.atriumGroup) {
+        this.atriumGroup.updateMatrixWorld(true);
+        this.atriumGroup.matrixAutoUpdate = false;
+      }
+      freezePureStatic(this.lightingGroup);
+      freezePureStatic(this.architecture?.getGroup?.());
+      freezePureStatic(this.staircase?.getGroup?.());
+      freezePureStatic(this.modelCreator?.getGroup?.());
+
+      // Đóng băng các tường vỏ phòng tĩnh (chỉ leaf structural meshes)
+      if (this._roomEntries) {
+        for (let i = 0; i < this._roomEntries.length; i++) {
+          const room = this._roomEntries[i].room;
+          if (!room) continue;
+          room.updateMatrixWorld(true);
+          room.traverse((obj) => {
+            if (obj.userData?.isDynamic || obj.isLight || obj.isPoints || obj.isSprite) return;
+            if (this._isStructuralShellNode(obj) && obj.children.length === 0) {
+              obj.updateMatrix();
+              obj.matrixAutoUpdate = false;
+              obj.matrixWorldAutoUpdate = false;
+            }
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('[FREEZE MATRIX] Warning:', err);
+    }
+  }
+
+  prewarmSceneShaders(targetScene = this.mainScene) {
+    if (!this.renderer || !targetScene || !this.camera) return;
+    const savedHidden = [];
+    const savedFrustumStates = [];
+    try {
+      if (targetScene === this.mainScene && this._roomEntries) {
+        for (let i = 0; i < this._roomEntries.length; i++) {
+          const props = this._roomEntries[i].cullableProps;
+          for (let p = 0; p < props.length; p++) {
+            const node = props[p];
+            if (node && !node.visible) {
+              savedHidden.push(node);
+              node.visible = true;
+            }
+          }
+        }
+      }
+
+      if (this._roomLightPool) {
+        for (let i = 0; i < this._roomLightPool.length; i++) {
+          this._roomLightPool[i].visible = true;
+        }
+      }
+
+      this._prewarmedTextures = this._prewarmedTextures || new WeakSet();
+      const texKeys = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap', 'alphaMap', 'bumpMap', 'envMap'];
+      let meshCount = 0;
+
+      targetScene.traverse((child) => {
+        if (!child.isMesh && !child.isSprite && !child.isPoints) return;
+        meshCount++;
+        savedFrustumStates.push(child, child.frustumCulled);
+        child.frustumCulled = false;
+
+        const matOrArr = child.material;
+        if (!matOrArr) return;
+        const mats = Array.isArray(matOrArr) ? matOrArr : [matOrArr];
+        for (let m = 0; m < mats.length; m++) {
+          const mat = mats[m];
+          if (!mat) continue;
+          for (let k = 0; k < texKeys.length; k++) {
+            const tex = mat[texKeys[k]];
+            if (tex && tex.isTexture && !this._prewarmedTextures.has(tex)) {
+              this._prewarmedTextures.add(tex);
+              this.renderer.initTexture(tex);
+            }
+          }
+        }
+      });
+
+      this.renderer.compile(targetScene, this.camera);
+
+      // Thực thi 1 warm-up draw call toàn cảnh (frustumCulled=false) để GPU/D3D11 nạp sẵn toàn bộ VBO lúc boot
+      if (targetScene !== this.mainScene || meshCount !== this._lastPrewarmedMeshCount) {
+        this.renderer.render(targetScene, this.camera);
+        this.renderer.clear();
+        this.renderer.info?.reset?.();
+        this.performanceOptimizer?.resetSampling?.(1800);
+      }
+      if (targetScene === this.mainScene) {
+        this._lastPrewarmedMeshCount = meshCount;
+      }
+    } catch (err) {
+      console.warn('[PREWARM] Lỗi pre-compile shaders/textures/VBOs:', err);
+    } finally {
+      for (let i = 0; i < savedFrustumStates.length; i += 2) {
+        savedFrustumStates[i].frustumCulled = savedFrustumStates[i + 1];
+      }
+      for (let i = 0; i < savedHidden.length; i++) {
+        savedHidden[i].visible = false;
+      }
+    }
   }
 
   /**
-   * VÔ HIỆU HÓA PROXIMITY STREAMING (LUÔN LOAD VÀ BẬT SÁNG TOÀN BỘ BẢO TÀNG):
-   * - Luôn bật Layer 1 hiển thị toàn cục cho camera.
-   * - Luôn hiển thị và bật đầy đủ hệ thống chiếu sáng/VFX của Phòng 01 (RoomDecorator).
-   * - Luôn bật toàn bộ ánh sáng của 14 phòng còn lại trong RoomGenerator.
-   * Người chơi đứng ở bất cứ góc nào trong bảo tàng cũng thấy đầy đủ ánh sáng, vật phẩm và không bị mất cảnh quan từ xa.
+   * CẬP NHẬT CULLING PHÒNG, POOL 3 POINTLIGHT VÀ NHÓM NỘI THẤT THEO VỊ TRÍ CAMERA (O(7))
    */
-  /**
-   * CẬP NHẬT CULLING, PROXIMITY VÀ TỐI ƯU HÓA HẬU KỲ THEO VỊ TRÍ CAMERA
-   */
-  updateRoomCullingAndLayers() {
+  updateRoomCullingAndLayers(force = false) {
     if (!this.camera) return;
 
-    // 1. Luôn kích hoạt Layer 1 toàn cục cho camera
     this.camera.layers.enable(1);
-
-    // 2. TỐI ƯU HẬU KỲ: CHỈ BẬT EFFECTCOMPOSER / BLOOM KHI Ở PHÒNG ĐẶC BIỆT (< 24M) HOẶC CÕI KIỀU.
-    // TẮT HOÀN TOÀN KHI Ở SẢNH CHÍNH ĐỂ ĐẠT 60+ FPS ỔN ĐỊNH TUYỆT ĐỐI!
-    this._kieuRoomPos = this._kieuRoomPos || new THREE.Vector3(-48, 10, 19);
-    const distToKieuRoom = this.camera.position.distanceTo(this._kieuRoomPos);
-    const isSpecialRoomActive = distToKieuRoom < 24.0 || (this.truyenKieuStoryWorld?.isInsideWorld ?? false);
-
     if (this.postProcessing) {
-      // TẮT MẶC ĐỊNH POST-PROCESSING CHO GTX 1050: Không kích hoạt EffectComposer ngốn VRAM
       this.postProcessing.setEnabled(false);
     }
 
-    // 3. Phòng 01 (RoomDecorator) tự động ngắt vẽ theo Frustum Culling
-    if (this.roomDecorator) {
-      const room1Group = typeof this.roomDecorator.getGroup === 'function'
-        ? this.roomDecorator.getGroup()
-        : (this.roomDecorator.isObject3D ? this.roomDecorator : this.roomDecorator.group);
-      if (room1Group) {
-        room1Group.visible = true; // Frustum Culling tự động loại bỏ các mesh ngoài FOV
-        this.roomDecorator.setLightsActive?.(distToKieuRoom < 48.0);
+    if (!this._roomEntries || !this._lastCullCamPos) return;
+    const camPos = this.camera.position;
+
+    if (!force && camPos.distanceToSquared(this._lastCullCamPos) < 0.04) {
+      return;
+    }
+    this._lastCullCamPos.copy(camPos);
+
+    // 1. Tìm 1 phòng gần nhất trong bán kính <= 32m trên cùng tầng
+    let closestEntry = null;
+    let closestDistSq = 32.0 * 32.0;
+
+    for (let i = 0; i < this._roomEntries.length; i++) {
+      const entry = this._roomEntries[i];
+      const dx = camPos.x - entry.center.x;
+      const dy = Math.abs(camPos.y - entry.center.y);
+      const dz = camPos.z - entry.center.z;
+      const distSq = dx * dx + dy * dy + dz * dz;
+
+      const sameFloor = dy <= 7.0;
+      entry.shouldUpdate = sameFloor && distSq <= (42.0 * 42.0);
+
+      const showProps = sameFloor && distSq <= (48.0 * 48.0);
+      if (force || entry.propsVisible !== showProps) {
+        entry.propsVisible = showProps;
+        for (let p = 0; p < entry.cullableProps.length; p++) {
+          const prop = entry.cullableProps[p];
+          if (prop && prop.visible !== showProps) {
+            prop.visible = showProps;
+          }
+        }
+      }
+
+      if (sameFloor && distSq <= closestDistSq) {
+        closestDistSq = distSq;
+        closestEntry = entry;
+      }
+    }
+
+    // 2. Cập nhật Pool 3 PointLight cố định (KHÔNG BAO GIỜ đổi light.visible -> 0 shader recompile)
+    if (this._roomLightPool && this._roomLightPool.length > 0) {
+      const distLobbySq = camPos.distanceToSquared(this._lobbyCenter);
+      const useLobbyLights = !closestEntry && camPos.y < 9.0 && distLobbySq <= (28.0 * 28.0);
+      const activeSpecs = closestEntry
+        ? closestEntry.lightSpecs
+        : (useLobbyLights ? this._lobbyLightSpecs : null);
+
+      for (let i = 0; i < this._roomLightPool.length; i++) {
+        const poolLight = this._roomLightPool[i];
+        const spec = activeSpecs && i < activeSpecs.length ? activeSpecs[i] : null;
+        if (spec) {
+          poolLight.position.copy(spec.worldPos);
+          poolLight.color.setHex(spec.color);
+          poolLight.intensity = spec.intensity;
+          poolLight.distance = spec.distance;
+          poolLight.decay = spec.decay;
+        } else {
+          poolLight.intensity = 0;
+        }
+        poolLight.visible = true;
       }
     }
   }
@@ -1230,7 +1910,11 @@ class LiteratureCathedralApp {
         this.camera.aspect = w / h;
         this.camera.updateProjectionMatrix();
         this.renderer?.setSize(w, h);
-        this.renderer?.setPixelRatio(0.85); // Giữ cố định 0.85 khi resize cho GTX 1050
+        if (this.performanceOptimizer?.applyCurrentPixelRatio) {
+          this.performanceOptimizer.applyCurrentPixelRatio();
+        } else {
+          this.renderer?.setPixelRatio(Math.min(window.devicePixelRatio || 1, 0.85));
+        }
       } catch (e) {
         console.warn("[SELF-HEALING] Lỗi resize handler:", e);
       }
@@ -1239,49 +1923,36 @@ class LiteratureCathedralApp {
 
   animate = (time) => {
     requestAnimationFrame(this.animate);
-    
-    // CỐ ĐỊNH CƠ CHẾ RENDER LƯỜI / THẬN TRỌNG (ON-DEMAND / CAUTIOUS RAF):
-    // 1. Tự động ngắt render khi tab trình duyệt đang ẩn (tiết kiệm 100% CPU/GPU, triệt tiêu rò rỉ bộ nhớ)
-    if (typeof document !== 'undefined' && document.hidden) return;
 
-    // 2. Khóa cứng thời gian tối thiểu 16ms/frame (Max 60 FPS trên PC, mở khóa 72+ FPS khi ở WebXR VR)
-    const isVR = this.renderer?.xr?.isPresenting;
-    if (!isVR) {
-      const now = performance.now();
-      if (this.lastFrameTime === undefined) this.lastFrameTime = now;
-      const elapsedMs = now - this.lastFrameTime;
-      if (elapsedMs < 16.0) return;
-      if (elapsedMs > 250.0) {
-        this.lastFrameTime = now; // Khôi phục mốc thời gian mượt mà, chống giật khựng/nhảy cóc delta sau khi chuyển tab
-      } else {
-        this.lastFrameTime = now - (elapsedMs % 16.0);
-      }
+    // Tự động ngắt render khi tab trình duyệt đang ẩn
+    if (typeof document !== 'undefined' && document.hidden) {
+      this._wasTabHidden = true;
+      return;
     }
-    
-    try {
-      // Reset bộ đếm thống kê render khi autoReset = false
-      this.renderer?.info?.reset?.();
 
-      const delta = Math.min(this.clock?.getDelta() ?? 0.016, 0.05);
+    try {
+      const rawDelta = this.clock?.getDelta() ?? 0.016;
+      const delta = this._wasTabHidden ? 0.016 : Math.min(rawDelta, 0.05);
+      this._wasTabHidden = false;
       const elapsedTime = this.clock?.getElapsedTime() ?? 0;
 
-      // Quét dọn tự động định kỳ ở các frame đầu để loại trừ mọi helper/bulb khi các model GLTF nạp xong
+      // Quét dọn định kỳ ở frame 60 & 180 để đồng bộ GLBs vừa tải và pre-compile nếu có mesh mới
       if (this.frameCounter === undefined) this.frameCounter = 0;
       this.frameCounter++;
-      if (this.frameCounter === 30 || this.frameCounter === 90) {
+      if (this.frameCounter === 60 || this.frameCounter === 180) {
         this.cleanupLightHelpers();
+        const meshCount = this.optimizeSubtree(this.mainScene);
+        this.collectSceneLightsAndCullTargets();
+        this.freezeStaticMatrices();
+        if (meshCount !== this._lastPrewarmedMeshCount) {
+          this.prewarmSceneShaders(this.mainScene);
+        }
+        this.updateRoomCullingAndLayers(true);
       }
 
       this.cameraManager?.update(delta);
-
-      // Cập nhật hệ thống trải nghiệm đa giác quan (WebXR teleport & Spatial Audio)
       this.immersionSystem?.update?.();
-
-      // Cập nhật Đạo diễn Auto-Tour tự động tham quan bảo tàng
       this.autoTour?.update(performance.now());
-
-      // Cập nhật Động cơ Tái thiết kế toàn diện (hiệu ứng hạt linh khí & bệ hoa sen)
-      this.totalOverhaulEngine?.update(elapsedTime);
 
       if (this.renderer?.xr && !this._vrSessionBound) {
         this._vrSessionBound = true;
@@ -1294,12 +1965,8 @@ class LiteratureCathedralApp {
         });
       }
 
-      // Cập nhật hệ thống đám đông bóng đen (Museum Crowd Simulation)
-      this.museumCrowd?.update(delta, elapsedTime, this.camera);
-
       // MULTI-SCENE ARCHITECTURE: CHỈ CẬP NHẬT CÁC HỆ THỐNG CỦA SCENE ĐANG ACTIVE
       if (this.activeScene === this.mainScene) {
-        // Đảm bảo mở khóa ngoại cảnh Tràng An luôn hiển thị và hoạt ảnh mây trôi được cập nhật
         if (this.exteriorVista?.group && !this.exteriorVista.group.visible) {
           this.exteriorVista.group.visible = true;
         }
@@ -1311,47 +1978,63 @@ class LiteratureCathedralApp {
           this.kieuWorld.group.visible = false;
         }
 
+        this.museumCrowd?.update(delta, elapsedTime, this.camera);
+        this.totalOverhaulEngine?.update(elapsedTime);
         updateProceduralLighting(elapsedTime);
         this.portalInteraction?.update(delta, elapsedTime);
         this.updateRoomCullingAndLayers();
         this.roomGenerator?.update(delta, elapsedTime, this.camera);
-        if (this.truyenKieuRoom?.update) {
-          this.truyenKieuRoom.update(delta, elapsedTime, this.camera);
-        } else if (this.roomDecorator?.update) {
-          this.roomDecorator.update(delta, elapsedTime, this.camera);
+
+        if (this._roomEntries) {
+          for (let i = 0; i < this._roomEntries.length; i++) {
+            const entry = this._roomEntries[i];
+            if (entry.shouldUpdate) {
+              entry.updateFn(delta, elapsedTime, this.camera);
+            }
+          }
         }
-        this.thanhGiongRoom?.update?.(delta, elapsedTime, this.camera);
-        this.sonTinhThuyTinhRoom?.update?.(delta, elapsedTime, this.camera);
-        this.namQuocSonHaRoom?.update?.(delta, elapsedTime, this.camera);
-        this.anDuongVuongRoom?.update?.(delta, elapsedTime, this.camera);
-        this.voNhatRoom?.update?.(delta, elapsedTime, this.camera);
         this.lobbyDecorator?.updateLobby?.(elapsedTime, delta);
-      } else if (this.activeScene === this.truyenKieuScene) {
-        if (this.truyenKieuStoryWorld?.worldGroup && !this.truyenKieuStoryWorld.worldGroup.visible) {
-          this.truyenKieuStoryWorld.worldGroup.visible = true;
+        if (this.ultimate16Skills?.updateAll) {
+          this.ultimate16Skills.updateAll(performance.now());
         }
-        this.truyenKieuRoom?.updateRealm?.(delta, elapsedTime, this.camera);
-        this.truyenKieuStoryWorld?.update(delta, elapsedTime);
-        this.kieuWorld?.update?.(delta, elapsedTime);
+      } else if (this.activeScene === this.truyenKieuScene) {
+        // Chỉ hiển thị & cập nhật duy nhất 1 nhánh Truyện Kiều đang vào
+        if (this.truyenKieuRoom?.isInsideRealm?.()) {
+          if (this.truyenKieuStoryWorld?.worldGroup) this.truyenKieuStoryWorld.worldGroup.visible = false;
+          if (this.kieuWorld?.group) this.kieuWorld.group.visible = false;
+          this.truyenKieuRoom.updateRealm?.(delta, elapsedTime, this.camera);
+        } else if (this.truyenKieuStoryWorld?.isInsideWorld) {
+          if (this.truyenKieuStoryWorld.worldGroup && !this.truyenKieuStoryWorld.worldGroup.visible) {
+            this.truyenKieuStoryWorld.worldGroup.visible = true;
+          }
+          if (this.kieuWorld?.group) this.kieuWorld.group.visible = false;
+          this.truyenKieuStoryWorld.update(delta, elapsedTime);
+        } else if (this.worldManager?.currentState === WORLD_STATES.KIEU_WORLD) {
+          if (this.truyenKieuStoryWorld?.worldGroup) this.truyenKieuStoryWorld.worldGroup.visible = false;
+          this.kieuWorld?.update?.(delta, elapsedTime);
+        }
       } else if (this.activeScene === this.sonTinhThuyTinhScene) {
         this.sonTinhThuyTinhRoom?.updateRealm?.(delta, elapsedTime, this.camera);
       } else if (this.activeScene === this.anDuongVuongScene) {
         this.anDuongVuongRoom?.updateRealm?.(delta, elapsedTime, this.camera);
       } else if (this.activeScene === this.voNhatScene) {
         this.voNhatRoom?.updateRealm?.(delta, elapsedTime, this.camera);
+      } else if (this.activeScene === this.tatDenScene) {
+        this.tatDenRoom?.updateRealm?.(delta, elapsedTime, this.camera);
+      } else if (this.activeScene === this.namQuocSonHaScene) {
+        this.namQuocSonHaRoom?.updateRealm?.(delta, elapsedTime, this.camera);
+      } else if (this.activeScene === this.thanhGiongScene) {
+        (this.thanhGiongRoom?.updateRealm || this.thanhGiongRoom?.userData?.updateRealm)?.(delta, elapsedTime, this.camera);
       }
 
-      this.performanceOptimizer?.update(delta);
       this.worldManager?.update(delta, elapsedTime);
-      if (this.ultimate16Skills?.updateAll) {
-        this.ultimate16Skills.updateAll(performance.now());
-      }
 
-      // CƠ CHẾ HOÁN ĐỔI SCENE (SCENE SWAPPING):
-      // CHỈ render scene đang active (this.activeScene) để triệt tiêu Draw Calls & giải phóng VRAM
+      // Reset stats trước render và đọc lại ngay sau render() để HUD đo chính xác DC & Tris
+      this.renderer?.info?.reset?.();
       if (this.renderer && this.activeScene && this.camera) {
         this.renderer.render(this.activeScene, this.camera);
       }
+      this.performanceOptimizer?.update(delta);
     } catch (err) {
       console.error("[SELF-HEALING LOOP] Lỗi render loop, phục hồi trực tiếp:", err);
       if (this.renderer && this.activeScene && this.camera) {

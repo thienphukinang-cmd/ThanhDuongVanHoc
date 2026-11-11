@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGroupMeshesByMaterial } from '../utils/geometryMerger.js';
 
 /**
  * INDOCHINE BALUSTRADES SYSTEM (HỆ THỐNG LAN CAN CỔ ĐIỂN ĐÔNG DƯƠNG)
@@ -33,9 +34,7 @@ export class IndochineBalustrades {
   getMat(name) {
     return this.matLib?.get?.(name) ?? new THREE.MeshLambertMaterial({
       color: 0xf5f3ee,
-      roughness: 0.25,
-      metalness: 0.05,
-      side: THREE.DoubleSide
+      side: THREE.FrontSide
     });
   }
 
@@ -64,28 +63,20 @@ export class IndochineBalustrades {
   }
 
   /**
-   * Tạo hình dáng con tiện cổ điển Indochine (LatheGeometry)
-   * Chiều cao: 0.78m, phân bố đường cong bình hoa / hồ lô Đông Dương mềm mại
+   * Tạo hình dáng con tiện cổ điển Indochine (LatheGeometry tối ưu: 6 điểm biên dạng x 6 mặt = 60 tris)
+   * Bảo toàn dáng bình hoa / hồ lô Đông Dương cân đối, giảm 61.5% số tam giác trên mỗi con tiện.
    */
   createBalusterGeometry() {
     const points = [
-      new THREE.Vector2(0.065, 0.0),
-      new THREE.Vector2(0.065, 0.08),
-      new THREE.Vector2(0.055, 0.10),
-      new THREE.Vector2(0.075, 0.14),
-      new THREE.Vector2(0.070, 0.18),
-      new THREE.Vector2(0.052, 0.22),
+      new THREE.Vector2(0.066, 0.00),
+      new THREE.Vector2(0.052, 0.18),
       new THREE.Vector2(0.088, 0.36),
-      new THREE.Vector2(0.082, 0.46),
-      new THREE.Vector2(0.046, 0.54),
-      new THREE.Vector2(0.052, 0.58),
-      new THREE.Vector2(0.046, 0.62),
-      new THREE.Vector2(0.068, 0.70),
-      new THREE.Vector2(0.072, 0.75),
+      new THREE.Vector2(0.048, 0.56),
+      new THREE.Vector2(0.072, 0.70),
       new THREE.Vector2(0.065, 0.78)
     ];
 
-    const geo = new THREE.LatheGeometry(points, 6); // Cắt giảm con tiện xuống 6 mặt
+    const geo = new THREE.LatheGeometry(points, 6);
     this.prepareGeometry(geo);
     return geo;
   }
@@ -134,7 +125,8 @@ export class IndochineBalustrades {
       segments.push({ p1: [62.5, -62.5], p2: [62.5, 62.5], y: 10.0, name: "Perimeter_East_L2" });
 
       // Hành lang trong hướng giếng trời 44m x 44m (tọa độ +-22m)
-      segments.push({ p1: [-22.0, -22.0], p2: [22.0, -22.0], y: 10.0, name: "Corridor_North_L2" });
+      segments.push({ p1: [-22.0, -22.0], p2: [-2.8, -22.0], y: 10.0, name: "Corridor_North_West_L2" });
+      segments.push({ p1: [2.8, -22.0], p2: [22.0, -22.0], y: 10.0, name: "Corridor_North_East_L2" });
       segments.push({ p1: [-22.0, 22.0], p2: [22.0, 22.0], y: 10.0, name: "Corridor_South_L2" });
 
       // Cánh Tây & Đông mở khoảng thông thủy (Z = 13.0m đến 18.0m) để vế thang chữ Y kết nối trực tiếp vào sàn Tầng 2
@@ -168,9 +160,23 @@ export class IndochineBalustrades {
       const balusterSpacing = 0.44; // Khoảng cách giữa các con tiện
       const postSpacing = 6.2;      // Khoảng cách giữa các trụ chính
 
-      const balusterTransforms = [];
+      const balusterBuckets = new Map();
       const postTransforms = [];
       const dummy = new THREE.Object3D();
+      const ptScratch = new THREE.Vector3();
+
+      const getBalusterBucketKey = (bx, bz) => {
+        if (Math.abs(bx) <= 23.0 && Math.abs(bz) <= 23.0) {
+          if (Math.abs(bz) >= Math.abs(bx)) {
+            return bz < 0 ? 'Corridor_North' : 'Corridor_South';
+          }
+          return bx < 0 ? 'Corridor_West' : 'Corridor_East';
+        }
+        if (Math.abs(bz) >= Math.abs(bx)) {
+          return (bz < 0 ? 'Perim_North' : 'Perim_South') + (bx < 0 ? '_W' : '_E');
+        }
+        return (bx < 0 ? 'Perim_West' : 'Perim_East') + (bz < 0 ? '_N' : '_S');
+      };
 
       // Nhóm chứa gờ đáy và tay vịn
       const railsGroup = new THREE.Group();
@@ -240,7 +246,7 @@ export class IndochineBalustrades {
           postTransforms.push(dummy.matrix.clone());
         }
 
-        // D. TÍNH TOÁN VỊ TRÍ HÀNG CON TIỆN (Balusters)
+        // D. TÍNH TOÁN VỊ TRÍ HÀNG CON TIỆN (Balusters) - Phân cụm theo cánh để frustum culling thật sự hiệu quả
         const balCount = Math.max(1, Math.floor(len / balusterSpacing));
         const balStep = len / balCount;
         for (let b = 0; b < balCount; b++) {
@@ -265,31 +271,62 @@ export class IndochineBalustrades {
           dummy.scale.set(1, 1, 1);
           dummy.updateMatrix();
 
-          balusterTransforms.push(dummy.matrix.clone());
+          const bKey = getBalusterBucketKey(bx, bz);
+          let bucket = balusterBuckets.get(bKey);
+          if (!bucket) {
+            bucket = { matrices: [], box: new THREE.Box3() };
+            balusterBuckets.set(bKey, bucket);
+          }
+          bucket.matrices.push(dummy.matrix.clone());
+          ptScratch.set(bx, by, bz);
+          bucket.box.expandByPoint(ptScratch);
+          ptScratch.set(bx, by + 0.78, bz);
+          bucket.box.expandByPoint(ptScratch);
         }
       });
 
       this.group.add(railsGroup);
 
-      // -----------------------------------------------------------------------
-      // KHỞI TẠO THREE.InstancedMesh CHO TOÀN BỘ CON TIỆN (1 SINGLE DRAW CALL)
-      // -----------------------------------------------------------------------
-      const totalBalusters = balusterTransforms.length;
-      console.log(`%c[INDOCHINE BALUSTRADES] Tạo ${totalBalusters} con tiện qua THREE.InstancedMesh (1 Draw Call)!`, "color: #39e58c; font-weight: bold;");
+      // Gộp toàn bộ gờ đáy, tay vịn và nẹp vàng chạy dài (78 meshes -> 3 merged meshes)
+      mergeGroupMeshesByMaterial(railsGroup, {
+        namePrefix: 'Merged_Balustrade_Rails',
+        forceNoShadow: true,
+        excludeFromCollision: true,
+        ignoreRaycaster: true
+      });
 
-      const balusterInstanced = new THREE.InstancedMesh(balusterGeo, marbleMat, totalBalusters);
-      balusterInstanced.name = "Instanced_Indochine_Balusters";
-      balusterInstanced.frustumCulled = true;
-      balusterInstanced.castShadow = false; // Tắt hoàn toàn shadow pass cho hàng ngàn con tiện nhỏ
-      balusterInstanced.receiveShadow = false;
+      // -----------------------------------------------------------------------
+      // KHỞI TẠO THREE.InstancedMesh THEO CÁNH (FRUSTUM CULLING TIGHT BOUNDS)
+      // -----------------------------------------------------------------------
+      let totalBalusters = 0;
+      balusterBuckets.forEach((bucket, bKey) => {
+        const count = bucket.matrices.length;
+        if (count === 0) return;
+        totalBalusters += count;
 
-      for (let i = 0; i < totalBalusters; i++) {
-        balusterInstanced.setMatrixAt(i, balusterTransforms[i]);
-      }
-      balusterInstanced.instanceMatrix.needsUpdate = true;
-      balusterInstanced.computeBoundingBox();
-      balusterInstanced.computeBoundingSphere();
-      this.group.add(balusterInstanced);
+        bucket.box.expandByScalar(0.15);
+        const sphere = new THREE.Sphere();
+        bucket.box.getBoundingSphere(sphere);
+
+        const inst = new THREE.InstancedMesh(balusterGeo, marbleMat, count);
+        inst.name = `Instanced_Indochine_Balusters_${bKey}`;
+        inst.frustumCulled = true;
+        inst.castShadow = false;
+        inst.receiveShadow = false;
+        inst.matrixAutoUpdate = false;
+
+        for (let i = 0; i < count; i++) {
+          inst.setMatrixAt(i, bucket.matrices[i]);
+        }
+        inst.instanceMatrix.needsUpdate = true;
+        inst.boundingBox = bucket.box;
+        inst.boundingSphere = sphere;
+        inst.updateMatrix();
+        inst.userData = { excludeFromCollision: true, preventMerge: true };
+        this.group.add(inst);
+      });
+
+      console.log(`%c[INDOCHINE BALUSTRADES] Tạo ${totalBalusters} con tiện qua ${balusterBuckets.size} cụm InstancedMesh có frustum culling!`, "color: #39e58c; font-weight: bold;");
 
       // -----------------------------------------------------------------------
       // KHỞI TẠO THREE.InstancedMesh CHO TOÀN BỘ TRỤ CHÍNH (MASTER POSTS)
@@ -300,6 +337,7 @@ export class IndochineBalustrades {
       postInstanced.frustumCulled = true;
       postInstanced.castShadow = false;
       postInstanced.receiveShadow = false;
+      postInstanced.matrixAutoUpdate = false;
 
       for (let i = 0; i < totalPosts; i++) {
         postInstanced.setMatrixAt(i, postTransforms[i]);
@@ -307,9 +345,9 @@ export class IndochineBalustrades {
       postInstanced.instanceMatrix.needsUpdate = true;
       postInstanced.computeBoundingBox();
       postInstanced.computeBoundingSphere();
+      postInstanced.updateMatrix();
       this.group.add(postInstanced);
 
-      balusterInstanced.userData = { excludeFromCollision: true, preventMerge: true };
       postInstanced.userData = { excludeFromCollision: true, preventMerge: true };
       this.group.userData = { excludeFromCollision: true, preventMerge: true };
 

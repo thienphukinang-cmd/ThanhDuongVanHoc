@@ -1,7 +1,8 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { registerInteractiveBook } from './PortalInteraction.js';
 import { playBookSuckInCutscene, playBookReturnCutscene, playBookVortexCutscene } from './bookVortexCutscene.js';
+import { loadGlbCached } from '../utils/modelLoaderHelper.js';
+import { mergeGroupMeshesByMaterial } from '../utils/geometryMerger.js';
 import {
   ROOM_PALETTES,
   styleAndNormalizeGlbModel,
@@ -53,28 +54,12 @@ function getCachedTex(key, w, h, drawFn, repeatX = 1, repeatY = 1) {
   if ('colorSpace' in tex && THREE.SRGBColorSpace) {
     tex.colorSpace = THREE.SRGBColorSpace;
   }
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
   tex.needsUpdate = true;
   VN_CACHE[key] = tex;
   return tex;
-}
-
-
-
-function loadGlbWithFallback(loader, urls, onSuccess, onFail) {
-  let idx = 0;
-  const tryNext = () => {
-    if (idx >= urls.length) {
-      if (onFail) onFail();
-      return;
-    }
-    loader.load(
-      urls[idx++],
-      (gltf) => onSuccess(gltf.scene),
-      undefined,
-      () => tryNext()
-    );
-  };
-  tryNext();
 }
 
 function createVolumetricLightBeam(topRadius, bottomRadius, height, colorHex, opacity = 0.25) {
@@ -209,7 +194,11 @@ function createGiantHologramScreen(index) {
     ]
   ];
 
-  const tex = getCachedTex(`vn_giant_screen_v9_${index}`, 1536, 900, (ctx, w, h) => {
+  const tex = getCachedTex(`vn_giant_screen_v10_${index}`, 768, 450, (ctx) => {
+    ctx.save();
+    ctx.scale(0.5, 0.5);
+    const w = 1536;
+    const h = 900;
     const bgG = ctx.createLinearGradient(0, 0, w, h);
     bgG.addColorStop(0.0, 'rgba(32, 18, 8, 0.95)');
     bgG.addColorStop(0.5, 'rgba(45, 24, 12, 0.92)');
@@ -309,19 +298,19 @@ function buildFullRoomEnclosureWalls(interiorGroup, {
   const backMat = new THREE.MeshBasicMaterial({
     map: backWallTex,
     color: backWallTex ? 0xffffff : 0x2e1d0f,
-    side: THREE.DoubleSide,
+    side: THREE.FrontSide,
     fog: false
   });
   const leftMat = new THREE.MeshBasicMaterial({
     map: leftWallTex || backWallTex,
     color: leftWallTex ? 0xffffff : 0x362212,
-    side: THREE.DoubleSide,
+    side: THREE.FrontSide,
     fog: false
   });
   const rightMat = new THREE.MeshBasicMaterial({
     map: rightWallTex || backWallTex,
     color: rightWallTex ? 0xffffff : 0x362212,
-    side: THREE.DoubleSide,
+    side: THREE.FrontSide,
     fog: false
   });
   const trimMat = new THREE.MeshBasicMaterial({ color: trimColor, fog: false });
@@ -409,7 +398,6 @@ export function buildVoNhatExhibition({
   root.name = 'VoNhat_Master_Root';
   root.position.set(0, 0, 0);
 
-  const gltfLoader = new GLTFLoader();
   const candidateGlbUrls = [
     glbUrl,
     '/model/vonhat.glb',
@@ -581,7 +569,7 @@ export function buildVoNhatExhibition({
   // SÀN NHÀ RIÊNG: NỀN ĐẤT NỆN & CHIẾU CÓI MỞ RỘNG PHỦ KÍN 100% CĂN PHÒNG (25.8M x 27.6M)
   const floorCarpet = new THREE.Mesh(
     new THREE.PlaneGeometry(25.8, 27.6),
-    new THREE.MeshBasicMaterial({ map: earthenFloorTex, side: THREE.DoubleSide, fog: false })
+    new THREE.MeshBasicMaterial({ map: earthenFloorTex, side: THREE.FrontSide, fog: false })
   );
   floorCarpet.rotation.x = -Math.PI / 2;
   floorCarpet.position.set(0, 0.02, 0);
@@ -750,13 +738,12 @@ export function buildVoNhatExhibition({
   roomGlbHolder.position.set(0, 0.78, 0);
   roomStatuePedestal.add(roomGlbHolder);
 
-  loadGlbWithFallback(
-    gltfLoader,
-    candidateGlbUrls,
-    (rawScene) => {
-      const roomModel = prepareUnlitVividGlbModel(rawScene.clone(true), {
+  loadGlbCached(candidateGlbUrls, { maxTextureSize: 512 })
+    .then((rawScene) => {
+      const roomModel = prepareUnlitVividGlbModel(rawScene, {
         targetSpan: 3.1,
-        fitAxis: 'y'
+        fitAxis: 'y',
+        maxTextureSize: 512
       });
       roomGlbHolder.add(roomModel);
 
@@ -768,8 +755,8 @@ export function buildVoNhatExhibition({
           padding: 0.12
         });
       }
-    }
-  );
+    })
+    .catch(() => {});
 
   // 4 Cột Tre Đèn Dầu cao 7.8m ở 4 góc phòng (Rộng 25.8m x Sâu 27.6m)
   const pillarCoords = [
@@ -779,32 +766,37 @@ export function buildVoNhatExhibition({
     { pos: new THREE.Vector3(10.5, 0, 10.5), flameColor: 0xfb923c }
   ];
 
+  const staticPillarsGroup = new THREE.Group();
+  staticPillarsGroup.name = 'VN_Static_Pillars';
+  const sharedColGeo = new THREE.CylinderGeometry(0.34, 0.40, 7.6, 12);
+  const sharedKnotGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.12, 12);
+  const sharedFlameGeo = new THREE.OctahedronGeometry(0.42, 1);
+
   const lampFlames = [];
   pillarCoords.forEach(({ pos, flameColor }) => {
-    const pGroup = new THREE.Group();
-    pGroup.position.copy(pos);
-
-    const col = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.40, 7.6, 12), terracottaMat);
-    col.position.y = 3.8;
-    pGroup.add(col);
+    const col = new THREE.Mesh(sharedColGeo, terracottaMat);
+    col.position.set(pos.x, pos.y + 3.8, pos.z);
+    staticPillarsGroup.add(col);
 
     // Các đốt tre vàng
     for (let b = 1; b <= 6; b++) {
-      const knot = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.12, 12), bambooGoldMat);
-      knot.position.y = b * 1.15;
-      pGroup.add(knot);
+      const knot = new THREE.Mesh(sharedKnotGeo, bambooGoldMat);
+      knot.position.set(pos.x, pos.y + b * 1.15, pos.z);
+      staticPillarsGroup.add(knot);
     }
 
     const flame = new THREE.Mesh(
-      new THREE.OctahedronGeometry(0.42, 1),
+      sharedFlameGeo,
       new THREE.MeshBasicMaterial({ color: flameColor, fog: false })
     );
-    flame.position.y = 7.6;
-    pGroup.add(flame);
+    flame.position.set(pos.x, pos.y + 7.6, pos.z);
+    interiorGroup.add(flame);
     lampFlames.push(flame);
-
-    interiorGroup.add(pGroup);
   });
+  mergeGroupMeshesByMaterial(staticPillarsGroup);
+  sharedColGeo.dispose();
+  sharedKnotGeo.dispose();
+  interiorGroup.add(staticPillarsGroup);
 
   // Hệ thống đèn lồng ấm áp Vàng Rơm & Cam Đèn Dầu (InstancedMesh - 1 Draw Call - museumMasterBeautifier)
   const vnLanternPositions = [
@@ -978,13 +970,13 @@ export function buildVoNhatExhibition({
 
   // Đăng ký thẻ thơ tương tác & Âm thanh không gian 3D cho Nồi Chè Khoán & Ngọn Đèn Dầu
   if (typeof window !== 'undefined') {
-    window.__loreGuide?.registerArtifact(porridgePed, 'voNhat_nieuChao');
-    window.__spatialAudio?.attachPositionalSound('voNhat_nieuChao', porridgePed, {
+    window.__loreGuide?.registerArtifact(porridgeStation, 'voNhat_nieuChao');
+    window.__spatialAudio?.attachPositionalSound('voNhat_nieuChao', porridgeStation, {
       fallbackTheme: 'voNhat',
       refDistance: 6,
       maxDistance: 35
     });
-    window.__loreGuide?.registerArtifact(oilLampPed, 'voNhat_denDau');
+    window.__loreGuide?.registerArtifact(oilLampStation, 'voNhat_denDau');
   }
 
   // 3. Xe Bò Đẩy Thóc Của Tràng & Thúng Con Của Thị (Góc Phải Trước)
@@ -1111,17 +1103,16 @@ export function buildVoNhatExhibition({
   realmGlbHolder.position.set(0, 4.2, 0);
   villageHomeGroup.add(realmGlbHolder);
 
-  loadGlbWithFallback(
-    gltfLoader,
-    candidateGlbUrls,
-    (rawScene) => {
+  loadGlbCached(candidateGlbUrls, { maxTextureSize: 512 })
+    .then((rawScene) => {
       const giantVnModel = prepareUnlitVividGlbModel(rawScene, {
         targetSpan: 18.5,
-        fitAxis: 'y'
+        fitAxis: 'y',
+        maxTextureSize: 512
       });
       realmGlbHolder.add(giantVnModel);
-    }
-  );
+    })
+    .catch(() => {});
 
   // B2. BÊN PHẢI: ĐÊ LÀNG, KHO THÓC MỞ TUNG & ĐẠI KỲ ĐỎ SAO VÀNG TUNG BAY (X = +20m, Z = -24m)
   const revolutionDykeGroup = new THREE.Group();
@@ -1142,7 +1133,7 @@ export function buildVoNhatExhibition({
   giantPole.position.set(-4.5, 18.0, 0);
   revolutionDykeGroup.add(giantPole);
 
-  const giantFlagGeo = new THREE.PlaneGeometry(14.0, 9.2, 24, 16);
+  const giantFlagGeo = new THREE.PlaneGeometry(14.0, 9.2, 10, 6);
   const giantFlagMesh = new THREE.Mesh(giantFlagGeo, crimsonFlagMat);
   giantFlagMesh.position.set(2.5, 24.0, 0);
   revolutionDykeGroup.add(giantFlagMesh);
@@ -1156,8 +1147,8 @@ export function buildVoNhatExhibition({
 
   // Mặt đất đồng quê & đường đê phía dưới
   const groundPlane = new THREE.Mesh(
-    new THREE.PlaneGeometry(240, 240, 32, 32),
-    new THREE.MeshBasicMaterial({ color: 0x241409, side: THREE.DoubleSide, fog: false })
+    new THREE.PlaneGeometry(240, 240, 8, 8),
+    new THREE.MeshBasicMaterial({ color: 0x241409, side: THREE.FrontSide, fog: false })
   );
   groundPlane.rotation.x = -Math.PI / 2;
   groundPlane.position.y = -0.5;
@@ -1401,6 +1392,7 @@ export function buildVoNhatExhibition({
 
     const cam = _camera || window.__camera;
     if (!cam) return;
+    if (!roomGroup.visible || cam.position.distanceToSquared(roomCenter) > 32 * 32) return;
 
     if (document.pointerLockElement) {
       mouse.set(0, 0);
@@ -1460,6 +1452,10 @@ export function buildVoNhatExhibition({
     clockTime += delta;
 
     if (!_isInsideRealm) {
+      if (!roomGroup.visible) return;
+      const cam = _camera || (typeof window !== 'undefined' ? window.__camera : null);
+      if (cam && cam.position.distanceToSquared(roomCenter) > 42 * 42) return;
+
       promptBanner.position.y = 3.05 + Math.sin(clockTime * 2.5) * 0.05;
       bookMeshGroup.position.y = 1.72 + Math.sin(clockTime * 2.2) * 0.05;
       floorWarmRing.rotation.z += delta * 0.35;
@@ -1476,6 +1472,8 @@ export function buildVoNhatExhibition({
       }
       return;
     }
+
+    if (!vnRealmGroup.visible) return;
 
     // Chuyển động bụi rơm vàng & tà dương
     if (vnParticles && vnParticles.update) {
@@ -1534,13 +1532,13 @@ export function buildVoNhatExhibition({
       portalInteraction.registerInteractiveBook(bookAltar, realmObservationCamPos, portalBookMeta);
     }
     if (typeof window !== 'undefined') {
-      window.__loreGuide?.registerArtifact(porridgePed, 'voNhat_nieuChao');
-      window.__spatialAudio?.attachPositionalSound('voNhat_nieuChao', porridgePed, {
+      window.__loreGuide?.registerArtifact(porridgeStation, 'voNhat_nieuChao');
+      window.__spatialAudio?.attachPositionalSound('voNhat_nieuChao', porridgeStation, {
         fallbackTheme: 'voNhat',
         refDistance: 6,
         maxDistance: 35
       });
-      window.__loreGuide?.registerArtifact(oilLampPed, 'voNhat_denDau');
+      window.__loreGuide?.registerArtifact(oilLampStation, 'voNhat_denDau');
     }
   };
 

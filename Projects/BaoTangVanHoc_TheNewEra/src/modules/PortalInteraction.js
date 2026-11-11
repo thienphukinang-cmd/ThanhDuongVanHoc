@@ -141,6 +141,10 @@ export class PortalInteraction {
       mesh.userData.isTeleportBook = true;
       mesh.userData.isVoNhatTeleportBook = true;
     }
+    if (metadata.id === 'nam_quoc_son_ha' || metadata.targetRealm === 'NAM_QUOC_SON_HA_REALM') {
+      mesh.userData.isTeleportBook = true;
+      mesh.userData.isNamQuocSonHaTeleportBook = true;
+    }
 
     const worldPos = new THREE.Vector3();
     mesh.getWorldPosition(worldPos);
@@ -542,7 +546,7 @@ export class PortalInteraction {
         if (this.isTransitioning) return;
 
         // Bỏ qua nếu click vào UI HUD / Director panel
-        if (e.target.closest('#director-hud') || e.target.closest('#kieuworld-realm-hud') || e.target.closest('#directory-hud-modal') || e.target.closest('#sttt-realm-top-hud')) {
+        if (e.target.closest('#director-hud') || e.target.closest('#kieuworld-realm-hud') || e.target.closest('#directory-hud-modal') || e.target.closest('#sttt-realm-top-hud') || e.target.closest('#td-realm-top-hud')) {
           return;
         }
 
@@ -578,6 +582,15 @@ export class PortalInteraction {
               onAct();
             } else if (typeof this.loadNarrativeWorld === 'function') {
               this.loadNarrativeWorld('vo_nhat', result.rootBook.userData?.targetSceneCoordinates, result.rootBook.userData?.portalMetadata);
+            }
+            return;
+          }
+
+          if (targetRealm === 'TAT_DEN_REALM' || mId === 'tat_den_realm' || mId === 'tat_den') {
+            if (typeof onAct === 'function') {
+              onAct();
+            } else if (window.__tatDenRoom?.enterRealm) {
+              window.__tatDenRoom.enterRealm();
             }
             return;
           }
@@ -620,6 +633,15 @@ export class PortalInteraction {
               onAct();
             } else if (typeof this.loadNarrativeWorld === 'function') {
               this.loadNarrativeWorld('vo_nhat', this.hoveredRoot.userData?.targetSceneCoordinates, this.hoveredRoot.userData?.portalMetadata);
+            }
+            return;
+          }
+
+          if (targetRealm === 'TAT_DEN_REALM' || mId === 'tat_den_realm' || mId === 'tat_den') {
+            if (typeof onAct === 'function') {
+              onAct();
+            } else if (window.__tatDenRoom?.enterRealm) {
+              window.__tatDenRoom.enterRealm();
             }
             return;
           }
@@ -678,12 +700,16 @@ export class PortalInteraction {
 
       const camPos = this.camera.position;
       const maxDistSq = maxDist * maxDist;
+      const hasHitboxManager = typeof window !== 'undefined' && Boolean(window.__museumHitboxManager);
 
-      // Chỉ lọc các cuốn sách ở gần camera (< 20m) để tối ưu hóa raycasting
+      // Chỉ lọc các cuốn sách ở gần camera (< 20m) & CHƯA có proxy hitbox để tối ưu raycasting
       const nearTargets = [];
       for (let i = 0; i < this.interactiveTargets.length; i++) {
         const t = this.interactiveTargets[i];
         if (!t || t.visible === false) continue;
+        if (hasHitboxManager && (t.userData?.clickProxyHitbox || t.userData?.interactiveBookRoot?.userData?.clickProxyHitbox)) {
+          continue;
+        }
         const wp = t.userData?.cachedWorldPos;
         if (wp) {
           const dSq = (camPos.x - wp.x) ** 2 + (camPos.y - wp.y) ** 2 + (camPos.z - wp.z) ** 2;
@@ -802,7 +828,7 @@ export class PortalInteraction {
         this.crosshairElement.classList.add('hovered');
       }
 
-      // 1. Kích hoạt hiệu ứng phát sáng viền/emissive (Outline / Highlight)
+      // 1. Kích hoạt hiệu ứng phát sáng viền/emissive (tránh gán m.needsUpdate = true để không compile lại shader)
       rootBook.traverse((child) => {
         if (child.isMesh && child.material) {
           const mats = Array.isArray(child.material) ? child.material : [child.material];
@@ -818,17 +844,17 @@ export class PortalInteraction {
               m.emissive.set(themeColor);
               m.emissiveIntensity = 1.35; // Phát quang rực rỡ ăn vào Postprocessing Bloom
             }
-            m.needsUpdate = true;
           });
         }
       });
 
       // 2. Định vị vòng hào quang ma trận 3D ngay dưới chân bục cuốn sách
       if (this.auraRing) {
-        const worldPos = new THREE.Vector3();
-        rootBook.getWorldPosition(worldPos);
-        const box = new THREE.Box3().setFromObject(rootBook);
-        this.auraRing.position.set(worldPos.x, box.min.y + 0.04, worldPos.z);
+        if (!this._hoverBoxScratch) this._hoverBoxScratch = new THREE.Box3();
+        if (!this._hoverVecScratch) this._hoverVecScratch = new THREE.Vector3();
+        rootBook.getWorldPosition(this._hoverVecScratch);
+        this._hoverBoxScratch.setFromObject(rootBook);
+        this.auraRing.position.set(this._hoverVecScratch.x, this._hoverBoxScratch.min.y + 0.04, this._hoverVecScratch.z);
         if (this.auraRingMaterial) {
           this.auraRingMaterial.color.set(themeColor);
         }
@@ -854,8 +880,8 @@ export class PortalInteraction {
         if (quoteEl) quoteEl.textContent = `"${meta.quote ?? ''}"`;
 
         if (clickBtn) {
-          if (meta.id === 'truyen_kieu' || meta.id === 'son_tinh' || meta.id === 'son_tinh_thuy_tinh' || meta.id === 'an_duong_vuong' || meta.id === 'vo_nhat') {
-            // Không hiển thị nút 2D đan xen vì đã có nút bấm 3D riêng biệt đặt ngay trên cuốn sách
+          if (meta.id === 'truyen_kieu' || meta.id === 'son_tinh' || meta.id === 'son_tinh_thuy_tinh' || meta.id === 'an_duong_vuong' || meta.id === 'vo_nhat' || meta.id === 'nam_quoc_son_ha') {
+            // Không hiển thị nút 2D đan xen vì đã có nút bấm 3D riêng biệt đặt ngay trên cuốn sách/cổng
             clickBtn.style.display = 'none';
           } else {
             clickBtn.style.display = 'block';
@@ -901,7 +927,6 @@ export class PortalInteraction {
                   m.emissive.copy(m.userData._origHighlightState.emissive);
                   m.emissiveIntensity = m.userData._origHighlightState.emissiveIntensity;
                 }
-                m.needsUpdate = true;
               }
             });
           }
@@ -960,6 +985,8 @@ export class PortalInteraction {
         ? 'an_duong_vuong'
         : (target.userData?.targetRealm === 'VO_NHAT_REALM' || meta?.targetRealm === 'VO_NHAT_REALM')
         ? 'vo_nhat'
+        : (target.userData?.targetRealm === 'NAM_QUOC_SON_HA_REALM' || meta?.targetRealm === 'NAM_QUOC_SON_HA_REALM')
+        ? 'nam_quoc_son_ha'
         : (meta?.id || '');
       if (bookId) {
         const handled = this.loadNarrativeWorld(bookId, coords, meta);

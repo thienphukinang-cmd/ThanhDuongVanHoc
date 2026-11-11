@@ -1,7 +1,8 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { registerInteractiveBook } from './PortalInteraction.js';
 import { playBookSuckInCutscene, playBookReturnCutscene, playBookVortexCutscene } from './bookVortexCutscene.js';
+import { loadGlbCached } from '../utils/modelLoaderHelper.js';
+import { mergeGroupMeshesByMaterial } from '../utils/geometryMerger.js';
 import {
   ROOM_PALETTES,
   styleAndNormalizeGlbModel,
@@ -17,6 +18,7 @@ import {
   createCuratedArtifactStation
 } from './museumCuratorAndTourSystem.js';
 import { upgradeRoomWallArchitecture } from './museumWallArchitectureSystem.js';
+import { createAnDuongVuongWorld } from '../worlds/anDuongVuongWorld.js';
 
 const prepareUnlitVividGlbModel = styleAndNormalizeGlbModel;
 
@@ -35,8 +37,8 @@ const prepareUnlitVividGlbModel = styleAndNormalizeGlbModel;
  */
 
 export const ADV_REALM_ORIGIN = new THREE.Vector3(260, 420, -450);
-export const ADV_OBS_PLATFORM_OFFSET = new THREE.Vector3(0, 4.0, 32);
-export const ADV_OBS_LOOK_TARGET_OFFSET = new THREE.Vector3(0, 10.0, -24);
+export const ADV_OBS_PLATFORM_OFFSET = new THREE.Vector3(0, 1.8, 14.0);
+export const ADV_OBS_LOOK_TARGET_OFFSET = new THREE.Vector3(0, 2.6, 0.0);
 
 const ADV_CACHE = {};
 
@@ -58,33 +60,12 @@ function getCachedTex(key, w, h, drawFn, repeatX = 1, repeatY = 1) {
   if ('colorSpace' in tex && THREE.SRGBColorSpace) {
     tex.colorSpace = THREE.SRGBColorSpace;
   }
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
   tex.needsUpdate = true;
   ADV_CACHE[key] = tex;
   return tex;
-}
-
-
-
-function loadGlbWithFallback(loader, urls, onSuccess, onFail) {
-  let idx = 0;
-  const tryNext = () => {
-    if (idx >= urls.length) {
-      if (onFail) onFail();
-      return;
-    }
-    const currentUrl = urls[idx++];
-    try {
-      loader.load(
-        currentUrl,
-        (gltf) => onSuccess(gltf.scene),
-        undefined,
-        () => tryNext()
-      );
-    } catch (e) {
-      tryNext();
-    }
-  };
-  tryNext();
 }
 
 function createVolumetricLightBeam(topRadius, bottomRadius, height, colorHex, opacity = 0.26) {
@@ -219,7 +200,11 @@ function createGiantHologramScreen(index) {
     ]
   ];
 
-  const tex = getCachedTex(`adv_giant_screen_v9_${index}`, 1536, 900, (ctx, w, h) => {
+  const tex = getCachedTex(`adv_giant_screen_v10_${index}`, 768, 450, (ctx) => {
+    ctx.save();
+    ctx.scale(0.5, 0.5);
+    const w = 1536;
+    const h = 900;
     const bgG = ctx.createLinearGradient(0, 0, w, h);
     bgG.addColorStop(0.0, 'rgba(4, 24, 22, 0.95)');
     bgG.addColorStop(0.5, 'rgba(8, 38, 34, 0.92)');
@@ -319,19 +304,19 @@ function buildFullRoomEnclosureWalls(interiorGroup, {
   const backMat = new THREE.MeshBasicMaterial({
     map: backWallTex,
     color: backWallTex ? 0xffffff : 0x062019,
-    side: THREE.DoubleSide,
+    side: THREE.FrontSide,
     fog: false
   });
   const leftMat = new THREE.MeshBasicMaterial({
     map: leftWallTex || backWallTex,
     color: leftWallTex ? 0xffffff : 0x0a2e24,
-    side: THREE.DoubleSide,
+    side: THREE.FrontSide,
     fog: false
   });
   const rightMat = new THREE.MeshBasicMaterial({
     map: rightWallTex || backWallTex,
     color: rightWallTex ? 0xffffff : 0x061c24,
-    side: THREE.DoubleSide,
+    side: THREE.FrontSide,
     fog: false
   });
   const trimMat = new THREE.MeshBasicMaterial({ color: trimColor, fog: false });
@@ -419,8 +404,9 @@ export function buildAnDuongVuongExhibition({
   root.position.set(0, 0, 0);
 
   let _realmScene = realmScene;
-  const gltfLoader = new GLTFLoader();
   const candidateGlbUrls = [
+    '/models/an_duong_vuong_web.glb',
+    '/model/an_duong_vuong_web.glb',
     glbUrl,
     '/model/ANDUONGVUONG.glb',
     '/models/ANDUONGVUONG.glb',
@@ -537,7 +523,11 @@ export function buildAnDuongVuongExhibition({
   // -------------------------------------------------------------------------
   // A2. SÀN NHÀ RIÊNG: HỌA TIẾT 9 VÒNG THÀNH CỔ LOA BAO PHỦ 100% CĂN PHÒNG (27.2m x 20.8m)
   // -------------------------------------------------------------------------
-  const coLoaSpiralFloorTex = getCachedTex('adv_coloa_spiral_floor_grand', 2048, 2048, (ctx, w, h) => {
+  const coLoaSpiralFloorTex = getCachedTex('adv_coloa_spiral_floor_grand', 1024, 1024, (ctx) => {
+    ctx.save();
+    ctx.scale(0.5, 0.5);
+    const w = 2048;
+    const h = 2048;
     const bg = ctx.createRadialGradient(w / 2, h / 2, 40, w / 2, h / 2, w * 0.72);
     bg.addColorStop(0.0, '#0d2d25');
     bg.addColorStop(0.50, '#071e19');
@@ -618,12 +608,13 @@ export function buildAnDuongVuongExhibition({
     ctx.beginPath();
     ctx.arc(cx, cy, 140, 0, Math.PI * 2);
     ctx.stroke();
+    ctx.restore();
   });
 
   // SÀN NHÀ RIÊNG: HỌA TIẾT THÀNH CỔ LOA MỞ RỘNG PHỦ KÍN 100% ĐẠI GIAN (43.8M x 27.6M)
   const floorCarpet = new THREE.Mesh(
     new THREE.PlaneGeometry(43.8, 27.6),
-    new THREE.MeshBasicMaterial({ map: coLoaSpiralFloorTex, side: THREE.DoubleSide, fog: false })
+    new THREE.MeshBasicMaterial({ map: coLoaSpiralFloorTex, side: THREE.FrontSide, fog: false })
   );
   floorCarpet.rotation.x = -Math.PI / 2;
   floorCarpet.position.set(0, 0.02, 0);
@@ -649,7 +640,11 @@ export function buildAnDuongVuongExhibition({
   // A3. HỆ THỐNG 3 VÁCH PHÙ ĐIÊU KHỔ LỚN BAO TRÙM TOÀN BỘ PHÒNG (HẬU, TRÁI, PHẢI)
   // -------------------------------------------------------------------------
   // 1. Vách Phù Điêu Hậu Cảnh (Back Wall Mural: 27.0m x 8.0m)
-  const backMuralTex = getCachedTex('adv_back_mural_wall_grand', 2048, 1024, (ctx, w, h) => {
+  const backMuralTex = getCachedTex('adv_back_mural_wall_grand', 1024, 512, (ctx) => {
+    ctx.save();
+    ctx.scale(0.5, 0.5);
+    const w = 2048;
+    const h = 1024;
     const bg = ctx.createLinearGradient(0, 0, w, 0);
     bg.addColorStop(0.0, '#062019');
     bg.addColorStop(0.25, '#0c2d25');
@@ -704,10 +699,15 @@ export function buildAnDuongVuongExhibition({
     ctx.fillStyle = '#a7f3d0';
     ctx.font = 'italic 34px "Times New Roman", serif';
     ctx.fillText('“Nỏ thần vô ý trao tay giặc • Nên nỗi cơ đồ đắm biển sâu”', w / 2, 175);
+    ctx.restore();
   });
 
   // 2. Vách Phù Điêu Cánh Trái (Cổ Loa Thành 9 Vòng)
-  const leftMuralTex = getCachedTex('adv_left_mural_wall_grand', 2048, 1024, (ctx, w, h) => {
+  const leftMuralTex = getCachedTex('adv_left_mural_wall_grand', 1024, 512, (ctx) => {
+    ctx.save();
+    ctx.scale(0.5, 0.5);
+    const w = 2048;
+    const h = 1024;
     const bg = ctx.createLinearGradient(0, 0, w, 0);
     bg.addColorStop(0.0, '#062019');
     bg.addColorStop(0.5, '#0a2e24');
@@ -731,10 +731,15 @@ export function buildAnDuongVuongExhibition({
       ctx.arc(w * 0.35, h * 0.62, r * 55, 0, Math.PI * 2);
       ctx.stroke();
     }
+    ctx.restore();
   });
 
   // 3. Vách Phù Điêu Cánh Phải (Mỵ Châu - Trọng Thủy & Giếng Ngọc)
-  const rightMuralTex = getCachedTex('adv_right_mural_wall_grand', 2048, 1024, (ctx, w, h) => {
+  const rightMuralTex = getCachedTex('adv_right_mural_wall_grand', 1024, 512, (ctx) => {
+    ctx.save();
+    ctx.scale(0.5, 0.5);
+    const w = 2048;
+    const h = 1024;
     const bg = ctx.createLinearGradient(0, 0, w, 0);
     bg.addColorStop(0.0, '#061c24');
     bg.addColorStop(0.5, '#092535');
@@ -758,6 +763,7 @@ export function buildAnDuongVuongExhibition({
       ctx.arc(w * 0.65, h * 0.62, r * 55, Math.PI * 0.6, Math.PI * 2.4);
       ctx.stroke();
     }
+    ctx.restore();
   });
 
   // 1. HỆ THỐNG TƯỜNG NGĂN CÁCH KHỚP 100% KIẾN TRÚC THẬT BẢO TÀNG (Rộng 43.8m x Sâu 27.6m x Cao kịch trần 9.8m)
@@ -837,13 +843,12 @@ export function buildAnDuongVuongExhibition({
   roomStatuePedestal.add(roomGlbHolder);
 
   // Nạp mô hình .glb An Dương Vương chuẩn màu PBR và bảo toàn góc xoay node_0
-  loadGlbWithFallback(
-    gltfLoader,
-    candidateGlbUrls,
-    (rawScene) => {
-      const roomModel = prepareUnlitVividGlbModel(rawScene.clone(true), {
+  loadGlbCached(candidateGlbUrls, { maxTextureSize: 1024 })
+    .then((rawScene) => {
+      const roomModel = prepareUnlitVividGlbModel(rawScene, {
         targetSpan: 4.2,
-        fitAxis: 'maxHorizontal'
+        fitAxis: 'maxHorizontal',
+        maxTextureSize: 1024
       });
       roomGlbHolder.add(roomModel);
 
@@ -855,8 +860,8 @@ export function buildAnDuongVuongExhibition({
           padding: 0.12
         });
       }
-    }
-  );
+    })
+    .catch(() => {});
 
   // Cột Đồng Cổ Loa cao 7.8m chạy dọc hai bên cánh Đại Gian (Rộng 43.8m)
   const pillarCoords = [
@@ -866,29 +871,34 @@ export function buildAnDuongVuongExhibition({
     { pos: new THREE.Vector3(18.5, 0, 10.5), flameColor: 0x38bdf8 }
   ];
 
+  const staticPillarsGroup = new THREE.Group();
+  staticPillarsGroup.name = 'ADV_Static_Pillars';
+  const sharedColGeo = new THREE.CylinderGeometry(0.40, 0.50, 7.6, 12);
+  const sharedCapGeo = new THREE.CylinderGeometry(0.68, 0.46, 0.42, 12);
+  const sharedFlameGeo = new THREE.OctahedronGeometry(0.52, 1);
+
   const torchFlames = [];
   pillarCoords.forEach(({ pos, flameColor }) => {
-    const pGroup = new THREE.Group();
-    pGroup.position.copy(pos);
+    const col = new THREE.Mesh(sharedColGeo, bronzeMat);
+    col.position.set(pos.x, pos.y + 3.8, pos.z);
+    staticPillarsGroup.add(col);
 
-    const col = new THREE.Mesh(new THREE.CylinderGeometry(0.40, 0.50, 7.6, 12), bronzeMat);
-    col.position.y = 3.8;
-    pGroup.add(col);
-
-    const capital = new THREE.Mesh(new THREE.CylinderGeometry(0.68, 0.46, 0.42, 12), goldMat);
-    capital.position.y = 7.6;
-    pGroup.add(capital);
+    const capital = new THREE.Mesh(sharedCapGeo, goldMat);
+    capital.position.set(pos.x, pos.y + 7.6, pos.z);
+    staticPillarsGroup.add(capital);
 
     const flame = new THREE.Mesh(
-      new THREE.OctahedronGeometry(0.52, 1),
+      sharedFlameGeo,
       new THREE.MeshBasicMaterial({ color: flameColor, fog: false })
     );
-    flame.position.y = 7.8;
-    pGroup.add(flame);
+    flame.position.set(pos.x, pos.y + 7.8, pos.z);
+    interiorGroup.add(flame);
     torchFlames.push(flame);
-
-    interiorGroup.add(pGroup);
   });
+  mergeGroupMeshesByMaterial(staticPillarsGroup);
+  sharedColGeo.dispose();
+  sharedCapGeo.dispose();
+  interiorGroup.add(staticPillarsGroup);
 
   // Hệ thống đèn lồng lụa Cổ Loa Ngọc Bích (InstancedMesh - 1 Draw Call - museumMasterBeautifier)
   const advLanternPositions = [
@@ -1026,12 +1036,17 @@ export function buildAnDuongVuongExhibition({
   );
   goldenClawTrigger.position.set(0, 0.18, 0.28);
   crossbowGroup.add(bowStock, bowArc, goldenClawTrigger);
+  const arrowsGroup = new THREE.Group();
+  const sharedArrowGeo = new THREE.CylinderGeometry(0.018, 0.018, 1.05, 6);
   for (let aIdx = -2; aIdx <= 2; aIdx++) {
-    const arrow = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 1.05, 6), goldMat);
+    const arrow = new THREE.Mesh(sharedArrowGeo, goldMat);
     arrow.rotation.x = Math.PI / 2;
     arrow.position.set(aIdx * 0.10, 0.11, -0.12);
-    crossbowGroup.add(arrow);
+    arrowsGroup.add(arrow);
   }
+  mergeGroupMeshesByMaterial(arrowsGroup);
+  sharedArrowGeo.dispose();
+  crossbowGroup.add(arrowsGroup);
 
   const crossbowStation = createCuratedArtifactStation({
     artifactMesh: crossbowGroup,
@@ -1064,13 +1079,16 @@ export function buildAnDuongVuongExhibition({
   cloakGroup.position.y = 1.70;
   const cloakCone = new THREE.Mesh(new THREE.ConeGeometry(0.52, 1.1, 12, 1, true), featherWhiteMat);
   cloakGroup.add(cloakCone);
+  const sharedFeatherGeo = new THREE.PlaneGeometry(0.16, 0.36);
   for (let f = 0; f < 14; f++) {
-    const feather = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.36), featherWhiteMat);
+    const feather = new THREE.Mesh(sharedFeatherGeo, featherWhiteMat);
     const fa = (f / 14) * Math.PI * 2;
     feather.position.set(Math.cos(fa) * 0.60, (f % 3) * 0.18 - 0.1, Math.sin(fa) * 0.60);
     feather.rotation.y = -fa;
     cloakGroup.add(feather);
   }
+  mergeGroupMeshesByMaterial(cloakGroup);
+  sharedFeatherGeo.dispose();
   featherCloakPed.add(cloakGroup);
 
   // 4. Giếng Ngọc Trọng Thủy & Trai Ngọc Biển Đông - Bệ Hoa Sen Chuẩn Bảo Tàng
@@ -1079,7 +1097,7 @@ export function buildAnDuongVuongExhibition({
   wellRim.position.y = 0.28;
   const wellWater = new THREE.Mesh(
     new THREE.CircleGeometry(0.50, 16),
-    new THREE.MeshBasicMaterial({ color: 0x0284c7, transparent: true, opacity: 0.82, side: THREE.DoubleSide, fog: false })
+    new THREE.MeshBasicMaterial({ color: 0x0284c7, transparent: true, opacity: 0.82, side: THREE.FrontSide, fog: false })
   );
   wellWater.rotation.x = -Math.PI / 2;
   wellWater.position.y = 0.24;
@@ -1167,21 +1185,20 @@ export function buildAnDuongVuongExhibition({
   skyDome.position.set(0, 15, -30);
   advRealmGroup.add(skyDome);
 
-  // Đài quan sát của người chơi
-  const obsPlatformGroup = new THREE.Group();
-  obsPlatformGroup.position.copy(ADV_OBS_PLATFORM_OFFSET);
-  advRealmGroup.add(obsPlatformGroup);
+  // =========================================================================
+  // THẾ GIỚI CỔ LOA THÀNH MỚI: 3 VÒNG THÀNH XOẮN ỐC, TƯỢNG AN DƯƠNG VƯƠNG, NỎ THẦN, HỒ KIM QUY, GIẾNG NGỌC
+  // Tích hợp từ createAnDuongVuongWorld (src/worlds/anDuongVuongWorld.js)
+  // =========================================================================
+  const coLoaWorldInstance = createAnDuongVuongWorld(advRealmGroup, {
+    worldOrigin: new THREE.Vector3(0, 0, 0),
+    camera: null,
+    domElement: typeof document !== 'undefined' ? document.body : null
+  });
 
-  const platDisc = new THREE.Mesh(
-    new THREE.CylinderGeometry(7.2, 8.4, 1.2, 16),
-    new THREE.MeshBasicMaterial({ color: 0x0f2926, fog: false })
-  );
-  platDisc.position.y = -0.6;
-  obsPlatformGroup.add(platDisc);
-
+  // Cổng Trở Về với Tinh thể ngọc xanh ở lối vào phía Nam thành Cổ Loa (Z = 16.0m)
   const returnPortalGroup = new THREE.Group();
-  returnPortalGroup.position.set(0, 0.2, 5.0);
-  obsPlatformGroup.add(returnPortalGroup);
+  returnPortalGroup.position.set(0, 0.2, 16.0);
+  advRealmGroup.add(returnPortalGroup);
 
   const crystalMesh = new THREE.Mesh(
     new THREE.OctahedronGeometry(0.55, 0),
@@ -1201,189 +1218,6 @@ export function buildAnDuongVuongExhibition({
   });
   returnLabel.position.set(0, 2.4, 0);
   returnPortalGroup.add(returnLabel);
-
-  const screenAngles = [-1.08, -0.58, 0.58, 1.08];
-  const screenRadius = 19.5;
-  for (let sIdx = 0; sIdx < 4; sIdx++) {
-    const angle = screenAngles[sIdx];
-    const screen = createGiantHologramScreen(sIdx);
-    screen.position.set(Math.sin(angle) * screenRadius, 4.5, -Math.cos(angle) * screenRadius);
-    screen.lookAt(0, 4.0, 0);
-    obsPlatformGroup.add(screen);
-  }
-
-  // B1. CỤM THÀNH ỐC CỔ LOA 3 TẦNG XOÁY ỐC & TƯỢNG AN DƯƠNG VƯƠNG KHỔNG LỒ (BÊN TRÁI: X = -24m)
-  const coLoaCitadelGroup = new THREE.Group();
-  coLoaCitadelGroup.position.set(-24.0, 0, -26.0);
-  advRealmGroup.add(coLoaCitadelGroup);
-
-  const wallMat = new THREE.MeshBasicMaterial({ color: 0x115e59, wireframe: false, fog: false });
-  const wallRims = [
-    { rTop: 22, rBot: 25, h: 6.0 },
-    { rTop: 16, rBot: 18, h: 10.5 },
-    { rTop: 10, rBot: 12, h: 14.5 }
-  ];
-
-  wallRims.forEach(({ rTop, rBot, h }, wIdx) => {
-    const ringWall = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, h, 24), wallMat);
-    ringWall.position.y = h * 0.5;
-    coLoaCitadelGroup.add(ringWall);
-
-    const battlementRim = new THREE.Mesh(
-      new THREE.TorusGeometry(rTop, 0.35, 8, 24),
-      new THREE.MeshBasicMaterial({ color: 0xf59e0b, wireframe: true, fog: false })
-    );
-    battlementRim.rotation.x = Math.PI / 2;
-    battlementRim.position.y = h;
-    coLoaCitadelGroup.add(battlementRim);
-  });
-
-  const realmGlbHolder = new THREE.Group();
-  realmGlbHolder.position.set(0, 14.8, 0);
-  coLoaCitadelGroup.add(realmGlbHolder);
-
-  loadGlbWithFallback(
-    gltfLoader,
-    candidateGlbUrls,
-    (rawScene) => {
-      const giantAdvModel = prepareUnlitVividGlbModel(rawScene, {
-        targetSpan: 24.0,
-        fitAxis: 'maxHorizontal'
-      });
-      realmGlbHolder.add(giantAdvModel);
-    }
-  );
-
-  // B2. THẦN KIM QUY KHỔNG LỒ TRỒI LÊN TỪ BIỂN ĐÔNG (BÊN PHẢI: X = +24m, Z = -22m)
-  const giantKimQuyGroup = new THREE.Group();
-  giantKimQuyGroup.position.set(24.0, 2.5, -22.0);
-  advRealmGroup.add(giantKimQuyGroup);
-
-  const giantShell = new THREE.Mesh(
-    new THREE.SphereGeometry(12.0, 20, 14, 0, Math.PI * 2, 0, Math.PI * 0.55),
-    new THREE.MeshBasicMaterial({ color: 0xd97706, fog: false })
-  );
-  const giantShellWire = new THREE.Mesh(
-    new THREE.SphereGeometry(12.25, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.55),
-    new THREE.MeshBasicMaterial({ color: 0xfef08a, wireframe: true, fog: false })
-  );
-  const giantHead = new THREE.Mesh(
-    new THREE.SphereGeometry(3.8, 14, 14),
-    new THREE.MeshBasicMaterial({ color: 0xfbbf24, fog: false })
-  );
-  giantHead.position.set(-9.8, 2.8, 4.8);
-  const giantClaw = new THREE.Mesh(
-    new THREE.ConeGeometry(1.2, 4.2, 6),
-    new THREE.MeshBasicMaterial({ color: 0xfef08a, fog: false })
-  );
-  giantClaw.position.set(-11.5, 3.2, 6.2);
-  giantClaw.rotation.x = Math.PI / 3;
-  giantKimQuyGroup.add(giantShell, giantShellWire, giantHead, giantClaw);
-
-  // B3. MẶT BIỂN ĐÔNG HẢI DẬY SÓNG
-  const seaGeo = new THREE.PlaneGeometry(240, 240, 64, 64);
-  seaGeo.rotateX(-Math.PI / 2);
-  const seaMesh = new THREE.Mesh(
-    seaGeo,
-    new THREE.MeshBasicMaterial({
-      color: 0x064e3b,
-      transparent: true,
-      opacity: 0.88,
-      wireframe: false,
-      fog: false
-    })
-  );
-  seaMesh.position.y = -1.5;
-  advRealmGroup.add(seaMesh);
-
-  // B4. HIỆU ỨNG MƯA TÊN ĐỒNG LIÊN CHÂU PHÁT SÁNG (BAY TỪ CỔ LOA RA HƯỚNG BIỂN)
-  const arrowFlock = [];
-  const arrowFlockGroup = new THREE.Group();
-  advRealmGroup.add(arrowFlockGroup);
-
-  const arrowMat = new THREE.MeshBasicMaterial({ color: 0xfef08a, fog: false });
-  const arrowGlowMat = new THREE.MeshBasicMaterial({
-    color: 0xf59e0b,
-    transparent: true,
-    opacity: 0.65,
-    blending: THREE.AdditiveBlending,
-    fog: false
-  });
-  const arrowGeo = new THREE.CylinderGeometry(0.04, 0.04, 1.8, 6);
-  const arrowHeadGeo = new THREE.ConeGeometry(0.12, 0.45, 6);
-
-  for (let i = 0; i < 36; i++) {
-    const arrowRig = new THREE.Group();
-    const shaft = new THREE.Mesh(arrowGeo, arrowMat);
-    shaft.rotation.x = Math.PI / 2;
-    const head = new THREE.Mesh(arrowHeadGeo, arrowGlowMat);
-    head.rotation.x = -Math.PI / 2;
-    head.position.z = 1.0;
-    arrowRig.add(shaft, head);
-
-    const startX = -32.0 + (i % 6) * 4.0;
-    const startY = 16.0 + (i % 5) * 3.5;
-    const startZ = -34.0 + Math.floor(i / 6) * 4.0;
-    arrowRig.position.set(startX, startY, startZ);
-
-    arrowRig.userData = {
-      startX,
-      startY,
-      startZ,
-      speed: 28.0 + (i % 7) * 4.5,
-      arcH: 6.0 + (i % 4) * 2.0,
-      phase: i * 0.35,
-      progress: (i / 36)
-    };
-    arrowFlockGroup.add(arrowRig);
-    arrowFlock.push(arrowRig);
-  }
-
-  // B5. HIỆU ỨNG LÔNG NGỖNG TRẮNG BAY TRONG GIÓ
-  const featherFlock = [];
-  const featherFlockGroup = new THREE.Group();
-  advRealmGroup.add(featherFlockGroup);
-
-  const featherTex = getCachedTex('adv_feather_tex', 64, 128, (ctx, w, h) => {
-    ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-    ctx.beginPath();
-    ctx.ellipse(w / 2, h / 2, w * 0.42, h * 0.46, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(226, 232, 240, 0.85)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(w / 2, 4);
-    ctx.lineTo(w / 2, h - 4);
-    ctx.stroke();
-  });
-
-  const featherMat = new THREE.MeshBasicMaterial({
-    map: featherTex,
-    transparent: true,
-    opacity: 0.88,
-    side: THREE.DoubleSide,
-    fog: false
-  });
-  const featherGeo = new THREE.PlaneGeometry(0.55, 1.1);
-
-  for (let f = 0; f < 42; f++) {
-    const fMesh = new THREE.Mesh(featherGeo, featherMat);
-    const fx = -24 + (f % 7) * 8.0 + Math.sin(f) * 4.0;
-    const fy = 4.0 + (f % 6) * 3.8;
-    const fz = -38 + Math.floor(f / 7) * 8.0;
-    fMesh.position.set(fx, fy, fz);
-    fMesh.userData = {
-      baseX: fx,
-      baseY: fy,
-      baseZ: fz,
-      driftSpeed: 0.6 + (f % 5) * 0.25,
-      spinSpeed: 1.2 + (f % 4) * 0.5,
-      phase: f * 0.7
-    };
-    featherFlockGroup.add(fMesh);
-    featherFlock.push(fMesh);
-  }
 
   // 140 Hạt lông ngỗng Mỵ Châu & Linh khí Cổ Loa Thành (1 Draw Call InstancedMesh - museumMasterBeautifier)
   const advParticles = createDetailedInstancedParticles('anDuongVuong', 140, 42, 32);
@@ -1492,8 +1326,8 @@ export function buildAnDuongVuongExhibition({
         }
 
         if (camCtrl) {
-          camCtrl.setFloorHeightProvider?.(() => 420.0 + 4.0 - 1.7);
-          camCtrl.floorHeightProvider = () => 420.0 + 4.0 - 1.7;
+          camCtrl.setFloorHeightProvider?.(() => 420.0);
+          camCtrl.floorHeightProvider = () => 420.0;
           camCtrl.velocity?.set?.(0, 0, 0);
         }
 
@@ -1615,15 +1449,31 @@ export function buildAnDuongVuongExhibition({
       }
       raycaster.setFromCamera(mouse, cam);
 
-      const intersects = intersectInteractiveTargetsOnly(raycaster, returnPortalGroup);
-      if (intersects.length > 0) {
+      const portalIntersects = intersectInteractiveTargetsOnly(raycaster, returnPortalGroup);
+      if (portalIntersects.length > 0) {
         exitRealm();
+        return;
+      }
+
+      if (coLoaWorldInstance?.raycastTargets) {
+        const artifactIntersects = raycaster.intersectObjects(coLoaWorldInstance.raycastTargets, true);
+        if (artifactIntersects.length > 0) {
+          let hit = artifactIntersects[0].object;
+          while (hit && !hit.userData?.isArtifactProxy && hit.parent) {
+            hit = hit.parent;
+          }
+          if (hit && hit.userData?.isArtifactProxy && hit.userData.loreKey) {
+            coLoaWorldInstance.showLore?.(hit.userData.loreKey);
+            return;
+          }
+        }
       }
       return;
     }
 
     const cam = _camera || window.__camera;
     if (!cam) return;
+    if (!roomGroup.visible || cam.position.distanceToSquared(roomCenter) > 32 * 32) return;
 
     if (document.pointerLockElement) {
       mouse.set(0, 0);
@@ -1677,13 +1527,16 @@ export function buildAnDuongVuongExhibition({
   // PHẦN D: VÒNG LẶP ANIMATION (60 FPS) & CÁC PHƯƠNG THỨC CẤP CAO CỦA ROOT
   // =========================================================================
   let clockTime = 0;
-  const seaPosAttr = seaGeo.attributes.position;
 
   root.update = function(delta = 0.016, elapsedTime = 0, camera = null) {
     if (camera) _camera = camera;
     clockTime += delta;
 
     if (!_isInsideRealm) {
+      if (!roomGroup.visible) return;
+      const cam = _camera || (typeof window !== 'undefined' ? window.__camera : null);
+      if (cam && cam.position.distanceToSquared(roomCenter) > 42 * 42) return;
+
       promptBanner.position.y = 3.05 + Math.sin(clockTime * 2.5) * 0.05;
       bookMeshGroup.position.y = 1.72 + Math.sin(clockTime * 2.2) * 0.05;
       floorHaloRing.rotation.z += delta * 0.45;
@@ -1703,45 +1556,15 @@ export function buildAnDuongVuongExhibition({
       return;
     }
 
-    // Chuyển động trong Cõi Cổ Loa Thành & Biển Đông
+    if (!advRealmGroup.visible) return;
+
+    // Chuyển động trong Thế Giới Cổ Loa Thành Mới
+    if (coLoaWorldInstance && coLoaWorldInstance.update) {
+      coLoaWorldInstance.update(delta, clockTime);
+    }
     if (advParticles && advParticles.update) {
       advParticles.update(delta, clockTime);
     }
-    giantKimQuyGroup.position.y = 2.0 + Math.sin(clockTime * 1.4) * 1.2;
-    realmGlbHolder.position.y = 14.8 + Math.sin(clockTime * 1.8) * 0.35;
-
-    // Cập nhật sóng biển Đông Hải dậy sóng
-    for (let i = 0; i < seaPosAttr.count; i++) {
-      const x = seaPosAttr.getX(i);
-      const z = seaPosAttr.getZ(i);
-      const waveH =
-        Math.sin(x * 0.08 + clockTime * 1.8) * 0.75 +
-        Math.cos(z * 0.07 - clockTime * 1.5) * 0.65;
-      seaPosAttr.setY(i, waveH);
-    }
-    seaPosAttr.needsUpdate = true;
-
-    // Cập nhật mưa tên đồng Liên Châu bay vút xé gió
-    arrowFlock.forEach((ar) => {
-      ar.userData.progress += delta * (ar.userData.speed / 70.0);
-      if (ar.userData.progress > 1.0) ar.userData.progress = 0;
-      const p = ar.userData.progress;
-      const currX = ar.userData.startX + p * 64.0;
-      const currZ = ar.userData.startZ + p * 24.0;
-      const currY = ar.userData.startY + Math.sin(p * Math.PI) * ar.userData.arcH - p * 8.0;
-      ar.position.set(currX, currY, currZ);
-      ar.lookAt(currX + 1.2, currY - 0.2, currZ + 0.45);
-    });
-
-    // Cập nhật lông ngỗng trắng bồng bềnh trong gió
-    featherFlock.forEach((fm) => {
-      const u = fm.userData;
-      fm.position.y = u.baseY + Math.sin(clockTime * u.driftSpeed + u.phase) * 1.6;
-      fm.position.x = u.baseX + Math.sin(clockTime * 0.8 + u.phase) * 2.2;
-      fm.position.z = u.baseZ + Math.cos(clockTime * 0.6 + u.phase) * 1.8;
-      fm.rotation.y += delta * u.spinSpeed;
-      fm.rotation.z = Math.sin(clockTime * 1.4 + u.phase) * 0.45;
-    });
 
     crystalMesh.rotation.y += delta * 1.2;
     returnLabel.position.y = 2.4 + Math.sin(clockTime * 2.5) * 0.05;
@@ -1794,6 +1617,7 @@ export function buildAnDuongVuongExhibition({
 
   // Dọn dẹp tài nguyên GPU triệt để khi hủy phòng (fps-optimizer & museumMasterBeautifier)
   root.dispose = function() {
+    if (coLoaWorldInstance?.dispose) coLoaWorldInstance.dispose();
     disposeSceneBranch(roomGroup);
     disposeSceneBranch(advRealmGroup);
   };

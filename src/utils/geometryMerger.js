@@ -14,7 +14,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
  *    - Ngăn chặn triệt để rò rỉ bộ nhớ khi chuyển đổi giữa Bảo Tàng và Thế Giới Sách.
  */
 
-export function mergeGroupMeshesByMaterial(rootGroup) {
+export function mergeGroupMeshesByMaterial(rootGroup, options = {}) {
   if (!rootGroup) return rootGroup;
 
   try {
@@ -22,31 +22,36 @@ export function mergeGroupMeshesByMaterial(rootGroup) {
 
     const materialMap = new Map();
     const meshesToRemove = [];
+    const invRoot = rootGroup.matrixWorld.clone().invert();
+    const relMatrix = new THREE.Matrix4();
 
-    // 1. Quét toàn bộ mesh trong group và gom nhóm theo material UUID
+    // 1. Quét toàn bộ mesh trong group và gom nhóm theo material UUID + layers mask
     rootGroup.traverse((child) => {
       if (child.isMesh && child.geometry) {
         // Bỏ qua nếu mesh là InstancedMesh hoặc được đánh dấu không được merge (ví dụ vật phẩm tương tác raycast động)
         if (child.isInstancedMesh || child.userData?.preventMerge || child.userData?.interactiveBookRoot) return;
 
         const mat = child.material;
-        if (!mat) return;
+        if (!mat || Array.isArray(mat)) return;
 
-        const matKey = mat.uuid || mat.name || 'default';
+        const layersMask = child.layers?.mask ?? 1;
+        const matKey = `${mat.uuid || mat.name || 'default'}__${layersMask}`;
         if (!materialMap.has(matKey)) {
           materialMap.set(matKey, {
             material: mat,
+            layersMask,
             geometries: [],
             castShadow: false,
-            receiveShadow: false
+            receiveShadow: false,
+            ignoreRaycaster: false,
+            isFloor: false
           });
         }
 
         const groupData = materialMap.get(matKey);
 
-        // Tính ma trận tương đối so với rootGroup
-        const invRoot = rootGroup.matrixWorld.clone().invert();
-        const relMatrix = child.matrixWorld.clone().premultiply(invRoot);
+        // Tính ma trận tương đối so với rootGroup (dùng invRoot đã tính sẵn)
+        relMatrix.copy(child.matrixWorld).premultiply(invRoot);
 
         // Clone geometry và apply ma trận transform
         const clonedGeo = child.geometry.clone();
@@ -59,6 +64,8 @@ export function mergeGroupMeshesByMaterial(rootGroup) {
         groupData.geometries.push(clonedGeo);
         if (child.castShadow) groupData.castShadow = true;
         if (child.receiveShadow) groupData.receiveShadow = true;
+        if (child.userData?.ignoreRaycaster) groupData.ignoreRaycaster = true;
+        if (child.userData?.isFloor) groupData.isFloor = true;
 
         meshesToRemove.push(child);
       }
@@ -66,15 +73,19 @@ export function mergeGroupMeshesByMaterial(rootGroup) {
 
     if (meshesToRemove.length === 0) return rootGroup;
 
-    // 2. Xóa các mesh cũ và giải phóng geometry tạm
+    // 2. Xóa các mesh cũ và giải phóng geometry tạm (chống dispose lặp)
+    const disposedSourceGeos = new Set();
     meshesToRemove.forEach((m) => {
       if (m.parent) m.parent.remove(m);
-      if (m.geometry) m.geometry.dispose();
+      if (m.geometry && !disposedSourceGeos.has(m.geometry)) {
+        disposedSourceGeos.add(m.geometry);
+        m.geometry.dispose();
+      }
     });
 
     // 3. Tiến hành gộp hình học theo từng vật liệu
     const mergedResults = [];
-    materialMap.forEach((groupData, key) => {
+    materialMap.forEach((groupData) => {
       if (!groupData.geometries || groupData.geometries.length === 0) return;
 
       try {
@@ -92,8 +103,8 @@ export function mergeGroupMeshesByMaterial(rootGroup) {
           groupData.geometries.forEach(g => {
             if (!g.index) {
               const posCount = g.attributes.position.count;
-              const indices = [];
-              for (let i = 0; i < posCount; i++) indices.push(i);
+              const indices = new Array(posCount);
+              for (let i = 0; i < posCount; i++) indices[i] = i;
               g.setIndex(indices);
             }
           });
@@ -106,11 +117,21 @@ export function mergeGroupMeshesByMaterial(rootGroup) {
           mergedGeometry.computeBoundingSphere();
 
           const combinedMesh = new THREE.Mesh(mergedGeometry, groupData.material);
-          combinedMesh.castShadow = groupData.castShadow;
-          combinedMesh.receiveShadow = groupData.receiveShadow;
+          combinedMesh.name = options.namePrefix ? `${options.namePrefix}_${mergedResults.length}` : `MergedStatic_${mergedResults.length}`;
+          combinedMesh.castShadow = options.forceNoShadow ? false : groupData.castShadow;
+          combinedMesh.receiveShadow = options.forceNoShadow ? false : groupData.receiveShadow;
           combinedMesh.frustumCulled = true;
-          combinedMesh.userData.excludeFromCollision = true;
+          if (combinedMesh.layers) {
+            combinedMesh.layers.mask = groupData.layersMask;
+          }
+          combinedMesh.userData.excludeFromCollision = options.excludeFromCollision ?? true;
           combinedMesh.userData.isMergedStatic = true;
+          if (groupData.ignoreRaycaster || options.ignoreRaycaster) {
+            combinedMesh.userData.ignoreRaycaster = true;
+          }
+          if (groupData.isFloor) {
+            combinedMesh.userData.isFloor = true;
+          }
 
           // CỐ ĐỊNH MA TRẬN CHO TẤT CẢ VẬT THỂ TĨNH (Tiết kiệm 100% chi phí tính ma trận CPU)
           combinedMesh.matrixAutoUpdate = false;
@@ -148,16 +169,18 @@ export function mergeAllMeshesIntoSingleUnifiedMesh(rootGroup) {
   try {
     rootGroup.updateMatrixWorld(true);
     const geometries = [];
+    const geoMatIndices = [];
     const materials = [];
     const meshesToRemove = [];
 
     const invRoot = rootGroup.matrixWorld.clone().invert();
+    const relMatrix = new THREE.Matrix4();
 
     rootGroup.traverse((child) => {
       if (child.isMesh && child.geometry) {
-        if (child.userData?.preventMerge || child.userData?.isDynamic) return;
+        if (child.isInstancedMesh || child.userData?.preventMerge || child.userData?.isDynamic) return;
         const mat = child.material;
-        if (!mat) return;
+        if (!mat || Array.isArray(mat)) return;
 
         let matIndex = materials.indexOf(mat);
         if (matIndex === -1) {
@@ -165,16 +188,15 @@ export function mergeAllMeshesIntoSingleUnifiedMesh(rootGroup) {
           matIndex = materials.length - 1;
         }
 
-        const relMatrix = child.matrixWorld.clone().premultiply(invRoot);
+        relMatrix.copy(child.matrixWorld).premultiply(invRoot);
         const clonedGeo = child.geometry.clone();
         clonedGeo.applyMatrix4(relMatrix);
 
         if (clonedGeo.attributes.tangent) clonedGeo.deleteAttribute('tangent');
         if (clonedGeo.attributes.color) clonedGeo.deleteAttribute('color');
 
-        clonedGeo.userData = clonedGeo.userData || {};
-        clonedGeo.userData.targetMaterialIndex = matIndex;
         geometries.push(clonedGeo);
+        geoMatIndices.push(matIndex);
         meshesToRemove.push(child);
       }
     });
@@ -189,23 +211,32 @@ export function mergeAllMeshesIntoSingleUnifiedMesh(rootGroup) {
       if (!allHaveUv && g.attributes.uv) g.deleteAttribute('uv');
       if (!g.index) {
         const count = g.attributes.position.count;
-        const idx = [];
-        for (let i = 0; i < count; i++) idx.push(i);
+        const idx = new Array(count);
+        for (let i = 0; i < count; i++) idx[i] = i;
         g.setIndex(idx);
       }
     });
 
-    // Xóa các mesh con cũ
+    // Xóa các mesh con cũ (tránh dispose trùng geometry)
+    const disposedSourceGeos = new Set();
     meshesToRemove.forEach((m) => {
       if (m.parent) m.parent.remove(m);
-      if (m.geometry) m.geometry.dispose();
+      if (m.geometry && !disposedSourceGeos.has(m.geometry)) {
+        disposedSourceGeos.add(m.geometry);
+        m.geometry.dispose();
+      }
     });
 
-    // Merge Geometries với useGroups = true để tạo 1 Mesh duy nhất với Multi-Materials
+    // Merge Geometries với useGroups = true và gán đúng materialIndex đã deduplicate
     const unifiedGeo = mergeGeometries(geometries, true);
     geometries.forEach(g => g.dispose());
 
     if (unifiedGeo) {
+      if (Array.isArray(unifiedGeo.groups)) {
+        for (let i = 0; i < unifiedGeo.groups.length; i++) {
+          unifiedGeo.groups[i].materialIndex = geoMatIndices[i] ?? 0;
+        }
+      }
       unifiedGeo.computeVertexNormals();
       unifiedGeo.computeBoundingBox();
       unifiedGeo.computeBoundingSphere();
@@ -213,8 +244,8 @@ export function mergeAllMeshesIntoSingleUnifiedMesh(rootGroup) {
       const unifiedMesh = new THREE.Mesh(unifiedGeo, materials.length === 1 ? materials[0] : materials);
       unifiedMesh.name = "Unified_SingleMesh_Landscape";
       unifiedMesh.frustumCulled = true;
-      unifiedMesh.receiveShadow = true;
-      unifiedMesh.castShadow = true;
+      unifiedMesh.receiveShadow = false;
+      unifiedMesh.castShadow = false;
 
       // CỐ ĐỊNH MA TRẬN KHÔNG CẬP NHẬT TỰ ĐỘNG (Tiết kiệm CPU)
       unifiedMesh.matrixAutoUpdate = false;

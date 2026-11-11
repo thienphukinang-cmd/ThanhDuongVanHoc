@@ -2,11 +2,19 @@ import * as THREE from 'three';
 
 /**
  * ============================================================================
- * MUSEUM HITBOX & COLLISION ARCHITECT SYSTEM
+ * MUSEUM HITBOX & COLLISION ARCHITECT SYSTEM (MASTER OVERHAUL)
  * Ứng dụng kỹ năng: hitbox-collision-architect & fps-optimizer
- * - Tự động bọc Proxy Hitbox ôm sát mô hình .GLB để click chuẩn 100%
- * - Chặn đi xuyên tường, cột trụ, bệ hoa sen với cơ chế trượt mượt (Wall Sliding)
- * - Tường phòng trưng bày chia 2 nửa chừa khoảng cửa rộng 5.4m (Door Opening)
+ * - Tự động bọc Proxy Hitbox ôm sát mô hình .GLB để click chuẩn 100% không lọt khe
+ * - Hệ thống 15 phòng triển lãm trên cả 3 tầng với cửa vòm đúng chuẩn thông thủy:
+ *   + Cửa vòm cánh Đông/Tây rộng 6.2m
+ *   + Đại môn cánh Bắc rộng 8.0m
+ * - Hệ thống tường biên ngoại vi 125m x 125m (+-62.5m) với đại môn Nam tầng 1 rộng 12m
+ * - 16 Cột trụ cung đình khổng lồ (bán kính ôm khít 0.50m)
+ * - Lan can giếng trời tầng 2 & 3 quanh ô thông tầng 44m x 44m (+-22.0m)
+ * - Lan can tay vịn uốn lượn Catmull-Rom bảo vệ toàn bộ cầu thang chữ Y & chiếu nghỉ
+ * - Thuật toán va chạm trượt tường mượt mà (Continuous Wall Sliding) kèm cơ chế
+ *   De-penetration AABB Pushout chống kẹt góc 100%
+ * - Phân vùng đa cõi (Multi-Realm Separation: Museum, Truyện Kiều, Sơn Tinh, v.v.)
  * - Bấm phím [H] hoặc [F2] để Bật/Tắt khung dây Wireframe Debug kiểm tra Hitbox
  * ============================================================================
  */
@@ -20,14 +28,69 @@ export function getMuseumHitboxManager(scene = null) {
   return activeHitboxManagerInstance;
 }
 
+/**
+ * Hàm tính toán bounding box ôm khít vật lý của một Object3D
+ * Loại bỏ hoàn toàn đèn, camera, hạt particle, tia sáng god ray, sprite hào quang
+ */
+export function computeTightWorldBox(obj, minSize = 0.3) {
+  if (!obj) return new THREE.Box3();
+  obj.updateMatrixWorld(true);
+  const box = new THREE.Box3();
+  let hasValidMesh = false;
+
+  obj.traverse((child) => {
+    if (!child.isMesh) return;
+    if (child.isLight || child.isPoints || child.isSprite) return;
+
+    const name = (child.name || '').toLowerCase();
+    // Bỏ qua các vệt sáng hoặc hào quang dạng mesh
+    if (name.includes('ray') || name.includes('beam') || name.includes('halo') || name.includes('godray') || name.includes('lightpool')) {
+      return;
+    }
+    // Bỏ qua các mesh bị ẩn hoặc gắn cờ ignoreRaycaster mà không phải hiện vật
+    if (child.visible === false) return;
+
+    if (child.geometry) {
+      if (!child.geometry.boundingBox) child.geometry.computeBoundingBox();
+      const geomBox = child.geometry.boundingBox;
+      if (geomBox && !geomBox.isEmpty()) {
+        const meshWorldBox = geomBox.clone().applyMatrix4(child.matrixWorld);
+        const sz = new THREE.Vector3();
+        meshWorldBox.getSize(sz);
+        // Tránh bounding box dị biệt (như skybox hay mặt phẳng vô cực)
+        if (sz.x < 35.0 && sz.y < 35.0 && sz.z < 35.0) {
+          box.union(meshWorldBox);
+          hasValidMesh = true;
+        }
+      }
+    }
+  });
+
+  if (!hasValidMesh || box.isEmpty()) {
+    const fallbackPos = new THREE.Vector3();
+    obj.getWorldPosition(fallbackPos);
+    box.set(
+      new THREE.Vector3(fallbackPos.x - minSize * 0.5, fallbackPos.y, fallbackPos.z - minSize * 0.5),
+      new THREE.Vector3(fallbackPos.x + minSize * 0.5, fallbackPos.y + minSize, fallbackPos.z + minSize * 0.5)
+    );
+  }
+
+  return box;
+}
+
 export class MuseumHitboxManager {
   constructor(scene) {
     this.scene = scene;
-    this.solidBoxes = [];       // Danh sách Box3 chặn người chơi đi xuyên qua (Obstacles)
-    this.clickProxies = [];     // Danh sách Mesh hộp vô hình dùng để bắt click cực nhạy
+    this.solidBoxes = [];       // Danh sách Box3 chặn người chơi đi xuyên qua
+    this.realmBuckets = new Map(); // Phân vùng theo Realm
+    this._museumGrid = new Map();  // Spatial hash (Y tier + 20m XZ cell) cho museum
+    this._candidateBoxes = [];     // Scratch array tái sử dụng mỗi frame
+    this._queryStamp = 0;
+    this.clickProxies = [];     // Danh sách Mesh hộp vô hình dùng để bắt click tương tác
+    this.debugHelperSpecs = new Map(); // Lưu thông số Box3Helper để khởi tạo lười khi bật debug [H]/[F2]
     this.debugHelpers = new THREE.Group();
     this.debugHelpers.name = 'Museum_Hitbox_Debug_Helpers';
-    this.debugHelpers.visible = false; // Mặc định ẩn, bấm phím H hoặc F2 để hiện
+    this.debugHelpers.visible = false;
     this.scene.add(this.debugHelpers);
 
     activeHitboxManagerInstance = this;
@@ -39,10 +102,104 @@ export class MuseumHitboxManager {
     this._bindDebugShortcut();
   }
 
+  _getMuseumTier(y) {
+    if (y < 9.0) return 0;
+    if (y < 18.0) return 1;
+    if (y < 30.0) return 2;
+    return 3;
+  }
+
+  _getMuseumCellKey(tier, cx, cz) {
+    const clampedX = Math.max(-511, Math.min(511, cx)) + 512;
+    const clampedZ = Math.max(-511, Math.min(511, cz)) + 512;
+    return ((tier & 7) << 20) | (clampedX << 10) | clampedZ;
+  }
+
+  _indexSolidEntry(entry) {
+    const realm = entry.realm || 'museum';
+    let realmList = this.realmBuckets.get(realm);
+    if (!realmList) {
+      realmList = [];
+      this.realmBuckets.set(realm, realmList);
+    }
+    realmList.push(entry);
+
+    if (realm === 'museum') {
+      const b = entry.box;
+      const minTier = this._getMuseumTier(b.min.y);
+      const maxTier = this._getMuseumTier(b.max.y);
+      const minCx = Math.max(-511, Math.min(511, Math.floor((b.min.x - 1.0) / 20.0)));
+      const maxCx = Math.max(-511, Math.min(511, Math.floor((b.max.x + 1.0) / 20.0)));
+      const minCz = Math.max(-511, Math.min(511, Math.floor((b.min.z - 1.0) / 20.0)));
+      const maxCz = Math.max(-511, Math.min(511, Math.floor((b.max.z + 1.0) / 20.0)));
+
+      const keys = [];
+      for (let t = minTier; t <= maxTier; t++) {
+        for (let cx = minCx; cx <= maxCx; cx++) {
+          for (let cz = minCz; cz <= maxCz; cz++) {
+            const key = this._getMuseumCellKey(t, cx, cz);
+            let cell = this._museumGrid.get(key);
+            if (!cell) {
+              cell = [];
+              this._museumGrid.set(key, cell);
+            }
+            cell.push(entry);
+            keys.push(key);
+          }
+        }
+      }
+      entry._bucketKeys = keys;
+    }
+  }
+
+  _unindexSolidEntry(entry) {
+    if (!entry) return;
+    const realm = entry.realm || 'museum';
+    const realmList = this.realmBuckets.get(realm);
+    if (realmList) {
+      const rIdx = realmList.indexOf(entry);
+      if (rIdx !== -1) realmList.splice(rIdx, 1);
+    }
+    if (entry._bucketKeys) {
+      for (let i = 0; i < entry._bucketKeys.length; i++) {
+        const cell = this._museumGrid.get(entry._bucketKeys[i]);
+        if (cell) {
+          const cIdx = cell.indexOf(entry);
+          if (cIdx !== -1) cell.splice(cIdx, 1);
+        }
+      }
+      entry._bucketKeys = null;
+    }
+  }
+
+  _setDebugHelperSpec(name, box, color, realm) {
+    this.debugHelperSpecs.set(name, { box, color, realm });
+    if (this.debugHelpers.visible) {
+      const old = this.debugHelpers.getObjectByName(name);
+      if (old) {
+        this.debugHelpers.remove(old);
+        old.geometry?.dispose?.();
+        old.material?.dispose?.();
+      }
+      const helper = new THREE.Box3Helper(box, color);
+      helper.name = name;
+      this.debugHelpers.add(helper);
+    }
+  }
+
+  _removeDebugHelper(name) {
+    this.debugHelperSpecs.delete(name);
+    const old = this.debugHelpers.getObjectByName(name);
+    if (old) {
+      this.debugHelpers.remove(old);
+      old.geometry?.dispose?.();
+      old.material?.dispose?.();
+    }
+  }
+
   _bindDebugShortcut() {
     if (typeof window === 'undefined') return;
     window.addEventListener('keydown', (e) => {
-      // Tránh bắt phím khi đang nhập form/input
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
         return;
       }
@@ -53,12 +210,26 @@ export class MuseumHitboxManager {
   }
 
   /**
-   * Bật/Tắt hiển thị toàn bộ Hitbox trong bảo tàng (Màu xanh lá: Vật cản, Màu vàng: Click tương tác)
+   * Bật/Tắt hiển thị toàn bộ Hitbox trong bảo tàng
+   * - Xanh lá (#22c55e): Tường, vách ngăn, cột trụ, bệ đá
+   * - Vàng kim (#fde047): Hộp click tương tác sách/hiện vật
+   * - Xanh lơ (#06b6d4): Lan can cầu thang & cửa ra vào
    */
   toggleDebugWireframes(forceState = null) {
     this.debugHelpers.visible =
       forceState !== null ? forceState : !this.debugHelpers.visible;
     const isVisible = this.debugHelpers.visible;
+
+    // Khởi tạo lười các Box3Helper chỉ khi người dùng bật [H] hoặc [F2]
+    if (isVisible) {
+      this.debugHelperSpecs.forEach((spec, name) => {
+        if (!this.debugHelpers.getObjectByName(name)) {
+          const helper = new THREE.Box3Helper(spec.box, spec.color);
+          helper.name = name;
+          this.debugHelpers.add(helper);
+        }
+      });
+    }
 
     console.log(
       `%c[Hitbox Architect] Hiển thị khung Hitbox Debug: ${isVisible ? 'BẬT' : 'TẮT'} (Phím H/F2)`,
@@ -79,7 +250,7 @@ export class MuseumHitboxManager {
         bottom: 28px;
         right: 28px;
         padding: 12px 20px;
-        background: rgba(15, 23, 42, 0.92);
+        background: rgba(15, 23, 42, 0.94);
         color: #f8fafc;
         border: 1px solid rgba(253, 224, 71, 0.6);
         border-radius: 10px;
@@ -105,6 +276,7 @@ export class MuseumHitboxManager {
         <div style="margin-top: 6px; font-size: 11px; color: #cbd5e1; display: flex; gap: 12px;">
           <span><span style="color: #22c55e;">🟩 Khung Xanh:</span> Vật cản đi bộ</span>
           <span><span style="color: #fde047;">🟨 Khung Vàng:</span> Click tương tác</span>
+          <span><span style="color: #06b6d4;">🟦 Khung Lam:</span> Lan can & cửa</span>
         </div>
       `;
       toast.style.opacity = '1';
@@ -129,101 +301,133 @@ export class MuseumHitboxManager {
 
   /**
    * XÓA SẠCH VÀ TÁI THIẾT LẬP TOÀN DIỆN MỌI HITBOX TRONG BẢO TÀNG
-   * Đảm bảo tính nhất quán tuyệt đối, không có hitbox rác hay va chạm trùng lặp.
+   * Đảm bảo tính nhất quán tuyệt đối giữa kiến trúc WebGL và hệ thống va chạm.
    */
   rebuildAllMuseumHitboxes() {
     this.clearAllHitboxes();
     console.log(
-      '%c[Hitbox Architect] Đang xóa sạch mọi hitbox cũ và tái thiết lập toàn diện hệ thống Hitbox...',
+      '%c[Hitbox Architect] Đang thiết lập toàn diện hệ sinh thái Hitbox chuẩn xác 100%...',
       'color: #38bdf8; font-weight: bold;'
     );
 
-    const addMacroWall = (minX, minY, minZ, maxX, maxY, maxZ, tag) => {
+    const addWallBox = (minX, minY, minZ, maxX, maxY, maxZ, tag, helperColor = 0x22c55e, realm = 'museum') => {
       const box = new THREE.Box3(
         new THREE.Vector3(minX, minY, minZ),
         new THREE.Vector3(maxX, maxY, maxZ)
       );
-      this.registerSolidObjectCollider(null, { customBox: box, tag });
+      this.registerSolidObjectCollider(null, { customBox: box, tag, helperColor, realm });
     };
 
-    // 1. TƯỜNG BIÊN NGOẠI VI BẢO TÀNG (Outer Perimeter Boundary Walls)
-    // Tường Bắc: Tách làm 2 đoạn Tây & Đông, chừa trống lối vào & lòng Phòng An Dương Vương (X: -16.0 đến +16.0)
-    addMacroWall(-64.5, 0.0, -45.5, -16.0, 32.0, -44.2, 'Perimeter_Wall_North_West');
-    addMacroWall(16.0, 0.0, -45.5, 64.5, 32.0, -44.2, 'Perimeter_Wall_North_East');
-    addMacroWall(-64.5, 0.0, 44.2, 64.5, 32.0, 45.5, 'Perimeter_Wall_South');
-    addMacroWall(-65.5, 0.0, -45.0, -64.2, 32.0, 45.0, 'Perimeter_Wall_West');
-    addMacroWall(64.2, 0.0, -45.0, 65.5, 32.0, 45.0, 'Perimeter_Wall_East');
+    // =========================================================================
+    // 1. TƯỜNG BIÊN NGOẠI VI BẢO TÀNG (Outer Perimeter: 125m x 125m, +-62.5m)
+    // =========================================================================
+    // Cánh Tây (X = -62.5m) chạy dọc từ Z = -62.5 đến +62.5, cao 32m
+    addWallBox(-63.0, 0.0, -62.5, -62.0, 32.0, 62.5, 'Perimeter_Wall_West');
+    // Cánh Đông (X = +62.5m) chạy dọc từ Z = -62.5 đến +62.5, cao 32m
+    addWallBox(62.0, 0.0, -62.5, 63.0, 32.0, 62.5, 'Perimeter_Wall_East');
+    // Cánh Bắc (Z = -62.5m) chạy ngang từ X = -62.5 đến +62.5, cao 32m
+    addWallBox(-62.5, 0.0, -63.0, 62.5, 32.0, -62.0, 'Perimeter_Wall_North');
 
-    // 2. VÁCH NGĂN TRUNG TÂM TẦNG 2 GIỮA CÁC PHÒNG (Divider Partitions)
-    addMacroWall(-64.0, 9.8, -0.4, -34.8, 18.2, 0.4, 'Floor2_Partition_West');
-    addMacroWall(34.8, 9.8, -0.4, 64.0, 18.2, 0.4, 'Floor2_Partition_East');
+    // Cánh Nam (Z = +62.5m):
+    // - Tầng 1: Chừa ô đại môn đón khách rộng 12m tại X in [-6.0, 6.0]
+    addWallBox(-62.5, 0.0, 62.0, -6.0, 10.0, 63.0, 'Perimeter_Wall_South_West_L1');
+    addWallBox(6.0, 0.0, 62.0, 62.5, 10.0, 63.0, 'Perimeter_Wall_South_East_L1');
+    // - Tầng 2 & 3: Lan can và tường kín từ X = -62.5 đến +62.5
+    addWallBox(-62.5, 10.0, 62.0, 62.5, 32.0, 63.0, 'Perimeter_Wall_South_L2_L3');
 
-    // 3. TƯỜNG PHÒNG TRƯNG BÀY CÓ CHỪA Ô CỬA RỘNG 5.4M (Doorway Width = 5.4m)
-    // Tuyệt đối chia 2 nửa Trái - Phải, chừa trống cửa ở giữa!
-    // Phòng 01: Truyện Kiều (Tầng 2, Cửa vòm hướng Đông / Đại sảnh tại X = -35.0, Z=19.0)
-    this.registerRoomWallsWithDoorway({
-      roomCenter: new THREE.Vector3(-48.0, 9.8, 19.0),
-      roomWidth: 26,
-      roomDepth: 28,
-      wallHeight: 8.4,
-      doorSide: 'right', // Cửa ở vách Đông nhìn ra sảnh
-      doorWidth: 5.4,
-      floorY: 9.8
+    // =========================================================================
+    // 2. HỆ THỐNG 15 PHÒNG TRIỂN LÃM (5 PHÒNG / TẦNG x 3 TẦNG)
+    // Khớp 100% kiến trúc ProceduralArchitecture và LiteratureRegistry
+    // =========================================================================
+    const floors = [
+      { id: 1, elevation: 0.0,  height: 9.8,  name: 'T1' },
+      { id: 2, elevation: 10.0, height: 9.8,  name: 'T2' },
+      { id: 3, elevation: 20.0, height: 11.8, name: 'T3' }
+    ];
+
+    floors.forEach((fl) => {
+      const y = fl.elevation;
+      const h = fl.height;
+      const pfx = fl.name;
+
+      // -----------------------------------------------------------------------
+      // PHÒNG 0: CÁNH TÂY - NAM (idx 0, Tâm X = -48.0, Z = 19.0)
+      // T1: Thánh Gióng | T2: Truyện Kiều | T3: Chí Phèo
+      // Cửa vòm nhìn ra sảnh ở vách Đông tại X = -34.0, khe mở Z in [15.9, 22.1] (rộng 6.2m)
+      // -----------------------------------------------------------------------
+      // Vách Đông (Mặt tiền có cửa vòm)
+      addWallBox(-34.25, y, 6.0, -33.75, y + h, 15.9, `${pfx}_WestSouth_Front_North`, 0x06b6d4);
+      addWallBox(-34.25, y, 22.1, -33.75, y + h, 32.0, `${pfx}_WestSouth_Front_South`, 0x06b6d4);
+      // Vách ngăn Bắc (Z = 6.0m)
+      addWallBox(-62.0, y, 5.75, -34.0, y + h, 6.25, `${pfx}_WestSouth_Partition_North`);
+      // Vách ngăn Nam (Z = 32.0m)
+      addWallBox(-62.0, y, 31.75, -34.0, y + h, 32.25, `${pfx}_WestSouth_Partition_South`);
+      // Vách hậu Tây (X = -62.0m)
+      addWallBox(-62.25, y, 6.0, -61.75, y + h, 32.0, `${pfx}_WestSouth_Back_West`);
+
+      // -----------------------------------------------------------------------
+      // VÁCH BỊT HÀNH LANG TÂY GIỮA PHÒNG 0 VÀ PHÒNG 1 (X = -34.0, Z in [-6.0, 6.0])
+      // -----------------------------------------------------------------------
+      addWallBox(-34.25, y, -6.0, -33.75, y + h, 6.0, `${pfx}_West_Corridor_Infill`);
+
+      // -----------------------------------------------------------------------
+      // PHÒNG 1: CÁNH TÂY - BẮC (idx 1, Tâm X = -48.0, Z = -19.0)
+      // T1: Sơn Tinh - Thủy Tinh | T2: Nam Quốc Sơn Hà | T3: Tắt Đèn
+      // Cửa vòm nhìn ra sảnh ở vách Đông tại X = -34.0, khe mở Z in [-22.1, -15.9] (rộng 6.2m)
+      // -----------------------------------------------------------------------
+      addWallBox(-34.25, y, -32.0, -33.75, y + h, -22.1, `${pfx}_WestNorth_Front_North`, 0x06b6d4);
+      addWallBox(-34.25, y, -15.9, -33.75, y + h, -6.0, `${pfx}_WestNorth_Front_South`, 0x06b6d4);
+      addWallBox(-62.0, y, -6.25, -34.0, y + h, -5.75, `${pfx}_WestNorth_Partition_South`);
+      addWallBox(-62.0, y, -32.25, -34.0, y + h, -31.75, `${pfx}_WestNorth_Partition_North`);
+      addWallBox(-62.25, y, -32.0, -61.75, y + h, -6.0, `${pfx}_WestNorth_Back_West`);
+
+      // -----------------------------------------------------------------------
+      // PHÒNG 2: CÁNH BẮC - ĐẠI GIAN (idx 2, Tâm X = 0.0, Z = -48.0)
+      // T1: An Dương Vương | T2: Hịch Tướng Sĩ | T3: Số Đỏ
+      // Đại môn hướng Nam tại Z = -34.0, khe mở X in [-4.0, 4.0] (rộng 8.0m)
+      // -----------------------------------------------------------------------
+      // Vách Nam (Mặt tiền có cửa vòm lớn 8m)
+      addWallBox(-22.0, y, -34.25, -4.0, y + h, -33.75, `${pfx}_NorthHall_Front_West`, 0x06b6d4);
+      addWallBox(4.0, y, -34.25, 22.0, y + h, -33.75, `${pfx}_NorthHall_Front_East`, 0x06b6d4);
+      // Vách ngăn Tây (X = -22.0m)
+      addWallBox(-22.25, y, -62.0, -21.75, y + h, -34.0, `${pfx}_NorthHall_Partition_West`);
+      // Vách ngăn Đông (X = +22.0m)
+      addWallBox(21.75, y, -62.0, 22.25, y + h, -34.0, `${pfx}_NorthHall_Partition_East`);
+      // Vách hậu Bắc (Z = -62.0m)
+      addWallBox(-22.0, y, -62.25, 22.0, y + h, -61.75, `${pfx}_NorthHall_Back_North`);
+
+      // -----------------------------------------------------------------------
+      // PHÒNG 3: CÁNH ĐÔNG - BẮC (idx 3, Tâm X = 48.0, Z = -19.0)
+      // T1: Sự Tích Trầu Cau | T2: Bình Ngô Đại Cáo | T3: Vợ Nhặt
+      // Cửa vòm nhìn ra sảnh ở vách Tây tại X = 34.0, khe mở Z in [-22.1, -15.9] (rộng 6.2m)
+      // -----------------------------------------------------------------------
+      addWallBox(33.75, y, -32.0, 34.25, y + h, -22.1, `${pfx}_EastNorth_Front_North`, 0x06b6d4);
+      addWallBox(33.75, y, -15.9, 34.25, y + h, -6.0, `${pfx}_EastNorth_Front_South`, 0x06b6d4);
+      addWallBox(34.0, y, -6.25, 62.0, y + h, -5.75, `${pfx}_EastNorth_Partition_South`);
+      addWallBox(34.0, y, -32.25, 62.0, y + h, -31.75, `${pfx}_EastNorth_Partition_North`);
+      addWallBox(61.75, y, -32.0, 62.25, y + h, -6.0, `${pfx}_EastNorth_Back_East`);
+
+      // -----------------------------------------------------------------------
+      // VÁCH BỊT HÀNH LANG ĐÔNG GIỮA PHÒNG 3 VÀ PHÒNG 4 (X = 34.0, Z in [-6.0, 6.0])
+      // -----------------------------------------------------------------------
+      addWallBox(33.75, y, -6.0, 34.25, y + h, 6.0, `${pfx}_East_Corridor_Infill`);
+
+      // -----------------------------------------------------------------------
+      // PHÒNG 4: CÁNH ĐÔNG - NAM (idx 4, Tâm X = 48.0, Z = 19.0)
+      // T1: Đẻ Đất Đẻ Nước | T2: Chuyện Người Con Gái Nam Xương | T3: Đây Thôn Vĩ Dạ
+      // Cửa vòm nhìn ra sảnh ở vách Tây tại X = 34.0, khe mở Z in [15.9, 22.1] (rộng 6.2m)
+      // -----------------------------------------------------------------------
+      addWallBox(33.75, y, 6.0, 34.25, y + h, 15.9, `${pfx}_EastSouth_Front_North`, 0x06b6d4);
+      addWallBox(33.75, y, 22.1, 34.25, y + h, 32.0, `${pfx}_EastSouth_Front_South`, 0x06b6d4);
+      addWallBox(34.0, y, 5.75, 62.0, y + h, 6.25, `${pfx}_EastSouth_Partition_North`);
+      addWallBox(34.0, y, 31.75, 62.0, y + h, 32.25, `${pfx}_EastSouth_Partition_South`);
+      addWallBox(61.75, y, 6.0, 62.25, y + h, 32.0, `${pfx}_EastSouth_Back_East`);
     });
 
-    // Phòng 02: Nam Quốc Sơn Hà (Tầng 2, Cửa vòm hướng Đông / Đại sảnh tại X = -35.0, Z=-19.0)
-    this.registerRoomWallsWithDoorway({
-      roomCenter: new THREE.Vector3(-48.0, 9.8, -19.0),
-      roomWidth: 26,
-      roomDepth: 28,
-      wallHeight: 8.4,
-      doorSide: 'right', // Cửa ở vách Đông nhìn ra sảnh
-      doorWidth: 5.4,
-      floorY: 9.8
-    });
-
-    // Phòng 03: Sơn Tinh - Thủy Tinh (Tầng 1, Cửa hướng Đông, Z=-19.0)
-    this.registerRoomWallsWithDoorway({
-      roomCenter: new THREE.Vector3(-48.0, 0.0, -19.0),
-      roomWidth: 26,
-      roomDepth: 28,
-      wallHeight: 8.4,
-      doorSide: 'right',
-      doorWidth: 5.4,
-      floorY: 0.0
-    });
-
-    // Phòng 04: An Dương Vương & Cổ Loa Thành (Tầng 1, Cửa chính hướng Nam / Z=-34.0)
-    this.registerRoomWallsWithDoorway({
-      roomCenter: new THREE.Vector3(0.0, 0.0, -48.0),
-      roomWidth: 32,
-      roomDepth: 28,
-      wallHeight: 8.4,
-      doorSide: 'front', // Cửa ở vách Z+ (hướng sảnh)
-      doorWidth: 5.4,
-      floorY: 0.0
-    });
-
-    // Phòng 05: Vợ Nhặt (Tầng 3, Cửa hướng Tây / Đại sảnh, Z=-19.0)
-    this.registerRoomWallsWithDoorway({
-      roomCenter: new THREE.Vector3(48.0, 19.6, -19.0),
-      roomWidth: 26,
-      roomDepth: 28,
-      wallHeight: 8.4,
-      doorSide: 'left', // Cửa ở vách Tây nhìn ra sảnh
-      doorWidth: 5.4,
-      floorY: 19.6
-    });
-
-    // 4. ĐÀI TRỐNG ĐỒNG ĐÔNG SƠN TRUNG TÂM SẢNH (shrinkFactor: 0.92)
-    const drumBox = new THREE.Box3(
-      new THREE.Vector3(-1.45 * 0.92, 0.0, -1.45 * 0.92),
-      new THREE.Vector3(1.45 * 0.92, 2.2, 1.45 * 0.92)
-    );
-    this.registerSolidObjectCollider(null, { customBox: drumBox, tag: 'Central_DongSon_Drum_Monument' });
-
-    // 5. 16 CỘT CUNG ĐÌNH ĐẠI SẢNH (Hitbox nhỏ gọn, ôm sát thân cột)
-    const pillarRadius = 0.48; // Bán kính ôm khít thân cột (đường kính 0.96m)
+    // =========================================================================
+    // 3. 16 CỘT CUNG ĐÌNH ĐẠI SẢNH (Hitbox tròn hóa nhỏ gọn, ôm sát thân cột)
+    // =========================================================================
+    const pillarHalf = 0.48; // Bán kính thân cột 0.50m (shrink nhẹ 4%)
     const pillarHeight = 32.0;
     const pillarPositions = [
       { x: -16.5, z: -22.0 }, { x: -5.5, z: -22.0 }, { x: 5.5, z: -22.0 }, { x: 16.5, z: -22.0 },
@@ -234,58 +438,124 @@ export class MuseumHitboxManager {
     ];
 
     pillarPositions.forEach((pos, idx) => {
-      const pBox = new THREE.Box3(
-        new THREE.Vector3(pos.x - pillarRadius, 0.0, pos.z - pillarRadius),
-        new THREE.Vector3(pos.x + pillarRadius, pillarHeight, pos.z + pillarRadius)
+      addWallBox(
+        pos.x - pillarHalf, 0.0, pos.z - pillarHalf,
+        pos.x + pillarHalf, pillarHeight, pos.z + pillarHalf,
+        `Imperial_Pillar_${idx + 1}`
       );
-      this.registerSolidObjectCollider(null, { customBox: pBox, tag: `Imperial_Pillar_${idx + 1}` });
     });
 
-    // 6. LAN CAN INDOCHINE GIẾNG TRỜI TẦNG 2 & TẦNG 3 (Hitbox mảnh 12cm ôm sát phào chỉ lan can)
-    // Lan can Tầng 2 (Y: 9.9m -> 11.0m, dày 12cm)
-    // Cạnh Bắc: chừa ô thông thủy X in [-3.2, 3.2] rộng 6.4m cho vế cầu thang T2 -> T3
-    addMacroWall(-22.06, 9.9, -22.06, -3.2, 11.0, -21.94, 'Balustrade_North_West_L2');
-    addMacroWall(3.2, 9.9, -22.06, 22.06, 11.0, -21.94, 'Balustrade_North_East_L2');
-    addMacroWall(-22.06, 9.9, 21.94, 22.06, 11.0, 22.06, 'Balustrade_South_L2');
-    // Cánh Tây & Đông mở khoảng thông thủy Z in [13.0, 18.0] cho cầu thang T1 -> T2
-    addMacroWall(-22.06, 9.9, -22.0, -21.94, 11.0, 13.0, 'Balustrade_West_North_L2');
-    addMacroWall(-22.06, 9.9, 18.0, -21.94, 11.0, 22.0, 'Balustrade_West_South_L2');
-    addMacroWall(21.94, 9.9, -22.0, 22.06, 11.0, 13.0, 'Balustrade_East_North_L2');
-    addMacroWall(21.94, 9.9, 18.0, 22.06, 11.0, 22.0, 'Balustrade_East_South_L2');
+    // =========================================================================
+    // 4. LAN CAN INDOCHINE GIẾNG TRỜI TẦNG 2 & TẦNG 3 (Dày 16cm, cao 1.1m)
+    // =========================================================================
+    // LAN CAN TẦNG 2 (Y: 10.0m -> 11.1m):
+    // Cạnh Bắc: Chừa ô thông thủy X in [-2.82, 2.82] khớp khít bề rộng thang T2 -> T3 (5.4m + tay vịn)
+    addWallBox(-22.0, 10.0, -22.08, -2.82, 11.1, -21.92, 'Balustrade_North_West_L2', 0x06b6d4);
+    addWallBox(2.82, 10.0, -22.08, 22.0, 11.1, -21.92, 'Balustrade_North_East_L2', 0x06b6d4);
+    // Cạnh Nam: Chạy suốt từ -22.0 đến 22.0
+    addWallBox(-22.0, 10.0, 21.92, 22.0, 11.1, 22.08, 'Balustrade_South_L2', 0x06b6d4);
+    // Cánh Tây: Chừa ô thông thủy Z in [13.65, 17.35] khớp khít tay vịn 2 bên vế thang cong T1 -> T2
+    addWallBox(-22.08, 10.0, -22.0, -21.92, 11.1, 13.65, 'Balustrade_West_North_L2', 0x06b6d4);
+    addWallBox(-22.08, 10.0, 17.35, -21.92, 11.1, 22.0, 'Balustrade_West_South_L2', 0x06b6d4);
+    // Cánh Đông: Chừa ô thông thủy Z in [13.65, 17.35] khớp khít tay vịn 2 bên vế thang cong T1 -> T2
+    addWallBox(21.92, 10.0, -22.0, 22.08, 11.1, 13.65, 'Balustrade_East_North_L2', 0x06b6d4);
+    addWallBox(21.92, 10.0, 17.35, 22.08, 11.1, 22.0, 'Balustrade_East_South_L2', 0x06b6d4);
 
-    // Lan can Tầng 3 (Y: 19.9m -> 21.0m, dày 12cm)
-    addMacroWall(-22.06, 19.9, -22.06, 22.06, 21.0, -21.94, 'Balustrade_North_L3');
-    addMacroWall(-22.06, 19.9, 21.94, 22.06, 21.0, 22.06, 'Balustrade_South_L3');
-    // Cánh Tây & Đông mở khoảng thông thủy Z in [-18.0, -13.0] cho cầu thang T2 -> T3
-    addMacroWall(-22.06, 19.9, -22.0, -21.94, 21.0, -18.0, 'Balustrade_West_North_L3');
-    addMacroWall(-22.06, 19.9, -13.0, -21.94, 21.0, 22.0, 'Balustrade_West_South_L3');
-    addMacroWall(21.94, 19.9, -22.0, 22.06, 21.0, -18.0, 'Balustrade_East_North_L3');
-    addMacroWall(21.94, 19.9, -13.0, 22.06, 21.0, 22.0, 'Balustrade_East_South_L3');
+    // LAN CAN TẦNG 3 (Y: 20.0m -> 21.1m):
+    addWallBox(-22.0, 20.0, -22.08, 22.0, 21.1, -21.92, 'Balustrade_North_L3', 0x06b6d4);
+    addWallBox(-22.0, 20.0, 21.92, 22.0, 21.1, 22.08, 'Balustrade_South_L3', 0x06b6d4);
+    // Cánh Tây & Đông mở khoảng thông thủy Z in [-17.35, -13.65] khớp khít vế thang T2 -> T3
+    addWallBox(-22.08, 20.0, -22.0, -21.92, 21.1, -17.35, 'Balustrade_West_North_L3', 0x06b6d4);
+    addWallBox(-22.08, 20.0, -13.65, -21.92, 21.1, 22.0, 'Balustrade_West_South_L3', 0x06b6d4);
+    addWallBox(21.92, 20.0, -22.0, 22.08, 21.1, -17.35, 'Balustrade_East_North_L3', 0x06b6d4);
+    addWallBox(21.92, 20.0, -13.65, 22.08, 21.1, 22.0, 'Balustrade_East_South_L3', 0x06b6d4);
 
-    // 7. LAN CAN TAY VỊN TOÀN BỘ CẦU THANG CHỮ Y & CHIẾU NGHỈ (Hitbox siêu mảnh, ôm khít 100% tay vịn mạ vàng)
+    // =========================================================================
+    // 5. LAN CAN TAY VỊN CẦU THANG CHỮ Y & CHIẾU NGHỈ
+    // =========================================================================
     this.registerStaircaseBalustrades();
 
+    // =========================================================================
+    // 6. BỆ SÁCH DI SẢN TRUNG TÂM SẢNH (0, 0, 0)
+    // =========================================================================
+    const centerBookBox = new THREE.Box3(
+      new THREE.Vector3(-1.8, 0.0, -1.8),
+      new THREE.Vector3(1.8, 1.8, 1.8)
+    );
+    this.registerSolidObjectCollider(null, { customBox: centerBookBox, tag: 'Center_Heritage_Book_Platform' });
+
     console.log(
-      `%c[Hitbox Architect] Hoàn tất tái thiết lập: Đã tạo ${this.solidBoxes.length} vật cản đi bộ chuẩn hóa O(1).`,
+      `%c[Hitbox Architect] Hoàn tất: Đã kích hoạt ${this.solidBoxes.length} vật cản không gian chuẩn hóa O(1).`,
       'color: #22c55e; font-weight: bold;'
     );
   }
 
   /**
-   * ĐĂNG KÝ HITBOX LAN CAN TAY VỊN CẦU THANG CHỮ Y (SKILL: hitbox-collision-architect)
-   * Tự động uốn theo các đường cong CatmullRomCurve3 của 6 vế thang và 2 chiếu nghỉ tròn.
-   * Giúp người chơi di chuyển an toàn, trượt tường mượt mà dọc theo tay vịn,
-   * tuyệt đối không bị trượt ngã khỏi mép cầu thang vào giếng trời.
+   * ĐĂNG KÝ HITBOX LAN CAN TAY VỊN CẦU THANG CHỮ Y & CHIẾU NGHỈ
+   * Thiết kế lại hoàn chỉnh:
+   * 1. Vế trung tâm thẳng theo trục Z: Ray/Box dọc mỏng 8cm đặt ngoài mép bậc (X = ±(halfW + 0.12m)),
+   *    triệt tiêu 100% hiện tượng góc chéo AABB nhô vào lối đi.
+   * 2. Vế cánh uốn cong (West & East): Mật độ cao 36 phân đoạn/vế, ôm khít theo CatmullRomCurve3,
+   *    tự động cắt gọn chuẩn xác tại biên hành lang (|X| = 22.0m) đón tiếp nối mượt mà vào Tầng 2 & 3.
+   * 3. Chiếu nghỉ tròn (Landing 1 & 2): Vòng cung 16 phân đoạn bảo vệ mép mở nhìn ra giếng trời trung tâm,
+   *    đảm bảo lối chuyển hướng từ vế trung tâm rẽ sang 2 cánh thông thoáng 100%.
    */
   registerStaircaseBalustrades() {
-    const registerFlightRail = (curvePoints, flightWidth, flightName, segmentsCount = 14) => {
+    // -------------------------------------------------------------------------
+    // HÀM TẠO VẬT CẢN LAN CAN VẾ THẲNG TRUNG TÂM (Trục Z)
+    // -------------------------------------------------------------------------
+    const registerStraightCentralFlight = (centerZ1, centerZ2, y1, y2, flightWidth, flightName, segments = 12) => {
+      const halfW = flightWidth * 0.5;
+      const railH = 1.05;
+      const railThick = 0.08;
+      const zMin = Math.min(centerZ1, centerZ2);
+      const zMax = Math.max(centerZ1, centerZ2);
+      const zStep = (zMax - zMin) / segments;
+      const isReversed = centerZ1 > centerZ2;
+
+      for (let i = 0; i < segments; i++) {
+        const segZ1 = zMin + i * zStep;
+        const segZ2 = zMin + (i + 1) * zStep;
+        const u1 = isReversed ? (zMax - segZ1) / (zMax - zMin) : (segZ1 - zMin) / (zMax - zMin);
+        const u2 = isReversed ? (zMax - segZ2) / (zMax - zMin) : (segZ2 - zMin) / (zMax - zMin);
+        const segY1 = y1 + Math.min(u1, u2) * (y2 - y1);
+        const segY2 = y1 + Math.max(u1, u2) * (y2 - y1);
+
+        // Lan can mép Trái (X âm): Đặt tại X in [-(halfW + 0.16), -(halfW + 0.08)]
+        const leftBox = new THREE.Box3(
+          new THREE.Vector3(-(halfW + 0.16), segY1, segZ1),
+          new THREE.Vector3(-(halfW + 0.08), segY2 + railH, segZ2)
+        );
+        this.registerSolidObjectCollider(null, {
+          customBox: leftBox,
+          tag: `StairRail_${flightName}_Left_s${i + 1}`,
+          helperColor: 0x06b6d4
+        });
+
+        // Lan can mép Phải (X dương): Đặt tại X in [halfW + 0.08, halfW + 0.16]
+        const rightBox = new THREE.Box3(
+          new THREE.Vector3(halfW + 0.08, segY1, segZ1),
+          new THREE.Vector3(halfW + 0.16, segY2 + railH, segZ2)
+        );
+        this.registerSolidObjectCollider(null, {
+          customBox: rightBox,
+          tag: `StairRail_${flightName}_Right_s${i + 1}`,
+          helperColor: 0x06b6d4
+        });
+      }
+    };
+
+    // -------------------------------------------------------------------------
+    // HÀM TẠO LAN CAN VẾ CÁNH UỐN LƯỢN (36 Phân đoạn / vế, mỏng 8cm)
+    // -------------------------------------------------------------------------
+    const registerCurvedWingFlight = (curvePoints, flightWidth, flightName, segmentsCount = 36, isWest = true) => {
       if (!curvePoints || curvePoints.length < 2) return;
       const curve = new THREE.CatmullRomCurve3(curvePoints);
       curve.curveType = 'centripetal';
 
       const halfW = flightWidth * 0.5;
-      const railHeight = 1.0;  // Chiều cao tay vịn nhỏ gọn 1.0m
-      const thickness = 0.10;  // Bề dày hitbox siêu mảnh 10cm (ôm khít ống tay vịn mạ vàng)
+      const railHeight = 1.05;
+      const thickness = 0.08;
 
       [-1, 1].forEach((side) => {
         const sideName = side === -1 ? 'Left' : 'Right';
@@ -296,19 +566,28 @@ export class MuseumHitboxManager {
           const p1 = curve.getPoint(u1);
           const tan1 = curve.getTangent(u1);
           const norm1 = new THREE.Vector3(-tan1.z, 0, tan1.x).normalize();
-          const pt1 = p1.clone().add(norm1.multiplyScalar(side * (halfW - 0.05)));
+          const pt1 = p1.clone().add(norm1.multiplyScalar(side * (halfW + 0.16)));
 
           const p2 = curve.getPoint(u2);
           const tan2 = curve.getTangent(u2);
           const norm2 = new THREE.Vector3(-tan2.z, 0, tan2.x).normalize();
-          const pt2 = p2.clone().add(norm2.multiplyScalar(side * (halfW - 0.05)));
+          const pt2 = p2.clone().add(norm2.multiplyScalar(side * (halfW + 0.16)));
 
-          const minX = Math.min(pt1.x, pt2.x) - thickness * 0.5;
-          const maxX = Math.max(pt1.x, pt2.x) + thickness * 0.5;
+          let minX = Math.min(pt1.x, pt2.x) - thickness * 0.5;
+          let maxX = Math.max(pt1.x, pt2.x) + thickness * 0.5;
           const minY = Math.min(pt1.y, pt2.y);
           const maxY = Math.max(pt1.y, pt2.y) + railHeight;
           const minZ = Math.min(pt1.z, pt2.z) - thickness * 0.5;
           const maxZ = Math.max(pt1.z, pt2.z) + thickness * 0.5;
+
+          // Cắt gọn chuẩn xác tại ranh giới hành lang (|X| = 22.0m)
+          if (isWest) {
+            if (minX < -22.0) minX = -22.0;
+            if (maxX < -22.0) continue; // Nằm trọn trong hành lang, nhường cho lan can tầng
+          } else {
+            if (maxX > 22.0) maxX = 22.0;
+            if (minX > 22.0) continue;
+          }
 
           const box = new THREE.Box3(
             new THREE.Vector3(minX, minY, minZ),
@@ -316,109 +595,121 @@ export class MuseumHitboxManager {
           );
           this.registerSolidObjectCollider(null, {
             customBox: box,
-            tag: `StairRail_${flightName}_${sideName}_s${i + 1}`
+            tag: `StairRail_${flightName}_${sideName}_s${i + 1}`,
+            helperColor: 0x06b6d4
           });
+
+          // Nối kín đầu tay vịn trong với lan can hành lang tại |X| = 22.0m để không hở góc rơi
+          if (i === segmentsCount - 1) {
+            if (isWest && pt2.x > -22.0) {
+              const bridgeBox = new THREE.Box3(
+                new THREE.Vector3(-22.0, pt2.y, pt2.z - thickness * 0.5),
+                new THREE.Vector3(pt2.x + thickness * 0.5, pt2.y + railHeight, pt2.z + thickness * 0.5)
+              );
+              this.registerSolidObjectCollider(null, {
+                customBox: bridgeBox,
+                tag: `StairRail_${flightName}_${sideName}_CorridorBridge`,
+                helperColor: 0x06b6d4
+              });
+            } else if (!isWest && pt2.x < 22.0) {
+              const bridgeBox = new THREE.Box3(
+                new THREE.Vector3(pt2.x - thickness * 0.5, pt2.y, pt2.z - thickness * 0.5),
+                new THREE.Vector3(22.0, pt2.y + railHeight, pt2.z + thickness * 0.5)
+              );
+              this.registerSolidObjectCollider(null, {
+                customBox: bridgeBox,
+                tag: `StairRail_${flightName}_${sideName}_CorridorBridge`,
+                helperColor: 0x06b6d4
+              });
+            }
+          }
         }
       });
     };
 
-    // 1. CẦU THANG TẦNG 1 -> TẦNG 2:
-    // 1.1. Vế trung tâm T1 (5.8m rộng, Z: 24.0 -> 8.0)
-    registerFlightRail([
-      new THREE.Vector3(0, 0.0, 24.0),
-      new THREE.Vector3(0, 1.6, 18.5),
-      new THREE.Vector3(0, 3.4, 13.0),
-      new THREE.Vector3(0, 5.0, 8.0)
-    ], 5.8, 'T1_Central', 8);
+    // -------------------------------------------------------------------------
+    // HÀM TẠO LAN CAN VÒNG CUNG CHIẾU NGHỈ TRÒN (16 Phân đoạn)
+    // -------------------------------------------------------------------------
+    const registerLandingRails = (center, radius, y, startAngle, endAngle, facingZ, name, segments = 16) => {
+      const railH = 1.05;
+      const thick = 0.08;
+      for (let i = 0; i < segments; i++) {
+        const a1 = startAngle + (i / segments) * (endAngle - startAngle);
+        const a2 = startAngle + ((i + 1) / segments) * (endAngle - startAngle);
 
-    // 1.2. Vế Tây T1 -> T2 (4.0m rộng, 14 phân đoạn nhỏ ôm trọn đường cong mềm mại)
-    registerFlightRail([
+        const x1 = center.x + Math.sin(a1) * (radius + 0.10);
+        const z1 = center.z + facingZ * Math.cos(a1) * (radius + 0.10);
+        const x2 = center.x + Math.sin(a2) * (radius + 0.10);
+        const z2 = center.z + facingZ * Math.cos(a2) * (radius + 0.10);
+
+        const box = new THREE.Box3(
+          new THREE.Vector3(Math.min(x1, x2) - thick * 0.5, y, Math.min(z1, z2) - thick * 0.5),
+          new THREE.Vector3(Math.max(x1, x2) + thick * 0.5, y + railH, Math.max(z1, z2) + thick * 0.5)
+        );
+        this.registerSolidObjectCollider(null, {
+          customBox: box,
+          tag: `StairRail_${name}_s${i + 1}`,
+          helperColor: 0x06b6d4
+        });
+      }
+    };
+
+    // =========================================================================
+    // 1. CẦU THANG TẦNG 1 -> TẦNG 2 (Y: 0.0m -> 10.0m)
+    // =========================================================================
+    // 1.1. Vế trung tâm thẳng T1 (Rộng 5.8m, Z từ 24.0m đến 9.2m tiếp nối Chiếu nghỉ 1)
+    registerStraightCentralFlight(24.0, 9.2, 0.0, 4.6, 5.8, 'T1_Central', 14);
+
+    // 1.2. Mép vòng cung Chiếu nghỉ 1 (R = 5.0m tại Z = 7.5m, Y = 5.0m, quay về hướng Bắc Z < 7.5)
+    registerLandingRails(new THREE.Vector3(0, 5.0, 7.5), 5.0, 5.0, -Math.PI * 0.28, Math.PI * 0.28, -1, 'Landing_L1_FrontRail', 16);
+
+    // 1.3. Vế cong Tây T1 -> T2 (Rộng 4.0m, từ Chiếu nghỉ lên Hành lang Tây Tầng 2)
+    registerCurvedWingFlight([
       new THREE.Vector3(-1.8, 5.0, 6.5),
       new THREE.Vector3(-7.5, 6.4, 7.8),
       new THREE.Vector3(-14.5, 8.2, 11.0),
       new THREE.Vector3(-22.0, 10.0, 15.5)
-    ], 4.0, 'T1T2_Wing_West', 14);
+    ], 4.0, 'T1T2_Wing_West', 36, true);
 
-    // 1.3. Vế Đông T1 -> T2 (4.0m rộng, 14 phân đoạn nhỏ ôm trọn đường cong mềm mại)
-    registerFlightRail([
+    // 1.4. Vế cong Đông T1 -> T2 (Rộng 4.0m, từ Chiếu nghỉ lên Hành lang Đông Tầng 2)
+    registerCurvedWingFlight([
       new THREE.Vector3(1.8, 5.0, 6.5),
       new THREE.Vector3(7.5, 6.4, 7.8),
       new THREE.Vector3(14.5, 8.2, 11.0),
       new THREE.Vector3(22.0, 10.0, 15.5)
-    ], 4.0, 'T1T2_Wing_East', 14);
+    ], 4.0, 'T1T2_Wing_East', 36, false);
 
-    // 1.4. Mép chiếu nghỉ T1 (Bán kính R=4.95m tại Z=7.5m, Y=5.0m, dải mảnh 10cm chắn cung tròn hướng giếng trời)
-    const landing1Center = new THREE.Vector3(0, 5.0, 7.5);
-    const landing1R = 4.95;
-    const l1Segments = 10;
-    const l1StartAngle = -Math.PI * 0.35;
-    const l1EndAngle = Math.PI * 0.35;
-    for (let i = 0; i < l1Segments; i++) {
-      const a1 = l1StartAngle + (i / l1Segments) * (l1EndAngle - l1StartAngle);
-      const a2 = l1StartAngle + ((i + 1) / l1Segments) * (l1EndAngle - l1StartAngle);
-      const x1 = landing1Center.x + Math.sin(a1) * landing1R;
-      const z1 = landing1Center.z - Math.cos(a1) * landing1R;
-      const x2 = landing1Center.x + Math.sin(a2) * landing1R;
-      const z2 = landing1Center.z - Math.cos(a2) * landing1R;
-      const box = new THREE.Box3(
-        new THREE.Vector3(Math.min(x1, x2) - 0.05, 5.0, Math.min(z1, z2) - 0.05),
-        new THREE.Vector3(Math.max(x1, x2) + 0.05, 6.0, Math.max(z1, z2) + 0.05)
-      );
-      this.registerSolidObjectCollider(null, { customBox: box, tag: `Landing_L1_FrontRail_s${i + 1}` });
-    }
+    // =========================================================================
+    // 2. CẦU THANG TẦNG 2 -> TẦNG 3 (Y: 10.0m -> 20.0m)
+    // =========================================================================
+    // 2.1. Vế trung tâm thẳng T2 (Rộng 5.4m, Z từ -24.0m đến -9.2m tiếp nối Chiếu nghỉ 2)
+    registerStraightCentralFlight(-24.0, -9.2, 10.0, 14.6, 5.4, 'T2_Central', 14);
 
-    // 2. CẦU THANG TẦNG 2 -> TẦNG 3:
-    // 2.1. Vế trung tâm T2 (5.4m rộng, Z: -24.0 -> -8.0)
-    registerFlightRail([
-      new THREE.Vector3(0, 10.0, -24.0),
-      new THREE.Vector3(0, 11.6, -18.5),
-      new THREE.Vector3(0, 13.4, -13.0),
-      new THREE.Vector3(0, 15.0, -8.0)
-    ], 5.4, 'T2_Central', 8);
+    // 2.2. Mép vòng cung Chiếu nghỉ 2 (R = 4.8m tại Z = -7.5m, Y = 15.0m, quay về hướng Nam Z > -7.5)
+    registerLandingRails(new THREE.Vector3(0, 15.0, -7.5), 4.8, 15.0, -Math.PI * 0.28, Math.PI * 0.28, 1, 'Landing_L2_FrontRail', 16);
 
-    // 2.2. Vế Tây T2 -> T3 (4.0m rộng, 14 phân đoạn nhỏ ôm trọn đường cong mềm mại)
-    registerFlightRail([
+    // 2.3. Vế cong Tây T2 -> T3 (Rộng 4.0m, từ Chiếu nghỉ lên Hành lang Tây Tầng 3)
+    registerCurvedWingFlight([
       new THREE.Vector3(-1.8, 15.0, -6.5),
       new THREE.Vector3(-7.5, 16.4, -7.8),
       new THREE.Vector3(-14.5, 18.2, -11.0),
       new THREE.Vector3(-22.0, 20.0, -15.5)
-    ], 4.0, 'T2T3_Wing_West', 14);
+    ], 4.0, 'T2T3_Wing_West', 36, true);
 
-    // 2.3. Vế Đông T2 -> T3 (4.0m rộng, 14 phân đoạn nhỏ ôm trọn đường cong mềm mại)
-    registerFlightRail([
+    // 2.4. Vế cong Đông T2 -> T3 (Rộng 4.0m, từ Chiếu nghỉ lên Hành lang Đông Tầng 3)
+    registerCurvedWingFlight([
       new THREE.Vector3(1.8, 15.0, -6.5),
       new THREE.Vector3(7.5, 16.4, -7.8),
       new THREE.Vector3(14.5, 18.2, -11.0),
       new THREE.Vector3(22.0, 20.0, -15.5)
-    ], 4.0, 'T2T3_Wing_East', 14);
-
-    // 2.4. Mép chiếu nghỉ T2 (Bán kính R=4.75m tại Z=-7.5m, Y=15.0m, dải mảnh 10cm chắn cung tròn hướng giếng trời)
-    const landing2Center = new THREE.Vector3(0, 15.0, -7.5);
-    const landing2R = 4.75;
-    const l2Segments = 10;
-    const l2StartAngle = -Math.PI * 0.35;
-    const l2EndAngle = Math.PI * 0.35;
-    for (let i = 0; i < l2Segments; i++) {
-      const a1 = l2StartAngle + (i / l2Segments) * (l2EndAngle - l2StartAngle);
-      const a2 = l2StartAngle + ((i + 1) / l2Segments) * (l2EndAngle - l2StartAngle);
-      const x1 = landing2Center.x + Math.sin(a1) * landing2R;
-      const z1 = landing2Center.z + Math.cos(a1) * landing2R;
-      const x2 = landing2Center.x + Math.sin(a2) * landing2R;
-      const z2 = landing2Center.z + Math.cos(a2) * landing2R;
-      const box = new THREE.Box3(
-        new THREE.Vector3(Math.min(x1, x2) - 0.05, 15.0, Math.min(z1, z2) - 0.05),
-        new THREE.Vector3(Math.max(x1, x2) + 0.05, 16.0, Math.max(z1, z2) + 0.05)
-      );
-      this.registerSolidObjectCollider(null, { customBox: box, tag: `Landing_L2_FrontRail_s${i + 1}` });
-    }
+    ], 4.0, 'T2T3_Wing_East', 36, false);
   }
 
   /**
-   * 1. BỌC PROXY HITBOX CHO SÁCH DỊCH CHUYỂN & HIỆN VẬT .GLB
-   * - Tự động gọi model.updateMatrixWorld(true)
-   * - Đo Box3 ôm khít thực tế của mô hình sau khi scale/xoay
-   * - Tạo một khối hộp vô hình (opacity: 0, transparent: true) ôm khít với padding = 0.12
-   * - Giúp người chơi click ở bất kỳ góc nào cũng trúng 100%, không bị bắn nhầm qua khe hở mesh
+   * BỌC PROXY HITBOX CHO SÁCH DỊCH CHUYỂN & HIỆN VẬT .GLB
+   * - Tự động tính toán Bounding Box ôm sát mô hình thực tế, loại trừ hoàn toàn tia sáng & hào quang
+   * - Tạo một khối hộp vô hình (opacity: 0, depthWrite: false) với padding nhẹ
+   * - Click chuột ở bất kỳ góc nào cũng trúng 100%, không bị bắn tia lọt qua khe mesh
    */
   createTightClickHitbox(targetObject, {
     loreKey = null,
@@ -427,25 +718,24 @@ export class MuseumHitboxManager {
     portalMetadata = null,
     targetSceneCoordinates = null,
     onActivate = null,
-    padding = 0.05,        // Nới nhẹ 5cm quanh vật thể (nhỏ gọn, ôm sát mô hình)
-    minSize = 0.30         // Kích thước tối thiểu nhỏ gọn 30cm
+    padding = 0.08,
+    minSize = 0.35,
+    realm = 'museum'
   } = {}) {
     if (!targetObject) return null;
 
-    // BẮT BUỘC: Cập nhật ma trận thế giới trước khi đo Box3 để không bị lệch tâm/tỷ lệ
-    targetObject.updateMatrixWorld(true);
-    let worldBox = new THREE.Box3().setFromObject(targetObject);
-
-    // Xử lý trường hợp đối tượng rỗng hoặc vị trí cục bộ chưa sẵn sàng
-    if (worldBox.isEmpty()) {
-      const fallbackPos = new THREE.Vector3();
-      targetObject.getWorldPosition(fallbackPos);
-      worldBox = new THREE.Box3(
-        new THREE.Vector3(fallbackPos.x - minSize * 0.5, fallbackPos.y, fallbackPos.z - minSize * 0.5),
-        new THREE.Vector3(fallbackPos.x + minSize * 0.5, fallbackPos.y + minSize, fallbackPos.z + minSize * 0.5)
-      );
+    // Dọn dẹp proxy cũ nếu đã từng bọc đối tượng này để tránh rác bộ nhớ
+    if (targetObject.userData?.clickProxyHitbox) {
+      const oldProxy = targetObject.userData.clickProxyHitbox;
+      const oldIdx = this.clickProxies.indexOf(oldProxy);
+      if (oldIdx !== -1) this.clickProxies.splice(oldIdx, 1);
+      this._removeDebugHelper(`Helper_${oldProxy.name}`);
+      oldProxy.geometry?.dispose();
+      oldProxy.material?.dispose();
+      this.scene.remove(oldProxy);
     }
 
+    const worldBox = computeTightWorldBox(targetObject, minSize);
     const size = new THREE.Vector3();
     const center = new THREE.Vector3();
     worldBox.getSize(size);
@@ -455,12 +745,12 @@ export class MuseumHitboxManager {
     const boxH = Math.max(size.y + padding * 2, minSize);
     const boxD = Math.max(size.z + padding * 2, minSize);
 
-    // Tạo hộp Proxy vô hình nhưng Raycaster luôn bắt trúng 100% (12 tam giác thay vì 50.000 tam giác)
+    // Hộp Proxy vô hình cho Raycaster
     const proxyGeo = new THREE.BoxGeometry(boxW, boxH, boxD);
     const proxyMat = new THREE.MeshBasicMaterial({
       color: 0xfde047,
       transparent: true,
-      opacity: 0.0,       // Vô hình với mắt thường nhưng Raycaster vẫn nhận diện
+      opacity: 0.0,
       depthWrite: false,
       wireframe: false
     });
@@ -469,7 +759,7 @@ export class MuseumHitboxManager {
     proxyMesh.name = `ClickHitbox_${loreKey || portalTargetRealm || targetObject.name || 'Artifact'}`;
     proxyMesh.position.copy(center);
 
-    // Gắn toàn bộ metadata tương tác lên hộp Hitbox chuẩn này
+    // Gắn metadata tương tác
     const mergedUserData = {
       ...(targetObject.userData || {}),
       isClickProxy: true,
@@ -480,7 +770,8 @@ export class MuseumHitboxManager {
       portalMetadata: portalMetadata || targetObject.userData?.portalMetadata,
       targetSceneCoordinates: targetSceneCoordinates || targetObject.userData?.targetSceneCoordinates,
       onActivate: onActivate || targetObject.userData?.onActivate,
-      linkedVisualObject: targetObject
+      linkedVisualObject: targetObject,
+      realm
     };
 
     if (mergedUserData.isBookPortal) {
@@ -500,12 +791,12 @@ export class MuseumHitboxManager {
     this.scene.add(proxyMesh);
     this.clickProxies.push(proxyMesh);
 
-    // Đăng ký tự động với Lore Guide nếu có loreKey
+    // Đăng ký tự động với Lore Guide
     if (mergedUserData.loreKey && typeof window !== 'undefined' && window.__loreGuide?.registerArtifact) {
       window.__loreGuide.registerArtifact(proxyMesh, mergedUserData.loreKey);
     }
 
-    // Đăng ký tự động với PortalInteraction nếu là sách dịch chuyển
+    // Đăng ký tự động với PortalInteraction
     if (mergedUserData.isBookPortal && typeof window !== 'undefined' && window.registerInteractiveBook) {
       window.registerInteractiveBook(proxyMesh, mergedUserData.targetSceneCoordinates, mergedUserData.portalMetadata || {
         id: mergedUserData.loreKey || 'interactive_book',
@@ -513,34 +804,31 @@ export class MuseumHitboxManager {
       });
     }
 
-    // Thêm khung dây màu VÀNG KIM vào nhóm Debug (bấm phím H sẽ thấy)
-    const debugBox = new THREE.Box3().setFromCenterAndSize(center, new THREE.Vector3(boxW, boxH, boxD));
-    const helper = new THREE.Box3Helper(debugBox, 0xfde047);
-    helper.name = `Helper_${proxyMesh.name}`;
-    this.debugHelpers.add(helper);
+    // Lưu thông số khung dây VÀNG KIM (khởi tạo lười khi bật phím H hoặc F2)
+    worldBox.setFromCenterAndSize(center, size.set(boxW, boxH, boxD));
+    this._setDebugHelperSpec(`Helper_${proxyMesh.name}`, worldBox, 0xfde047, realm);
 
     return proxyMesh;
   }
 
   /**
-   * 2. ĐĂNG KÝ HITBOX VẬT CẢN CỨNG (BỆ ĐÁ HOA SEN, ĐÀI TRỐNG ĐỒNG, HÀNG CỘT CUNG ĐÌNH, TƯỜNG)
-   * shrinkFactor: 0.92 thu nhẹ 8% quanh tâm để người chơi tiến sát ngắm hiện vật tự nhiên
+   * ĐĂNG KÝ HITBOX VẬT CẢN CỨNG (BỆ ĐÁ, CỘT, TƯỜNG, ĐÀI QUAN SÁT)
    */
   registerSolidObjectCollider(object3D, {
-    shrinkFactor = 0.92,   // Thu nhẹ 8% để người chơi tiến sát bệ ngắm hiện vật tự nhiên
+    shrinkFactor = 0.92,
     customBox = null,
-    tag = 'Obstacle'
+    tag = 'Obstacle',
+    helperColor = 0x22c55e,
+    realm = 'museum'
   } = {}) {
     let box3 = null;
 
     if (customBox) {
       box3 = customBox.clone();
     } else if (object3D) {
-      object3D.updateMatrixWorld(true);
-      box3 = new THREE.Box3().setFromObject(object3D);
+      box3 = computeTightWorldBox(object3D);
       if (box3.isEmpty()) return null;
 
-      // Co giãn nhẹ theo shrinkFactor quanh tâm để tránh kẹt vai nhân vật
       const center = new THREE.Vector3();
       const size = new THREE.Vector3();
       box3.getCenter(center);
@@ -552,174 +840,270 @@ export class MuseumHitboxManager {
 
     if (!box3) return null;
 
-    this.solidBoxes.push({ box: box3, tag, sourceObject: object3D });
+    // Dọn dẹp collider cũ nếu object3D đã từng đăng ký
+    if (object3D && object3D.userData?.solidBoxEntry) {
+      const oldEntry = object3D.userData.solidBoxEntry;
+      const oldIdx = this.solidBoxes.indexOf(oldEntry);
+      if (oldIdx !== -1) this.solidBoxes.splice(oldIdx, 1);
+      this._unindexSolidEntry(oldEntry);
+      this._removeDebugHelper(`SolidHelper_${tag}`);
+    }
 
-    // Thêm khung dây màu XANH LÁ vào nhóm Debug (bấm phím H sẽ thấy)
-    const helper = new THREE.Box3Helper(box3, 0x22c55e);
-    helper.name = `SolidHelper_${tag}`;
-    this.debugHelpers.add(helper);
+    const entry = { box: box3, tag, sourceObject: object3D, realm, _stamp: 0, _bucketKeys: null };
+    if (object3D) object3D.userData.solidBoxEntry = entry;
+    this.solidBoxes.push(entry);
+    this._indexSolidEntry(entry);
+
+    // Lưu thông số khung dây Debug (khởi tạo lười khi bật [H]/[F2])
+    this._setDebugHelperSpec(`SolidHelper_${tag}`, box3, helperColor, realm);
 
     return box3;
   }
 
   /**
-   * CHUẨN HÓA HITBOX TƯỜNG PHÒNG CÓ CHỪA Ô CỬA RA VÀO (DOORWAY WIDTH = 5.4M)
-   * Tuyệt đối không dùng 1 Box3 bọc kín cả mặt tiền làm chặn lối vào phòng!
-   * Chia bức tường có cửa thành 2 nửa Trái và Phải chừa trống đúng 5.4m ở giữa.
-   *
-   * @param {THREE.Vector3} roomCenter Tâm phòng trưng bày
-   * @param {number} roomWidth Chiều rộng phòng (trục X nếu door ở front/back)
-   * @param {number} roomDepth Chiều sâu phòng (trục Z nếu door ở front/back)
-   * @param {number} wallHeight Chiều cao tường (mặc định 8.4m)
-   * @param {number} wallThickness Độ dày tường (mặc định 0.55m)
-   * @param {string} doorSide Hướng cửa: 'front' (Z+), 'back' (Z-), 'left' (X-), 'right' (X+)
-   * @param {number} doorWidth Chiều rộng ô cửa thông thoáng (mặc định 5.4m)
-   * @param {number} floorY Cao độ sàn phòng (mặc định 0m)
+   * ĐĂNG KÝ DANH SÁCH HITBOX CHO CÁC THẾ GIỚI TRUYỆN ĐỘC LẬP
+   * (Truyện Kiều, Sơn Tinh - Thủy Tinh, An Dương Vương, Vợ Nhặt)
    */
-  registerRoomWallsWithDoorway({
-    roomCenter = new THREE.Vector3(0, 0, 0),
-    roomWidth = 26,
-    roomDepth = 28,
-    wallHeight = 8.4,
-    wallThickness = 0.25,
-    doorSide = 'front',    // 'front' (Z+), 'back' (Z-), 'left' (X-), 'right' (X+)
-    doorWidth = 5.4,
-    floorY = 0
-  } = {}) {
-    const hw = roomWidth * 0.5;
-    const hd = roomDepth * 0.5;
-    const cx = roomCenter.x;
-    const cy = floorY || roomCenter.y || 0;
-    const cz = roomCenter.z;
-    const halfDoor = doorWidth * 0.5;
+  registerRealmHitboxes(realmName, hitboxes = []) {
+    if (!Array.isArray(hitboxes) || hitboxes.length === 0) return;
+    hitboxes.forEach((hb) => {
+      if (!hb || !hb.box) return;
+      this.registerSolidObjectCollider(null, {
+        customBox: hb.box,
+        tag: `${realmName}_${hb.name || 'Object'}`,
+        helperColor: 0x38bdf8,
+        realm: realmName
+      });
+    });
+    console.log(
+      `%c[Hitbox Architect] Đã đăng ký ${hitboxes.length} hitbox riêng biệt cho cõi: ${realmName}`,
+      'color: #38bdf8; font-weight: bold;'
+    );
+  }
 
-    const addWallSegment = (minX, minZ, maxX, maxZ, label) => {
-      const box = new THREE.Box3(
-        new THREE.Vector3(minX, cy, minZ),
-        new THREE.Vector3(maxX, cy + wallHeight, maxZ)
-      );
-      this.registerSolidObjectCollider(null, { customBox: box, tag: label });
-    };
-
-    if (doorSide === 'front') {
-      // Cửa ở tường Nam (Z+)
-      // Nửa Trái (X âm hơn cửa)
-      addWallSegment(cx - hw, cz + hd - wallThickness, cx - halfDoor, cz + hd + wallThickness, 'Wall_Front_Left');
-      // Nửa Phải (X dương hơn cửa)
-      addWallSegment(cx + halfDoor, cz + hd - wallThickness, cx + hw, cz + hd + wallThickness, 'Wall_Front_Right');
-      // Tường Bắc (Z-)
-      addWallSegment(cx - hw, cz - hd - wallThickness, cx + hw, cz - hd + wallThickness, 'Wall_Back');
-      // Tường Tây (X-) & Tường Đông (X+)
-      addWallSegment(cx - hw - wallThickness, cz - hd, cx - hw + wallThickness, cz + hd, 'Wall_Left');
-      addWallSegment(cx + hw - wallThickness, cz - hd, cx + hw + wallThickness, cz + hd, 'Wall_Right');
-
-    } else if (doorSide === 'back') {
-      // Cửa ở tường Bắc (Z-)
-      addWallSegment(cx - hw, cz - hd - wallThickness, cx - halfDoor, cz - hd + wallThickness, 'Wall_Back_Left');
-      addWallSegment(cx + halfDoor, cz - hd - wallThickness, cx + hw, cz - hd + wallThickness, 'Wall_Back_Right');
-      // Tường Nam (Z+)
-      addWallSegment(cx - hw, cz + hd - wallThickness, cx + hw, cz + hd + wallThickness, 'Wall_Front');
-      // Tường Tây & Đông
-      addWallSegment(cx - hw - wallThickness, cz - hd, cx - hw + wallThickness, cz + hd, 'Wall_Left');
-      addWallSegment(cx + hw - wallThickness, cz - hd, cx + hw + wallThickness, cz + hd, 'Wall_Right');
-
-    } else if (doorSide === 'right') {
-      // Cửa ở tường Đông (X+) - Hướng nhìn từ phòng ra đại sảnh (Phòng 01, Phòng 02, Phòng 03)
-      // Nửa Bắc (Z âm hơn cửa)
-      addWallSegment(cx + hw - wallThickness, cz - hd, cx + hw + wallThickness, cz - halfDoor, 'Wall_Right_North');
-      // Nửa Nam (Z dương hơn cửa)
-      addWallSegment(cx + hw - wallThickness, cz + halfDoor, cx + hw + wallThickness, cz + hd, 'Wall_Right_South');
-      // Tường Tây (X-)
-      addWallSegment(cx - hw - wallThickness, cz - hd, cx - hw + wallThickness, cz + hd, 'Wall_Left');
-      // Tường Bắc (Z-) & Tường Nam (Z+)
-      addWallSegment(cx - hw, cz - hd - wallThickness, cx + hw, cz - hd + wallThickness, 'Wall_Back');
-      addWallSegment(cx - hw, cz + hd - wallThickness, cx + hw, cz + hd + wallThickness, 'Wall_Front');
-
-    } else if (doorSide === 'left') {
-      // Cửa ở tường Tây (X-) - Hướng nhìn từ phòng ra đại sảnh (Phòng 05 Vợ Nhặt)
-      // Nửa Bắc
-      addWallSegment(cx - hw - wallThickness, cz - hd, cx - hw + wallThickness, cz - halfDoor, 'Wall_Left_North');
-      // Nửa Nam
-      addWallSegment(cx - hw - wallThickness, cz + halfDoor, cx - hw + wallThickness, cz + hd, 'Wall_Left_South');
-      // Tường Đông (X+)
-      addWallSegment(cx + hw - wallThickness, cz - hd, cx + hw + wallThickness, cz + hd, 'Wall_Right');
-      // Tường Bắc & Nam
-      addWallSegment(cx - hw, cz - hd - wallThickness, cx + hw, cz - hd + wallThickness, 'Wall_Back');
-      addWallSegment(cx - hw, cz + hd - wallThickness, cx + hw, cz + hd + wallThickness, 'Wall_Front');
+  /**
+   * Gỡ bỏ và giải phóng Hitbox vật cản & Debug helper của một cõi truyện riêng (khi exitRealm)
+   */
+  clearRealmHitboxes(realmName) {
+    if (!realmName) return;
+    for (let i = this.solidBoxes.length - 1; i >= 0; i--) {
+      const entry = this.solidBoxes[i];
+      if (entry.realm === realmName) {
+        this._unindexSolidEntry(entry);
+        this._removeDebugHelper(`SolidHelper_${entry.tag}`);
+        this.solidBoxes.splice(i, 1);
+      }
+    }
+    this.realmBuckets.delete(realmName);
+    for (let i = this.clickProxies.length - 1; i >= 0; i--) {
+      const p = this.clickProxies[i];
+      if (p?.userData?.realm === realmName) {
+        this._removeDebugHelper(`Helper_${p.name}`);
+        p.geometry?.dispose?.();
+        p.material?.dispose?.();
+        this.scene.remove(p);
+        this.clickProxies.splice(i, 1);
+      }
     }
   }
 
   /**
-   * 3. XỬ LÝ VA CHẠM TRƯỢT MƯỢT (SLIDING COLLISION RESOLUTION) CHO NGƯỜI CHƠI
-   * Tách kiểm tra trục X và trục Z độc lập giúp nhân vật trượt êm mượt dọc mặt tường hoặc bệ đá mà không bị kẹt cứng!
-   *
-   * @param {THREE.Vector3} currentPos Vị trí chân hiện tại của người chơi
-   * @param {THREE.Vector3} targetPos Vị trí mong muốn đi tới trong frame này
-   * @param {number} playerRadius Bán kính va chạm thân người (mặc định 0.45m)
-   * @param {number} playerHeight Chiều cao người chơi (mặc định 1.8m)
-   * @returns {THREE.Vector3} Tọa độ an toàn sau khi trượt mượt
+   * XỬ LÝ VA CHẠM TRƯỢT MƯỢT LIÊN TỤC (CONTINUOUS SWEPT WALL SLIDING & AABB PUSHOUT)
+   * - Phân vùng kiểm tra theo chiều cao (Vertical Height Filtering)
+   * - Tự động nhận diện Realm (Bảo Tàng vs Thế Giới Truyện) để không bị đụng nhầm vật thể
+   * - Chia nhỏ bước di chuyển (Swept Sub-stepping) chống tuyệt đối hiện tượng đi xuyên tường khi lag FPS
+   * - Trượt mượt theo mặt phẳng tiếp xúc (Wall Sliding)
+   * - Cơ chế De-penetration Pushout đẩy nhân vật ra khỏi kẹt góc 100%
    */
-  resolvePlayerMovement(currentPos, targetPos, playerRadius = 0.45, playerHeight = 1.8) {
+  resolvePlayerMovement(currentPos, targetPos, playerRadius = 0.25, playerHeight = 1.8) {
     if (!this.solidBoxes || this.solidBoxes.length === 0) {
       return targetPos.clone();
     }
 
-    // 1. Kiểm tra nếu bước đi thẳng không chạm bất kỳ vật cản nào -> đi thẳng thoải mái
-    if (!this._checkPlayerIntersectsAny(targetPos, playerRadius, playerHeight)) {
+    // 1. Xác định Realm hiện tại
+    let activeRealm = 'museum';
+    if (typeof window !== 'undefined') {
+      if (window.__activeScene && window.__truyenKieuScene && window.__activeScene === window.__truyenKieuScene) {
+        activeRealm = 'truyen_kieu';
+      } else if (window.__stttRealmActive || (window.__activeScene && window.__sonTinhThuyTinhScene && window.__activeScene === window.__sonTinhThuyTinhScene) || (targetPos.x >= 3000.0 && targetPos.z >= 3000.0)) {
+        activeRealm = 'son_tinh';
+      } else if (window.__activeScene && window.__anDuongVuongScene && window.__activeScene === window.__anDuongVuongScene) {
+        activeRealm = 'an_duong_vuong';
+      } else if (window.__activeScene && window.__voNhatScene && window.__activeScene === window.__voNhatScene) {
+        activeRealm = 'vo_nhat';
+      } else if (window.__tatDenRealmActive || (window.__activeScene && window.__tatDenScene && window.__activeScene === window.__tatDenScene)) {
+        activeRealm = 'tat_den';
+      } else if (window.__nqshRealmActive || (window.__activeScene && window.__namQuocSonHaScene && window.__activeScene === window.__namQuocSonHaScene)) {
+        activeRealm = 'nam_quoc_son_ha';
+      } else if (window.__thanhGiongRealmActive || (window.__activeScene && window.__thanhGiongScene && window.__activeScene === window.__thanhGiongScene)) {
+        activeRealm = 'thanh_giong';
+      } else if (targetPos.y > 35.0) {
+        activeRealm = 'aerial_realm';
+      }
+    }
+
+    // 2. Lọc các hộp vật cản cùng Realm và vùng không gian (Spatial Bucketing + Height Filtering)
+    const feetY = Math.min(currentPos.y, targetPos.y);
+    const headY = Math.max(currentPos.y, targetPos.y) + playerHeight;
+    const candidateBoxes = this._candidateBoxes;
+    candidateBoxes.length = 0;
+
+    if (activeRealm === 'museum') {
+      const minTier = this._getMuseumTier(feetY + 0.12);
+      const maxTier = this._getMuseumTier(headY - 0.10);
+      const minX = Math.min(currentPos.x, targetPos.x) - playerRadius;
+      const maxX = Math.max(currentPos.x, targetPos.x) + playerRadius;
+      const minZ = Math.min(currentPos.z, targetPos.z) - playerRadius;
+      const maxZ = Math.max(currentPos.z, targetPos.z) + playerRadius;
+      const minCx = Math.max(-511, Math.min(511, Math.floor(minX / 20.0)));
+      const maxCx = Math.max(-511, Math.min(511, Math.floor(maxX / 20.0)));
+      const minCz = Math.max(-511, Math.min(511, Math.floor(minZ / 20.0)));
+      const maxCz = Math.max(-511, Math.min(511, Math.floor(maxZ / 20.0)));
+
+      const stamp = (this._queryStamp = (this._queryStamp + 1) | 0);
+      for (let t = minTier; t <= maxTier; t++) {
+        for (let cx = minCx; cx <= maxCx; cx++) {
+          for (let cz = minCz; cz <= maxCz; cz++) {
+            const cell = this._museumGrid.get(this._getMuseumCellKey(t, cx, cz));
+            if (!cell) continue;
+            for (let k = 0; k < cell.length; k++) {
+              const entry = cell[k];
+              if (entry._stamp === stamp) continue;
+              entry._stamp = stamp;
+              const b = entry.box;
+              if (b.max.y >= feetY + 0.12 && b.min.y <= headY - 0.10) {
+                candidateBoxes.push(b);
+              }
+            }
+          }
+        }
+      }
+    } else {
+      const realmList = this.realmBuckets.get(activeRealm);
+      if (realmList) {
+        for (let i = 0; i < realmList.length; i++) {
+          const b = realmList[i].box;
+          if (b.max.y >= feetY + 0.12 && b.min.y <= headY - 0.10) {
+            candidateBoxes.push(b);
+          }
+        }
+      }
+    }
+
+    if (candidateBoxes.length === 0) {
       return targetPos.clone();
     }
 
-    const resolved = currentPos.clone();
-    resolved.y = targetPos.y;
+    const checkOverlap = (posX, posY, posZ) => {
+      const minX = posX - playerRadius;
+      const maxX = posX + playerRadius;
+      const minY = posY + 0.12;
+      const maxY = posY + playerHeight;
+      const minZ = posZ - playerRadius;
+      const maxZ = posZ + playerRadius;
 
-    // 2. Thử nghiệm trượt theo trục X trước (giữ nguyên Z cũ)
-    const testPosX = new THREE.Vector3(targetPos.x, currentPos.y, currentPos.z);
-    let movedX = false;
-    if (!this._checkPlayerIntersectsAny(testPosX, playerRadius, playerHeight)) {
-      resolved.x = targetPos.x;
-      movedX = true;
+      for (let i = 0; i < candidateBoxes.length; i++) {
+        const b = candidateBoxes[i];
+        if (maxX > b.min.x && minX < b.max.x &&
+            maxY > b.min.y && minY < b.max.y &&
+            maxZ > b.min.z && minZ < b.max.z) {
+          return b;
+        }
+      }
+      return null;
+    };
+
+    // 3. Quãng đường di chuyển trong frame
+    const totalDist = Math.hypot(targetPos.x - currentPos.x, targetPos.z - currentPos.z);
+    if (totalDist < 0.0001) {
+      return currentPos.clone();
     }
 
-    // 3. Thử nghiệm trượt theo trục Z tiếp theo (dựa trên X đã resolved)
-    const testPosZ = new THREE.Vector3(resolved.x, currentPos.y, targetPos.z);
-    let movedZ = false;
-    if (!this._checkPlayerIntersectsAny(testPosZ, playerRadius, playerHeight)) {
-      resolved.z = targetPos.z;
-      movedZ = true;
+    const maxSubStep = Math.min(playerRadius * 0.6, 0.15);
+
+    // Fast-path: Nếu di chuyển rất ngắn (frame 60 FPS thông thường) và đích đến hoàn toàn trống -> đi thẳng tức thì O(1)
+    if (totalDist <= maxSubStep && !checkOverlap(targetPos.x, targetPos.y, targetPos.z)) {
+      return targetPos.clone();
     }
 
-    // 4. Nếu di chuyển X bị chặn, thử nghiệm chỉ đi theo trục Z độc lập từ currentPos
-    if (!movedX && !movedZ) {
-      const testPosZOnly = new THREE.Vector3(currentPos.x, currentPos.y, targetPos.z);
-      if (!this._checkPlayerIntersectsAny(testPosZOnly, playerRadius, playerHeight)) {
-        resolved.z = targetPos.z;
-        movedZ = true;
+    // 4. Swept Sub-stepping: Chia nhỏ quãng đường theo delta bước nhỏ để kiểm tra liên tục, chống tuyệt đối xuyên tường
+    const numSteps = Math.max(1, Math.min(64, Math.ceil(totalDist / maxSubStep)));
+    const deltaX = (targetPos.x - currentPos.x) / numSteps;
+    const deltaZ = (targetPos.z - currentPos.z) / numSteps;
+
+    let simPos = currentPos.clone();
+    simPos.y = targetPos.y;
+
+    for (let step = 0; step < numSteps; step++) {
+      const nextX = simPos.x + deltaX;
+      const nextZ = simPos.z + deltaZ;
+
+      // A. Nếu bước tiếp theo không va chạm -> tiến tới thẳng
+      if (!checkOverlap(nextX, simPos.y, nextZ)) {
+        simPos.x = nextX;
+        simPos.z = nextZ;
+        continue;
+      }
+
+      // B. Thử trượt theo trục X (bị cản Z, chỉ đi X)
+      if (Math.abs(deltaX) > 0.0001 && !checkOverlap(nextX, simPos.y, simPos.z)) {
+        simPos.x = nextX;
+      }
+
+      // C. Thử trượt theo trục Z (bị cản X, chỉ đi Z)
+      if (Math.abs(deltaZ) > 0.0001 && !checkOverlap(simPos.x, simPos.y, nextZ)) {
+        simPos.z = nextZ;
+      }
+
+      // D. De-penetration pushout nếu vẫn còn chạm góc
+      const hitBox = checkOverlap(simPos.x, simPos.y, simPos.z);
+      if (hitBox) {
+        const overlapX1 = (hitBox.max.x + playerRadius) - simPos.x;
+        const overlapX2 = simPos.x - (hitBox.min.x - playerRadius);
+        const pushX = overlapX1 < overlapX2 ? overlapX1 : -overlapX2;
+
+        const overlapZ1 = (hitBox.max.z + playerRadius) - simPos.z;
+        const overlapZ2 = simPos.z - (hitBox.min.z - playerRadius);
+        const pushZ = overlapZ1 < overlapZ2 ? overlapZ1 : -overlapZ2;
+
+        if (Math.abs(pushX) < Math.abs(pushZ)) {
+          simPos.x += pushX + Math.sign(pushX) * 0.005;
+        } else {
+          simPos.z += pushZ + Math.sign(pushZ) * 0.005;
+        }
       }
     }
 
-    return resolved;
-  }
-
-  _checkPlayerIntersectsAny(feetPos, radius, height) {
-    const playerBox = new THREE.Box3(
-      new THREE.Vector3(feetPos.x - radius, feetPos.y + 0.1, feetPos.z - radius),
-      new THREE.Vector3(feetPos.x + radius, feetPos.y + height, feetPos.z + radius)
-    );
-
-    for (let i = 0; i < this.solidBoxes.length; i++) {
-      if (playerBox.intersectsBox(this.solidBoxes[i].box)) {
-        return true;
-      }
-    }
-    return false;
+    return simPos;
   }
 
   /**
-   * 4. BẮN TIA RAYCASTER CHỈ QUÉT QUA CÁC HỘP PROXY HITBOX CHUẨN
+   * BẮN TIA RAYCASTER TƯƠNG TÁC QUA CÁC HỘP PROXY HITBOX CHUẨN
+   * Tự động lọc chỉ các đối tượng đang hiển thị (visible=true) và trong cõi hoạt động
    */
-  raycastInteractiveHitboxes(raycaster, maxDistance = 24.0) {
-    if (this.clickProxies.length === 0) return null;
-    const hits = raycaster.intersectObjects(this.clickProxies, false);
+  raycastInteractiveHitboxes(raycaster, maxDistance = 28.0) {
+    if (!this.clickProxies || this.clickProxies.length === 0) return null;
+
+    const validProxies = [];
+    for (let i = 0; i < this.clickProxies.length; i++) {
+      const p = this.clickProxies[i];
+      if (!p || !p.visible) continue;
+      const linked = p.userData?.linkedVisualObject;
+      if (linked) {
+        let isVis = true;
+        let cur = linked;
+        while (cur) {
+          if (cur.visible === false) { isVis = false; break; }
+          cur = cur.parent;
+        }
+        if (!isVis) continue;
+      }
+      validProxies.push(p);
+    }
+
+    if (validProxies.length === 0) return null;
+
+    const hits = raycaster.intersectObjects(validProxies, false);
     if (hits.length > 0 && hits[0].distance <= maxDistance) {
       return hits[0];
     }
@@ -731,12 +1115,20 @@ export class MuseumHitboxManager {
    */
   clearAllHitboxes() {
     this.solidBoxes.length = 0;
+    this.realmBuckets.clear();
+    this._museumGrid.clear();
+    this._candidateBoxes.length = 0;
+    this.debugHelperSpecs.clear();
     this.clickProxies.forEach((mesh) => {
       mesh.geometry?.dispose?.();
       mesh.material?.dispose?.();
       this.scene.remove(mesh);
     });
     this.clickProxies.length = 0;
+    this.debugHelpers.children.forEach((h) => {
+      h.geometry?.dispose?.();
+      h.material?.dispose?.();
+    });
     this.debugHelpers.clear();
   }
 }

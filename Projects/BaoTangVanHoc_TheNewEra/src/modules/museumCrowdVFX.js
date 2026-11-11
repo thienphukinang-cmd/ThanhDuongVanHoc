@@ -1,12 +1,13 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 /**
  * HỆ THỐNG KHÁCH THAM QUAN BÓNG ĐEN NGHỆ THUẬT (SILHOUETTE CROWD SIMULATION)
  * Tấp nập khắp Đại Sảnh, Hành Lang và các Phòng Triển Lãm Văn Học.
  * 
  * Tối ưu hóa tuyệt đối 60+ FPS cho NVIDIA GeForce GTX 1050 2GB VRAM:
- * - Dùng chung Geometry cho toàn bộ các cá thể bóng đen (Zero duplicate memory overhead).
- * - Vật liệu THREE.MeshBasicMaterial đơn sắc trầm (#0d121c, opacity: 0.76), không tính ánh sáng phức tạp.
+ * - Gộp 5 khối hình nhân thành 1 Geometry duy nhất và kết xuất toàn bộ 42 khách bằng 2 InstancedMesh (252 -> 2 Draw Calls).
+ * - Vật liệu THREE.MeshBasicMaterial đơn sắc trầm (#0d121c, opacity: 0.76), FrontSide, không tính ánh sáng phức tạp.
  * - Tự động ẩn toàn bộ khi người chơi bước vào Cõi Sách (Y > 100 hoặc __stttRealmActive).
  */
 
@@ -29,7 +30,7 @@ export function createMuseumCrowdSystem(scene, options = {}) {
     transparent: true,
     opacity: 0.76,   // Độ mờ nghệ thuật 0.76
     depthWrite: false,
-    side: THREE.DoubleSide,
+    side: THREE.FrontSide,
     fog: false
   });
 
@@ -38,66 +39,61 @@ export function createMuseumCrowdSystem(scene, options = {}) {
     transparent: true,
     opacity: 0.32,
     depthWrite: false,
-    side: THREE.DoubleSide,
+    side: THREE.FrontSide,
     fog: false
   });
 
   // =========================================================================
-  // 2. HÌNH KHỐI NHẸ DÙNG CHUNG (SHARED GEOMETRIES CHO TOÀN BỘ ĐÁM ĐÔNG)
-  // Ghép: Thân áo dáng dài thuôn sàn + Thân ngực + Vai bo tròn + Cổ + Đầu cầu + Vòng bóng đổ
+  // 2. HÌNH KHỐI NHẸ GỘP CHUNG + 2 INSTANCED MESH CHO TOÀN BỘ ĐÁM ĐÔNG
   // =========================================================================
   const skirtGeo = new THREE.CylinderGeometry(0.20, 0.34, 0.92, 10);
+  skirtGeo.translate(0, 0.46, 0);
+
   const torsoGeo = new THREE.CylinderGeometry(0.25, 0.20, 0.52, 10);
+  torsoGeo.translate(0, 1.14, 0);
+
   const shoulderGeo = new THREE.SphereGeometry(0.24, 10, 8);
+  shoulderGeo.scale(1.22, 0.55, 0.75);
+  shoulderGeo.translate(0, 1.38, 0);
+
   const neckGeo = new THREE.CylinderGeometry(0.08, 0.09, 0.14, 8);
+  neckGeo.translate(0, 1.48, 0);
+
   const headGeo = new THREE.SphereGeometry(0.165, 12, 10);
-  const shadowGeo = new THREE.CircleGeometry(0.38, 14);
-  shadowGeo.rotateX(-Math.PI / 2);
+  headGeo.translate(0, 1.65, 0);
 
-  function createSilhouetteFigure() {
-    const figureRoot = new THREE.Group();
-    figureRoot.name = 'Silhouette_Visitor';
-
-    // bodyPivot chứa toàn bộ hình nhân để thực hiện nhịp bước nhấp nhô & lắc lư
-    const bodyPivot = new THREE.Group();
-    bodyPivot.name = 'Body_Pivot';
-    figureRoot.add(bodyPivot);
-
-    // 1. Thân áo dáng dài thuôn xuống sàn
-    const skirtMesh = new THREE.Mesh(skirtGeo, silhouetteMat);
-    skirtMesh.position.y = 0.46;
-    bodyPivot.add(skirtMesh);
-
-    // 2. Thân ngực trên
-    const torsoMesh = new THREE.Mesh(torsoGeo, silhouetteMat);
-    torsoMesh.position.y = 1.14;
-    bodyPivot.add(torsoMesh);
-
-    // 3. Vai bo tròn tự nhiên
-    const shoulderMesh = new THREE.Mesh(shoulderGeo, silhouetteMat);
-    shoulderMesh.scale.set(1.22, 0.55, 0.75);
-    shoulderMesh.position.y = 1.38;
-    bodyPivot.add(shoulderMesh);
-
-    // 4. Cổ
-    const neckMesh = new THREE.Mesh(neckGeo, silhouetteMat);
-    neckMesh.position.y = 1.48;
-    bodyPivot.add(neckMesh);
-
-    // 5. Đầu cầu
-    const headMesh = new THREE.Mesh(headGeo, silhouetteMat);
-    headMesh.position.y = 1.65;
-    bodyPivot.add(headMesh);
-
-    // 6. Vòng bóng đổ mờ áp sát mặt sàn
-    const floorShadow = new THREE.Mesh(shadowGeo, floorShadowMat);
-    floorShadow.position.y = 0.02;
-    figureRoot.add(floorShadow);
-
-    figureRoot.userData.bodyPivot = bodyPivot;
-    figureRoot.userData.floorShadow = floorShadow;
-    return figureRoot;
+  const partGeos = [skirtGeo, torsoGeo, shoulderGeo, neckGeo, headGeo];
+  const mergedBodyGeo = mergeGeometries(partGeos, false);
+  partGeos.forEach(g => g.dispose());
+  if (mergedBodyGeo) {
+    mergedBodyGeo.computeVertexNormals();
+    mergedBodyGeo.computeBoundingBox();
+    mergedBodyGeo.computeBoundingSphere();
   }
+
+  const shadowGeo = new THREE.CircleGeometry(0.38, 12);
+  shadowGeo.rotateX(-Math.PI / 2);
+  shadowGeo.computeVertexNormals();
+  shadowGeo.computeBoundingBox();
+  shadowGeo.computeBoundingSphere();
+
+  const bodyInstanced = new THREE.InstancedMesh(mergedBodyGeo, silhouetteMat, totalVisitors);
+  bodyInstanced.name = 'Instanced_Silhouette_Visitors';
+  bodyInstanced.castShadow = false;
+  bodyInstanced.receiveShadow = false;
+  bodyInstanced.frustumCulled = true;
+  bodyInstanced.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 8, 0), 75);
+  bodyInstanced.userData.ignoreRaycaster = true;
+
+  const shadowInstanced = new THREE.InstancedMesh(shadowGeo, floorShadowMat, totalVisitors);
+  shadowInstanced.name = 'Instanced_Silhouette_Shadows';
+  shadowInstanced.castShadow = false;
+  shadowInstanced.receiveShadow = false;
+  shadowInstanced.frustumCulled = true;
+  shadowInstanced.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 8, 0), 75);
+  shadowInstanced.userData.ignoreRaycaster = true;
+
+  crowdGroup.add(bodyInstanced, shadowInstanced);
 
   // =========================================================================
   // 3. MẠNG LƯỚI ĐIỂM MỐC (WAYPOINTS) PHỦ KHẮP BẢO TÀNG
@@ -176,12 +172,12 @@ export function createMuseumCrowdSystem(scene, options = {}) {
   ];
 
   // =========================================================================
-  // 4. PHÂN BỔ NHÓM KHÁCH (1, 3, 5 NGƯỜI) VÀ KHỞI TẠO ĐÁM ĐÔNG
-  // Tỉ lệ: 40% Đi 1 mình, 35% Đi nhóm 3 người, 25% Đi nhóm 5 người
-  // Chiều cao: scale.y từ 0.75 (~1.35m) đến 1.18 (~1.92m) kèm tỉ lệ vai tự nhiên
+  // 4. PHÂN BỔ NHÓM KHÁCH (1, 3, 5 NGƯỜI) VÀ KHỞI TẠO ĐÁM ĐÔNG INSTANCED
   // =========================================================================
   const visitorGroups = [];
   let spawnedCount = 0;
+  const dummy = new THREE.Object3D();
+  const shadowDummy = new THREE.Object3D();
 
   while (spawnedCount < totalVisitors) {
     const roll = Math.random();
@@ -194,7 +190,7 @@ export function createMuseumCrowdSystem(scene, options = {}) {
     const currentFloorWaypoints = isFloor2 ? waypointsFloor2 : waypointsFloor1;
 
     const startWpIdx = Math.floor(Math.random() * currentFloorWaypoints.length);
-    let nextWpIdx = (startWpIdx + 1 + Math.floor(Math.random() * (currentFloorWaypoints.length - 1))) % currentFloorWaypoints.length;
+    const nextWpIdx = (startWpIdx + 1 + Math.floor(Math.random() * (currentFloorWaypoints.length - 1))) % currentFloorWaypoints.length;
 
     const startWp = currentFloorWaypoints[startWpIdx];
     const groupCenter = startWp.pos.clone();
@@ -202,50 +198,6 @@ export function createMuseumCrowdSystem(scene, options = {}) {
     groupCenter.z += (Math.random() - 0.5) * 2.5;
 
     const groupSpeed = 1.15 + Math.random() * 0.55; // Tốc độ bước bộ khoan thai (1.15 - 1.7 m/s)
-    const members = [];
-
-    for (let i = 0; i < actualSize; i++) {
-      const figure = createSilhouetteFigure();
-
-      // Đa dạng chiều cao rõ rệt: từ 0.75 (~1.35m) đến 1.18 (~1.92m)
-      const heightScale = 0.75 + Math.random() * (1.18 - 0.75);
-      // Tỉ lệ ngang vai khác nhau tạo phom người gầy, vừa, hoặc vạm vỡ
-      const shoulderScale = 0.86 + Math.random() * 0.30;
-      const depthScale = (shoulderScale + 1.0) * 0.5;
-
-      figure.scale.set(shoulderScale, heightScale, depthScale);
-
-      // Đồng bộ kích thước đĩa bóng đổ dưới sàn theo phom người
-      if (figure.userData.floorShadow) {
-        figure.userData.floorShadow.scale.set(shoulderScale, 1.0, shoulderScale);
-      }
-
-      // Đội hình nhóm tự nhiên quanh nhóm trưởng (khoảng cách vai kề vai 0.8m - 1.6m, không chồng chéo)
-      const localOffset = new THREE.Vector3(0, 0, 0);
-      if (i === 1) {
-        localOffset.set(-0.85 - Math.random() * 0.25, 0, -0.40 - Math.random() * 0.25);
-      } else if (i === 2) {
-        localOffset.set(0.85 + Math.random() * 0.25, 0, -0.40 - Math.random() * 0.25);
-      } else if (i === 3) {
-        localOffset.set(-1.55 - Math.random() * 0.30, 0, -0.85 - Math.random() * 0.30);
-      } else if (i === 4) {
-        localOffset.set(1.55 + Math.random() * 0.30, 0, -0.85 - Math.random() * 0.30);
-      }
-
-      figure.position.copy(groupCenter).add(localOffset);
-      crowdGroup.add(figure);
-      spawnedCount++;
-
-      members.push({
-        mesh: figure,
-        bodyPivot: figure.userData.bodyPivot,
-        localOffset,
-        walkPhase: Math.random() * Math.PI * 2,
-        walkFreq: 5.2 + Math.random() * 1.8,
-        heightScale
-      });
-    }
-
     const initialHeading = new THREE.Vector3(
       currentFloorWaypoints[nextWpIdx].pos.x - groupCenter.x,
       0,
@@ -257,6 +209,55 @@ export function createMuseumCrowdSystem(scene, options = {}) {
     }
 
     const initialAngle = Math.atan2(initialHeading.x, initialHeading.z);
+    const members = [];
+
+    for (let i = 0; i < actualSize; i++) {
+      const idx = spawnedCount;
+      // Đa dạng chiều cao rõ rệt: từ 0.75 (~1.35m) đến 1.18 (~1.92m)
+      const heightScale = 0.75 + Math.random() * (1.18 - 0.75);
+      // Tỉ lệ ngang vai khác nhau tạo phom người gầy, vừa, hoặc vạm vỡ
+      const shoulderScale = 0.86 + Math.random() * 0.30;
+      const depthScale = (shoulderScale + 1.0) * 0.5;
+
+      // Đội hình nhóm tự nhiên quanh nhóm trưởng
+      const localOffset = new THREE.Vector3(0, 0, 0);
+      if (i === 1) {
+        localOffset.set(-0.85 - Math.random() * 0.25, 0, -0.40 - Math.random() * 0.25);
+      } else if (i === 2) {
+        localOffset.set(0.85 + Math.random() * 0.25, 0, -0.40 - Math.random() * 0.25);
+      } else if (i === 3) {
+        localOffset.set(-1.55 - Math.random() * 0.30, 0, -0.85 - Math.random() * 0.30);
+      } else if (i === 4) {
+        localOffset.set(1.55 + Math.random() * 0.30, 0, -0.85 - Math.random() * 0.30);
+      }
+
+      const pos = groupCenter.clone().add(localOffset);
+
+      dummy.position.copy(pos);
+      dummy.rotation.set(0, initialAngle, 0);
+      dummy.scale.set(shoulderScale, heightScale, depthScale);
+      dummy.updateMatrix();
+      bodyInstanced.setMatrixAt(idx, dummy.matrix);
+
+      shadowDummy.position.set(pos.x, pos.y + 0.02, pos.z);
+      shadowDummy.rotation.set(0, initialAngle, 0);
+      shadowDummy.scale.set(shoulderScale, 1.0, shoulderScale);
+      shadowDummy.updateMatrix();
+      shadowInstanced.setMatrixAt(idx, shadowDummy.matrix);
+
+      spawnedCount++;
+
+      members.push({
+        idx,
+        pos,
+        localOffset,
+        shoulderScale,
+        heightScale,
+        depthScale,
+        walkPhase: Math.random() * Math.PI * 2,
+        walkFreq: 5.2 + Math.random() * 1.8
+      });
+    }
 
     visitorGroups.push({
       center: groupCenter,
@@ -270,6 +271,9 @@ export function createMuseumCrowdSystem(scene, options = {}) {
       members
     });
   }
+
+  bodyInstanced.instanceMatrix.needsUpdate = true;
+  shadowInstanced.instanceMatrix.needsUpdate = true;
 
   // =========================================================================
   // 5. VÒNG LẶP CẬP NHẬT DI CHUYỂN & HÀNH VI THAM QUAN (60+ FPS OPTIMIZED)
@@ -300,12 +304,10 @@ export function createMuseumCrowdSystem(scene, options = {}) {
     let nowSec = 0;
 
     if (deltaOrTimestamp > 100) {
-      // Nhận timestamp dạng performance.now()
       dt = Math.min((deltaOrTimestamp - lastTime) * 0.001, 0.1);
       lastTime = deltaOrTimestamp;
       nowSec = deltaOrTimestamp * 0.001;
     } else {
-      // Nhận delta chuẩn theo giây từ main loop
       dt = Math.min(Math.max(deltaOrTimestamp || 0.016, 0.001), 0.1);
       if (elapsedTime !== null && elapsedTime !== undefined) {
         nowSec = elapsedTime;
@@ -314,6 +316,9 @@ export function createMuseumCrowdSystem(scene, options = {}) {
         nowSec = internalClock;
       }
     }
+
+    let movedAny = false;
+    const posLerpAlpha = Math.min(1.0, dt * 6.5);
 
     // 3. CẬP NHẬT TỪNG NHÓM KHÁCH
     for (let g = 0; g < visitorGroups.length; g++) {
@@ -324,7 +329,6 @@ export function createMuseumCrowdSystem(scene, options = {}) {
       if (group.pauseTimer > 0) {
         group.pauseTimer -= dt;
 
-        // Xoay mặt mượt mà về hướng hiện vật hoặc tác phẩm nghệ thuật
         let diff = group.targetAngle - group.currentAngle;
         while (diff < -Math.PI) diff += Math.PI * 2;
         while (diff > Math.PI) diff -= Math.PI * 2;
@@ -332,23 +336,31 @@ export function createMuseumCrowdSystem(scene, options = {}) {
 
         for (let m = 0; m < group.members.length; m++) {
           const mem = group.members[m];
-          mem.mesh.rotation.y = group.currentAngle;
+          const bobY = Math.sin(nowSec * 2.0 + mem.walkPhase) * 0.018;
+          const swayZ = Math.sin(nowSec * 1.5 + mem.walkPhase) * 0.015;
 
-          // Hiệu ứng nhịp thở / đung đưa nhẹ khi đứng chiêm ngưỡng hiện vật
-          mem.bodyPivot.position.y = Math.sin(nowSec * 2.0 + mem.walkPhase) * 0.018;
-          mem.bodyPivot.rotation.z = Math.sin(nowSec * 1.5 + mem.walkPhase) * 0.015;
-          mem.bodyPivot.rotation.x = 0;
+          dummy.position.set(mem.pos.x, mem.pos.y + bobY, mem.pos.z);
+          dummy.rotation.set(0, group.currentAngle, swayZ);
+          dummy.scale.set(mem.shoulderScale, mem.heightScale, mem.depthScale);
+          dummy.updateMatrix();
+          bodyInstanced.setMatrixAt(mem.idx, dummy.matrix);
+
+          shadowDummy.position.set(mem.pos.x, mem.pos.y + 0.02, mem.pos.z);
+          shadowDummy.rotation.set(0, group.currentAngle, 0);
+          shadowDummy.scale.set(mem.shoulderScale, 1.0, mem.shoulderScale);
+          shadowDummy.updateMatrix();
+          shadowInstanced.setMatrixAt(mem.idx, shadowDummy.matrix);
         }
+        movedAny = true;
         continue;
       }
 
       // HÀNH VI 2: DI CHUYỂN THEO LỘ TRÌNH ĐẾN WAYPOINT TIẾP THEO
       const targetWp = waypoints[group.targetWpIdx];
       tempDir.subVectors(targetWp.pos, group.center);
-      tempDir.y = 0; // Khóa di chuyển thăng bằng trên mặt sàn của tầng đó
+      tempDir.y = 0;
       const dist = tempDir.length();
 
-      // Khi đến gần điểm mốc (< 1.8m), chọn điểm kế tiếp và quyết định dừng ngắm hiện vật
       if (dist < 1.8) {
         let nextIdx = Math.floor(Math.random() * waypoints.length);
         if (nextIdx === group.targetWpIdx) {
@@ -356,14 +368,12 @@ export function createMuseumCrowdSystem(scene, options = {}) {
         }
         group.targetWpIdx = nextIdx;
 
-        // Thỉnh thoảng dừng lại 2 - 4 giây xoay mặt ngắm hiện vật (tỉ lệ cao hơn tại các phòng trưng bày)
         const currentWp = targetWp;
         const pauseChance = currentWp.isExhibit ? 0.70 : 0.40;
 
         if (Math.random() < pauseChance) {
-          group.pauseTimer = 2.0 + Math.random() * 2.0; // Dừng lại 2 - 4 giây chuẩn xác theo yêu cầu
+          group.pauseTimer = 2.0 + Math.random() * 2.0;
 
-          // Xoay mặt ngắm hiện vật nếu có tọa độ ngắm (lookAt), hoặc xoay nhẹ theo hướng ngẫu nhiên
           if (currentWp.lookAt) {
             const lookDx = currentWp.lookAt.x - group.center.x;
             const lookDz = currentWp.lookAt.z - group.center.z;
@@ -375,34 +385,45 @@ export function createMuseumCrowdSystem(scene, options = {}) {
         continue;
       }
 
-      // Cập nhật hướng di chuyển (Heading lerp mượt mà)
       tempDir.normalize();
       group.heading.lerp(tempDir, Math.min(1.0, dt * 4.0)).normalize();
       group.center.addScaledVector(group.heading, group.speed * dt);
 
-      // Cập nhật góc quay theo hướng bước đi (tránh giật tại biên [-PI, PI])
       const desiredAngle = Math.atan2(group.heading.x, group.heading.z);
       let headingDiff = desiredAngle - group.currentAngle;
       while (headingDiff < -Math.PI) headingDiff += Math.PI * 2;
       while (headingDiff > Math.PI) headingDiff -= Math.PI * 2;
       group.currentAngle += headingDiff * Math.min(1.0, dt * 5.0);
 
-      // Cập nhật từng thành viên trong nhóm theo đội hình vai kề vai
       for (let m = 0; m < group.members.length; m++) {
         const mem = group.members[m];
 
         rotatedOffset.copy(mem.localOffset).applyAxisAngle(upAxis, group.currentAngle);
         tempTarget.copy(group.center).add(rotatedOffset);
+        mem.pos.lerp(tempTarget, posLerpAlpha);
 
-        mem.mesh.position.lerp(tempTarget, Math.min(1.0, dt * 6.5));
-        mem.mesh.rotation.y = group.currentAngle;
-
-        // Hiệu ứng nhấp nhô nhịp bước đi: Math.sin(nowSec * walkFreq + phase)
         const stepWave = Math.sin(nowSec * mem.walkFreq + mem.walkPhase);
-        mem.bodyPivot.position.y = Math.abs(stepWave) * 0.055;
-        mem.bodyPivot.rotation.z = stepWave * 0.035;
-        mem.bodyPivot.rotation.x = 0.035; // Nghiêng nhẹ người về phía trước khi tiến bước
+        const bobY = Math.abs(stepWave) * 0.055;
+        const swayZ = stepWave * 0.035;
+
+        dummy.position.set(mem.pos.x, mem.pos.y + bobY, mem.pos.z);
+        dummy.rotation.set(0.035, group.currentAngle, swayZ);
+        dummy.scale.set(mem.shoulderScale, mem.heightScale, mem.depthScale);
+        dummy.updateMatrix();
+        bodyInstanced.setMatrixAt(mem.idx, dummy.matrix);
+
+        shadowDummy.position.set(mem.pos.x, mem.pos.y + 0.02, mem.pos.z);
+        shadowDummy.rotation.set(0, group.currentAngle, 0);
+        shadowDummy.scale.set(mem.shoulderScale, 1.0, mem.shoulderScale);
+        shadowDummy.updateMatrix();
+        shadowInstanced.setMatrixAt(mem.idx, shadowDummy.matrix);
       }
+      movedAny = true;
+    }
+
+    if (movedAny) {
+      bodyInstanced.instanceMatrix.needsUpdate = true;
+      shadowInstanced.instanceMatrix.needsUpdate = true;
     }
   };
 
@@ -411,12 +432,8 @@ export function createMuseumCrowdSystem(scene, options = {}) {
     if (scene && crowdGroup) {
       scene.remove(crowdGroup);
     }
-    skirtGeo.dispose();
-    torsoGeo.dispose();
-    shoulderGeo.dispose();
-    neckGeo.dispose();
-    headGeo.dispose();
-    shadowGeo.dispose();
+    mergedBodyGeo?.dispose?.();
+    shadowGeo?.dispose?.();
     silhouetteMat.dispose();
     floorShadowMat.dispose();
   };

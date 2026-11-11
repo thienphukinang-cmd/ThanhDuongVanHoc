@@ -45,9 +45,7 @@ export class ExteriorVista {
   getMat(name) {
     return this.matLib?.get?.(name) ?? new THREE.MeshLambertMaterial({
       color: 0x60707a,
-      roughness: 0.85,
-      metalness: 0.05,
-      side: THREE.DoubleSide
+      side: THREE.FrontSide
     });
   }
 
@@ -139,10 +137,8 @@ export class ExteriorVista {
 
     const karstMat = new THREE.MeshLambertMaterial({
       vertexColors: true,
-      roughness: 0.88,
-      metalness: 0.05,
       flatShading: true,
-      side: THREE.DoubleSide
+      side: THREE.FrontSide
     });
 
     // Danh sách phân bổ vị trí núi
@@ -205,9 +201,10 @@ export class ExteriorVista {
 
       const instMesh = new THREE.InstancedMesh(geos[typeIdx], karstMat, items.length);
       instMesh.name = `Instanced_Karst_Mountains_Type_${typeIdx + 1}`;
-      instMesh.frustumCulled = false;
+      instMesh.frustumCulled = true;
       instMesh.castShadow = false; // Tắt hoàn toàn đổ bóng núi xa (300m - 1500m) để tiết kiệm shadow passes
       instMesh.receiveShadow = false;
+      instMesh.matrixAutoUpdate = false;
 
       const dummy = new THREE.Object3D();
       items.forEach((m, idx) => {
@@ -221,6 +218,7 @@ export class ExteriorVista {
       instMesh.instanceMatrix.needsUpdate = true;
       instMesh.computeBoundingBox();
       instMesh.computeBoundingSphere();
+      instMesh.updateMatrix();
       this.group.add(instMesh);
     });
   }
@@ -240,17 +238,19 @@ export class ExteriorVista {
 
     cloudLayers.forEach((layer, idx) => {
       // Vành khăn đĩa mây (RingGeometry) bao quanh bảo tàng từ r=70m đến r=radius
-      const ringGeo = new THREE.RingGeometry(72, layer.radius, 48, 8);
+      const ringGeo = new THREE.RingGeometry(72, layer.radius, 24, 1);
       ringGeo.rotateX(-Math.PI / 2);
       this.prepareGeometry(ringGeo);
 
       const layerMat = cloudMat.clone();
       layerMat.opacity = layer.opacity;
+      layerMat.side = THREE.FrontSide;
 
       const cloudMesh = new THREE.Mesh(ringGeo, layerMat);
       cloudMesh.name = `Cloud_Sea_Layer_${idx + 1}`;
       cloudMesh.position.y = layer.y;
-      cloudMesh.frustumCulled = false;
+      cloudMesh.frustumCulled = true;
+      cloudMesh.castShadow = false;
       cloudMesh.receiveShadow = false;
 
       this.group.add(cloudMesh);
@@ -262,7 +262,7 @@ export class ExteriorVista {
    * Mặt nước phẳng lặng của thung lũng sông Ngô Đồng (Y = -26m)
    */
   initValleyWaterPlane() {
-    const waterGeo = new THREE.PlaneGeometry(1800, 1800, 16, 16);
+    const waterGeo = new THREE.PlaneGeometry(1800, 1800, 1, 1);
     waterGeo.rotateX(-Math.PI / 2);
     this.prepareGeometry(waterGeo);
 
@@ -270,8 +270,10 @@ export class ExteriorVista {
     const waterMesh = new THREE.Mesh(waterGeo, waterMat);
     waterMesh.name = "TrangAn_Valley_Water_Mirror";
     waterMesh.position.y = -26.0;
-    waterMesh.frustumCulled = false;
-    waterMesh.receiveShadow = true;
+    waterMesh.frustumCulled = true;
+    waterMesh.castShadow = false;
+    waterMesh.receiveShadow = false;
+    waterMesh.matrixAutoUpdate = false;
     waterMesh.updateMatrix();
 
     this.group.add(waterMesh);

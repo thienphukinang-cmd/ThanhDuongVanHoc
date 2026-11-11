@@ -125,7 +125,7 @@ export function getSharedMaterial(type) {
         color: 0xffffff,
         specular: 0xffe8b5,
         shininess: 55,
-        side: THREE.DoubleSide
+        side: THREE.FrontSide
       });
       break;
     case 'column_marble':
@@ -133,21 +133,21 @@ export function getSharedMaterial(type) {
       mat = new THREE.MeshLambertMaterial({
         map: getWhiteMarbleTexture(),
         color: 0xf7f4ef,
-        side: THREE.DoubleSide
+        side: THREE.FrontSide
       });
       break;
     case 'baluster':
       // Con tiện lan can chỉ dùng Lambert trơn để giảm tối đa tải shader ở cầu thang chữ Y
       mat = new THREE.MeshLambertMaterial({
         color: 0xf2efe9,
-        side: THREE.DoubleSide
+        side: THREE.FrontSide
       });
       break;
     case 'dark_wood':
       mat = new THREE.MeshLambertMaterial({
         map: getDarkWoodTexture(),
         color: 0xffffff,
-        side: THREE.DoubleSide
+        side: THREE.FrontSide
       });
       break;
     case 'antique_gold':
@@ -156,7 +156,7 @@ export function getSharedMaterial(type) {
         emissive: 0x3d2c0b, // Độ tự phát xạ ấm nhẹ giúp chi tiết luôn ánh kim rạng rỡ ở góc khuất/gầm cầu thang
         specular: 0xffebaa, // Phản chiếu kim loại sáng ấm hoàng gia
         shininess: 75,
-        side: THREE.DoubleSide
+        side: THREE.FrontSide
       });
       break;
     case 'silk_lit':
@@ -165,14 +165,14 @@ export function getSharedMaterial(type) {
         map: getSilkPaperTexture(),
         color: 0xfff8e7,
         emissive: 0x48371e, // Tăng nhẹ tự phát xạ ấm áp cho thư tịch cổ & tranh lụa
-        side: THREE.DoubleSide
+        side: THREE.FrontSide
       });
       break;
     case 'lantern_glow':
       // Giả lập hiệu ứng phát sáng đèn lồng (Fake Glow) màu vàng hổ phách Indochine ấm áp
       mat = new THREE.MeshBasicMaterial({
         color: 0xffbe55, // Vàng hổ phách rực rỡ, phát sáng tự nhiên mà không cần PointLight hay Bloom pass
-        side: THREE.DoubleSide
+        side: THREE.FrontSide
       });
       break;
     case 'fake_shadow':
@@ -184,7 +184,7 @@ export function getSharedMaterial(type) {
     case 'floor_light_pool':
       return getFloorLightPoolMaterial();
     default:
-      mat = new THREE.MeshLambertMaterial({ color: 0xdddddd, side: THREE.DoubleSide });
+      mat = new THREE.MeshLambertMaterial({ color: 0xdddddd, side: THREE.FrontSide });
   }
 
   MATERIAL_CACHE[type] = mat;
@@ -304,7 +304,7 @@ export function getCalligraphyPlaqueMaterial(title = 'TRUYỆN KIỀU', id = 'tr
     map: tex,
     color: 0xffffff,
     emissive: 0x221a08, // Tự phát xạ ấm để chữ vàng nổi bật sắc nét trên nền gỗ mun
-    side: THREE.DoubleSide
+    side: THREE.FrontSide
   });
 
   MATERIAL_CACHE[cacheKey] = mat;
@@ -422,33 +422,21 @@ export class MaterialLibrary {
     this.materials.exteriorWall = getSharedMaterial('wall_marble');
     this.materials.warmLedCove = getSharedMaterial('lantern_glow');
     this.materials.indochineBalusterMarble = getSharedMaterial('baluster');
-    this.materials.karstRock = new THREE.MeshLambertMaterial({ color: 0x5b6873, side: THREE.DoubleSide });
-    this.materials.karstMoss = new THREE.MeshLambertMaterial({ color: 0x3b533d, side: THREE.DoubleSide });
-    this.materials.cloudMist = new THREE.MeshLambertMaterial({ color: 0xf0f5fa, transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide });
-    this.materials.waterSurface = new THREE.MeshPhongMaterial({ color: 0x2d4857, shininess: 80, specular: 0xffeba8, side: THREE.DoubleSide });
+    this.materials.karstRock = new THREE.MeshLambertMaterial({ color: 0x5b6873, side: THREE.FrontSide });
+    this.materials.karstMoss = new THREE.MeshLambertMaterial({ color: 0x3b533d, side: THREE.FrontSide });
+    this.materials.cloudMist = new THREE.MeshLambertMaterial({ color: 0xf0f5fa, transparent: true, opacity: 0.45, depthWrite: false, side: THREE.FrontSide });
+    this.materials.waterSurface = new THREE.MeshPhongMaterial({ color: 0x2d4857, shininess: 80, specular: 0xffeba8, side: THREE.FrontSide });
     this.materials.silkLit = getSharedMaterial('silk_lit');
     this.materials.fakeShadow = getFakeShadowMaterial();
     this.materials.fakeGlowSprite = getFakeGlowSpriteMaterial();
     this.materials.lightBeam = getLightBeamMaterial();
     this.materials.floorLightPool = getFloorLightPoolMaterial();
 
-    // Đảm bảo bật DoubleSide cho toàn bộ materials
-    Object.values(this.materials).forEach(mat => {
-      if (mat) {
-        mat.side = THREE.DoubleSide;
-        mat.needsUpdate = true;
-      }
-    });
-
     console.log("%c✓ [MATERIALS & LIGHTING UPGRADE 2 & 3] Bộ Cache vân đá / vân gỗ 1MB VRAM & Ánh sáng giả lập hoạt động!", "color: #39e58c; font-weight: bold;");
   }
 
   get(name) {
-    const mat = this.materials[name] || getSharedMaterial(name) || this.materials.whiteMarble;
-    if (mat) {
-      mat.side = THREE.DoubleSide;
-    }
-    return mat;
+    return this.materials[name] || getSharedMaterial(name) || this.materials.whiteMarble;
   }
 
   getPlaque(title, id) {

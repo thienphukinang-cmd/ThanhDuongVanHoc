@@ -26,7 +26,8 @@ export const LITERATURE_REGISTRY = [
     roomIndex: 0, // Cánh Tây-Nam
     themeColor: 0xe67e22, // Vàng đồng rực lửa
     quote: 'Gióng nhổ từng bụi tre đằng ngà quất tan giặc Ân, cởi áo giáp bay về trời, non nước thái bình muôn thuở.',
-    portalReady: false,
+    roomCompleted: true,
+    portalReady: true,
     atmosphere: {
       primaryColor: 0xe67e22,
       secondaryColor: 0xc0392b,
@@ -67,6 +68,7 @@ export const LITERATURE_REGISTRY = [
     roomIndex: 1, // Cánh Tây-Bắc
     themeColor: 0x2980b9, // Lam ngọc bão tố
     quote: 'Nước dâng cao bao nhiêu, núi cao lên bấy nhiêu – Bản hùng ca bất diệt chinh phục thiên nhiên của người Việt cổ.',
+    roomCompleted: true,
     portalReady: true,
     atmosphere: {
       primaryColor: 0x2980b9,
@@ -108,6 +110,7 @@ export const LITERATURE_REGISTRY = [
     roomIndex: 2, // Cánh Bắc - Đại Gian
     themeColor: 0x10b981, // Xanh Ngọc Bích Cổ Loa & Vàng Kim Quy
     quote: 'Nỏ thần vô ý trao tay giặc – Bi kịch dựng nước và bài học cảnh giác muôn đời vọng lại từ ngàn xưa nơi Cổ Loa thành.',
+    roomCompleted: true,
     portalReady: true,
     atmosphere: {
       primaryColor: 0xd35400,
@@ -236,6 +239,7 @@ export const LITERATURE_REGISTRY = [
     roomIndex: 0, // Cánh Tây-Nam (Phòng mẫu 01)
     themeColor: 0x39e58c, // Lam ngọc bích phát sáng
     quote: 'Đoạn trường tân thanh – Khúc ca bi tráng về tài mệnh tương đố, tấm lòng nhân đạo bao la và khát vọng tự do ngút trời.',
+    roomCompleted: true,
     portalReady: true, // ĐÃ KẾT NỐI KIEUWORLD
     atmosphere: {
       primaryColor: 0xffb703, // Cam hổ phách ấm áp (Warm Amber)
@@ -285,6 +289,7 @@ export const LITERATURE_REGISTRY = [
     roomIndex: 1, // Cánh Tây-Bắc
     themeColor: 0xf1c40f, // Hoàng kim đế vương
     quote: 'Nam quốc sơn hà Nam đế cư, tiệt nhiên định phận tại thiên thư – Bản tuyên ngôn độc lập đầu tiên khẳng định chủ quyền sông núi.',
+    roomCompleted: true,
     portalReady: true,
     atmosphere: {
       primaryColor: 0xf1c40f,
@@ -295,25 +300,32 @@ export const LITERATURE_REGISTRY = [
     },
     dioramaAssets: [
       {
-        file: 'bia_da_than_phap.glb',
-        name: 'Bia đá thần phán Định phận',
+        file: 'lythuongkiet.glb',
+        name: 'Tượng Thái úy Lý Thường Kiệt',
+        scale: 3.0,
+        offset: { x: 0.0, y: 0.0, z: -1.2 },
+        prompt: 'Heroic statue of Ly Thuong Kiet standing on Ly lotus pedestal'
+      },
+      {
+        file: 'namquocsonha/chieu_thu_nam_quoc.glb',
+        name: 'Chiếu thư Nam quốc sơn hà trên giá rồng',
+        scale: 1.0,
+        offset: { x: -6.2, y: 0.0, z: 1.2 },
+        prompt: 'Imperial golden silk scroll inscribed with Nam Quoc Son Ha on Ly dragon stand'
+      },
+      {
+        file: 'namquocsonha/sa_ban_nhu_nguyet.glb',
+        name: 'Sa bàn phòng tuyến sông Như Nguyệt',
         scale: 2.3,
-        offset: { x: 0.0, y: 0.0, z: -0.8 },
-        prompt: 'Ancient royal stone stele monolith on carved turtle base, inscribed with golden classical poetry characters'
+        offset: { x: 6.2, y: 0.0, z: 2.8 },
+        prompt: 'Tactical river defense diorama of Nhu Nguyet river stakes, war boats and camps'
       },
       {
-        file: 'kiem_lenh_trieu_ly.glb',
-        name: 'Bảo kiếm lệnh triều Lý',
-        scale: 1.8,
-        offset: { x: 1.1, y: 0.3, z: 0.8 },
-        prompt: 'Imperial Ly dynasty ceremonial dragon commander sword resting on lacquered gold stand, ancient steel blade'
-      },
-      {
-        file: 'trong_chien_tran.glb',
-        name: 'Trống trận phòng tuyến Như Nguyệt',
-        scale: 1.9,
-        offset: { x: -1.2, y: 0.0, z: 0.7 },
-        prompt: 'Traditional red lacquered wooden battle drum on carved frame, golden dragon patterns, fortress garrison'
+        file: 'namquocsonha/vu_khi_nha_ly.glb',
+        name: 'Giá binh khí nhà Lý & Trống trận',
+        scale: 1.85,
+        offset: { x: 6.2, y: 0.0, z: -2.4 },
+        prompt: 'Ly dynasty lacquered weapon rack with spears, glaive, tiger shield and war drum'
       }
     ]
   },
@@ -495,7 +507,8 @@ export const LITERATURE_REGISTRY = [
     roomIndex: 1, // Cánh Tây-Bắc
     themeColor: 0x34495e, // Đen xám nông thôn bế tắc
     quote: 'Bức tranh đêm đen nghẹt thở của nông thôn Việt Nam trước cách mạng và ngọn lửa quật khởi bừng cháy của chị Dậu.',
-    portalReady: false,
+    roomCompleted: true,
+    portalReady: true,
     atmosphere: {
       primaryColor: 0x34495e,
       secondaryColor: 0x7f8c8d,
@@ -577,7 +590,8 @@ export const LITERATURE_REGISTRY = [
     roomIndex: 3, // Cánh Đông-Bắc
     themeColor: 0xd35400, // Hoàng hôn nạn đói ấm áp tình người
     quote: 'Sức sống kỳ diệu, tình người cưu mang và niềm tin hướng về sự sống trước thềm nạn đói kinh hoàng 1945.',
-    portalReady: false,
+    roomCompleted: true,
+    portalReady: true,
     atmosphere: {
       primaryColor: 0xd35400,
       secondaryColor: 0xf39c12,

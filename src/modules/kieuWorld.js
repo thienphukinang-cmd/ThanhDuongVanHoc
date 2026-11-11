@@ -1,5 +1,6 @@
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as THREE from 'three';
+import { loadGlbCached } from '../utils/modelLoaderHelper.js';
+import { mergeGroupMeshesByMaterial } from '../utils/geometryMerger.js';
 import { NarrativeTrigger } from './NarrativeTrigger.js';
 import { SpatialAudio } from './SpatialAudio.js';
 
@@ -145,24 +146,40 @@ function createSteleTexture(size = 256) {
 }
 
 export class KieuWorld {
-  constructor(scene = null, materialLibrary = null, camera = null) {
+  constructor(scene = null, materialLibrary = null, camera = null, options = {}) {
     this.scene = scene;
     this.matLib = materialLibrary;
     this.camera = camera;
+    this.options = options || {};
 
     this.group = new THREE.Group();
     this.group.name = "KieuWorld_TietThanhMinh";
     this.group.visible = false; // Mặc định ẩn, bật khi dịch chuyển
 
-    this.waterTexture = createRiverFlowTexture();
-    this.petalTexture = createPetalTexture();
-    this.smokeTexture = createSmokePuffTexture();
-    this.steleTexture = createSteleTexture();
-
+    this._isBuilt = false;
+    this.audioManager = null;
     this.interactiveWaypoint = null; // Bức cuốn thư cổ trở về
     this.smokePoints = null;
 
+    if (this.scene?.add) {
+      this.scene.add(this.group);
+    }
+
+    if (!this.options.lazy) {
+      this.activate();
+    }
+  }
+
+  activate() {
+    if (this._isBuilt) return this.group;
+    this._isBuilt = true;
+
     try {
+      this.waterTexture = createRiverFlowTexture();
+      this.petalTexture = createPetalTexture();
+      this.smokeTexture = createSmokePuffTexture();
+      this.steleTexture = createSteleTexture();
+
       this.initAtmosphereAndSky();
       this.initRollingHillsTerrain();
       this.initMeanderingStream();
@@ -174,13 +191,18 @@ export class KieuWorld {
       this.initObservationOverlook();
       this.initNarrativeAndAudioSystems();
 
-      if (this.scene?.add) {
+      if (this.audioManager) {
+        this.setAudioManager(this.audioManager);
+      }
+      if (this.scene?.add && this.group.parent !== this.scene) {
         this.scene.add(this.group);
       }
       console.log("%c✓ Đã kiến tạo Thế Giới Tự Sự Truyện Kiều (Tiết Thanh Minh) thành công!", "color: #ff99bb; font-weight: bold; font-size: 13px;");
     } catch (err) {
+      this._isBuilt = false;
       console.error("[SELF-HEALING] Lỗi khởi tạo KieuWorld:", err);
     }
+    return this.group;
   }
 
   prepareGeometry(geo) {
@@ -352,13 +374,14 @@ export class KieuWorld {
       roughness: 0.90,
       metalness: 0.02,
       flatShading: true,
-      side: THREE.DoubleSide
+      side: THREE.FrontSide
     });
 
     const terrainMesh = new THREE.Mesh(geo, mat);
     terrainMesh.name = "Rolling_Hills_Meadow";
-    terrainMesh.receiveShadow = true;
-    terrainMesh.frustumCulled = false;
+    terrainMesh.castShadow = false;
+    terrainMesh.receiveShadow = false;
+    terrainMesh.frustumCulled = true;
 
     this.group.add(terrainMesh);
   }
@@ -401,8 +424,9 @@ export class KieuWorld {
 
     const riverMesh = new THREE.Mesh(riverGeo, this.waterMaterial);
     riverMesh.name = "Meandering_Stream_Water";
-    riverMesh.receiveShadow = true;
-    riverMesh.frustumCulled = false;
+    riverMesh.castShadow = false;
+    riverMesh.receiveShadow = false;
+    riverMesh.frustumCulled = true;
 
     this.group.add(riverMesh);
     this.streamMesh = riverMesh;
@@ -419,13 +443,13 @@ export class KieuWorld {
       color: 0x58605a,
       roughness: 0.85,
       metalness: 0.05,
-      side: THREE.DoubleSide
+      side: THREE.FrontSide
     });
 
     const agedWoodMat = this.matLib?.get?.('wainscotWood') ?? new THREE.MeshStandardMaterial({
       color: 0x483424,
       roughness: 0.78,
-      side: THREE.DoubleSide
+      side: THREE.FrontSide
     });
 
     // Vị trí cầu: Bắt ngang khúc hẹp của suối tại x = 2.0, z = -2.0
@@ -461,8 +485,8 @@ export class KieuWorld {
     const deckMesh = new THREE.Mesh(deckGeo, agedWoodMat);
     deckMesh.position.set(2.0, -0.05, -2.0 - bridgeWidth / 2);
     deckMesh.rotation.y = Math.PI / 2;
-    deckMesh.castShadow = true;
-    deckMesh.receiveShadow = true;
+    deckMesh.castShadow = false;
+    deckMesh.receiveShadow = false;
     bridgeGroup.add(deckMesh);
 
     // C. Lan can thấp uốn nhẹ hai bên mạn cầu
@@ -501,6 +525,7 @@ export class KieuWorld {
       }
     });
 
+    mergeGroupMeshesByMaterial(bridgeGroup);
     this.group.add(bridgeGroup);
   }
 
@@ -532,8 +557,8 @@ export class KieuWorld {
 
     const moundMesh = new THREE.Mesh(moundGeo, moundMat);
     moundMesh.position.y = 0.02;
-    moundMesh.receiveShadow = true;
-    moundMesh.castShadow = true;
+    moundMesh.receiveShadow = false;
+    moundMesh.castShadow = false;
     graveGroup.add(moundMesh);
 
     // 2. Bia đá cổ nhỏ rêu phong khắc chữ mờ ("ĐẠM TIÊN CHI MỘ")
@@ -562,7 +587,8 @@ export class KieuWorld {
     });
     const slabMesh = new THREE.Mesh(slabGeo, slabMat);
     slabMesh.position.y = 0.22 + 0.46;
-    slabMesh.castShadow = true;
+    slabMesh.castShadow = false;
+    slabMesh.receiveShadow = false;
     steleGroup.add(slabMesh);
 
     // Bát hương gốm cổ nhỏ đặt trước bia mộ
@@ -640,7 +666,7 @@ export class KieuWorld {
 
     this.smokePoints = new THREE.Points(smokeGeo, smokeMat);
     this.smokePoints.name = "DamTien_Incense_Smoke";
-    this.smokePoints.frustumCulled = false;
+    this.smokePoints.frustumCulled = true;
     this.group.add(this.smokePoints);
 
     this.graveOriginY = gy;
@@ -667,7 +693,7 @@ export class KieuWorld {
       color: 0x3d2c20,
       roughness: 0.88,
       metalness: 0.05,
-      side: THREE.DoubleSide
+      side: THREE.FrontSide
     });
 
     const leafMat = new THREE.MeshStandardMaterial({
@@ -682,7 +708,7 @@ export class KieuWorld {
       emissive: 0xfff0f5,
       emissiveIntensity: 0.3,
       roughness: 0.5,
-      side: THREE.DoubleSide
+      side: THREE.FrontSide
     });
 
     const curve = new THREE.CatmullRomCurve3([
@@ -721,9 +747,9 @@ export class KieuWorld {
       wTree.rotation.y = wp.rot;
 
       const trunk = new THREE.Mesh(trunkGeo, barkMat);
-      trunk.castShadow = true;
-      trunk.receiveShadow = true;
-      trunk.frustumCulled = false;
+      trunk.castShadow = false;
+      trunk.receiveShadow = false;
+      trunk.frustumCulled = true;
       wTree.add(trunk);
 
       const branchAngles = [0, 1.2, 2.4, 3.6, 4.8];
@@ -763,8 +789,8 @@ export class KieuWorld {
     if (frondTransforms.length > 0) {
       const frondsInstanced = new THREE.InstancedMesh(frondGeo, leafMat, frondTransforms.length);
       frondsInstanced.name = "Instanced_Willow_Leaves";
-      frondsInstanced.frustumCulled = false;
-      frondsInstanced.castShadow = true;
+      frondsInstanced.frustumCulled = true;
+      frondsInstanced.castShadow = false;
       for (let i = 0; i < frondTransforms.length; i++) {
         frondsInstanced.setMatrixAt(i, frondTransforms[i]);
       }
@@ -777,7 +803,8 @@ export class KieuWorld {
     if (blossomTransforms.length > 0) {
       const blossomsInstanced = new THREE.InstancedMesh(blossomFlowerGeo, blossomMat, blossomTransforms.length);
       blossomsInstanced.name = "Instanced_Pear_Blossoms";
-      blossomsInstanced.frustumCulled = false;
+      blossomsInstanced.frustumCulled = true;
+      blossomsInstanced.castShadow = false;
       for (let i = 0; i < blossomTransforms.length; i++) {
         blossomsInstanced.setMatrixAt(i, blossomTransforms[i]);
       }
@@ -787,6 +814,7 @@ export class KieuWorld {
       this.group.add(blossomsInstanced);
     }
 
+    mergeGroupMeshesByMaterial(willowsGroup);
     this.group.add(willowsGroup);
   }
 
@@ -843,7 +871,7 @@ export class KieuWorld {
 
     this.blossomPoints = new THREE.Points(geo, pMat);
     this.blossomPoints.name = "Spring_Blossom_Particles";
-    this.blossomPoints.frustumCulled = false;
+    this.blossomPoints.frustumCulled = true;
     this.group.add(this.blossomPoints);
   }
 
@@ -883,7 +911,8 @@ export class KieuWorld {
     const scrollGeo = new THREE.BoxGeometry(2.2, 1.3, 0.04);
     this.prepareGeometry(scrollGeo);
     const scrollMesh = new THREE.Mesh(scrollGeo, scrollSilkMat);
-    scrollMesh.castShadow = true;
+    scrollMesh.castShadow = false;
+    scrollMesh.receiveShadow = false;
     scrollGroup.add(scrollMesh);
 
     const rodGeo = new THREE.CylinderGeometry(0.065, 0.065, 1.6, 16);
@@ -1053,70 +1082,80 @@ export class KieuWorld {
       let cv = null;
       if (typeof document !== 'undefined') {
         cv = document.createElement('canvas');
-        cv.width = 1536;
-        cv.height = 900;
+        cv.width = 768;
+        cv.height = 450;
         const ctx = cv.getContext('2d');
         const w = 1536, h = 900;
+        if (ctx) {
+          ctx.save();
+          ctx.scale(0.5, 0.5);
 
-        const bgG = ctx.createLinearGradient(0, 0, w, h);
-        bgG.addColorStop(0.0, 'rgba(18, 32, 26, 0.95)');
-        bgG.addColorStop(0.5, 'rgba(28, 48, 38, 0.92)');
-        bgG.addColorStop(1.0, 'rgba(12, 22, 18, 0.97)');
-        ctx.fillStyle = bgG;
-        ctx.fillRect(0, 0, w, h);
+          const bgG = ctx.createLinearGradient(0, 0, w, h);
+          bgG.addColorStop(0.0, 'rgba(18, 32, 26, 0.95)');
+          bgG.addColorStop(0.5, 'rgba(28, 48, 38, 0.92)');
+          bgG.addColorStop(1.0, 'rgba(12, 22, 18, 0.97)');
+          ctx.fillStyle = bgG;
+          ctx.fillRect(0, 0, w, h);
 
-        ctx.strokeStyle = '#39e58c';
-        ctx.lineWidth = 7;
-        ctx.strokeRect(16, 16, w - 32, h - 32);
+          ctx.strokeStyle = '#39e58c';
+          ctx.lineWidth = 7;
+          ctx.strokeRect(16, 16, w - 32, h - 32);
 
-        ctx.strokeStyle = '#fde047';
-        ctx.lineWidth = 10;
-        const corner = 60;
-        ctx.beginPath(); ctx.moveTo(16, 16 + corner); ctx.lineTo(16, 16); ctx.lineTo(16 + corner, 16); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(w - 16 - corner, 16); ctx.lineTo(w - 16, 16); ctx.lineTo(w - 16, 16 + corner); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(16, h - 16 - corner); ctx.lineTo(16, h - 16); ctx.lineTo(16 + corner, h - 16); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(w - 16 - corner, h - 16); ctx.lineTo(w - 16, h - 16); ctx.lineTo(w - 16, h - 16 - corner); ctx.stroke();
+          ctx.strokeStyle = '#fde047';
+          ctx.lineWidth = 10;
+          const corner = 60;
+          ctx.beginPath(); ctx.moveTo(16, 16 + corner); ctx.lineTo(16, 16); ctx.lineTo(16 + corner, 16); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(w - 16 - corner, 16); ctx.lineTo(w - 16, 16); ctx.lineTo(w - 16, 16 + corner); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(16, h - 16 - corner); ctx.lineTo(16, h - 16); ctx.lineTo(16 + corner, h - 16); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(w - 16 - corner, h - 16); ctx.lineTo(w - 16, h - 16); ctx.lineTo(w - 16, h - 16 - corner); ctx.stroke();
 
-        ctx.strokeStyle = 'rgba(57, 229, 140, 0.65)';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(120, 115);
-        ctx.lineTo(w - 120, 115);
-        ctx.stroke();
-
-        ctx.fillStyle = '#fde047';
-        ctx.font = 'bold 44px "Segoe UI", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.fillText(`❖ BẢNG 0${sIdx + 1}: ${titles[sIdx]} ❖`, w / 2, 45);
-
-        ctx.textAlign = 'left';
-        const lines = screenLines[sIdx];
-        const startY = 175;
-        const lineSpacing = 102;
-
-        lines.forEach((line, i) => {
-          const parts = line.split(':');
-          const label = parts[0] + ':';
-          const desc = parts.slice(1).join(':');
-
-          ctx.fillStyle = '#39e58c';
+          ctx.strokeStyle = 'rgba(57, 229, 140, 0.65)';
+          ctx.lineWidth = 3;
           ctx.beginPath();
-          ctx.arc(80, startY + i * lineSpacing + 16, 7, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.moveTo(120, 115);
+          ctx.lineTo(w - 120, 115);
+          ctx.stroke();
 
           ctx.fillStyle = '#fde047';
-          ctx.font = 'bold 30px "Segoe UI", sans-serif';
-          ctx.fillText(label, 110, startY + i * lineSpacing);
+          ctx.font = 'bold 44px "Segoe UI", sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+          ctx.fillText(`❖ BẢNG 0${sIdx + 1}: ${titles[sIdx]} ❖`, w / 2, 45);
 
-          const labelW = ctx.measureText(label).width;
-          ctx.fillStyle = '#f1f5f9';
-          ctx.font = '28px "Segoe UI", sans-serif';
-          ctx.fillText(desc, 110 + labelW + 14, startY + i * lineSpacing);
-        });
+          ctx.textAlign = 'left';
+          const lines = screenLines[sIdx];
+          const startY = 175;
+          const lineSpacing = 102;
+
+          lines.forEach((line, i) => {
+            const parts = line.split(':');
+            const label = parts[0] + ':';
+            const desc = parts.slice(1).join(':');
+
+            ctx.fillStyle = '#39e58c';
+            ctx.beginPath();
+            ctx.arc(80, startY + i * lineSpacing + 16, 7, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#fde047';
+            ctx.font = 'bold 30px "Segoe UI", sans-serif';
+            ctx.fillText(label, 110, startY + i * lineSpacing);
+
+            const labelW = ctx.measureText(label).width;
+            ctx.fillStyle = '#f1f5f9';
+            ctx.font = '28px "Segoe UI", sans-serif';
+            ctx.fillText(desc, 110 + labelW + 14, startY + i * lineSpacing);
+          });
+          ctx.restore();
+        }
       }
 
       const tex = cv ? new THREE.CanvasTexture(cv) : null;
+      if (tex) {
+        tex.generateMipmaps = false;
+        tex.minFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+      }
       const mat = new THREE.MeshBasicMaterial({
         map: tex,
         color: tex ? 0xffffff : 0x112218,
@@ -1186,91 +1225,57 @@ export class KieuWorld {
     vanPed.position.set(7.5, 0.0, -1.5);
     overlookGroup.add(vanPed);
 
-    const gltfLoader = new GLTFLoader();
-    gltfLoader.load(
-      '/model/kimtrongthuykieu.glb',
-      (gltf) => {
-        const raw = gltf.scene;
-        raw.traverse((c) => {
-          if (c.isMesh) {
-            c.castShadow = false;
-            c.receiveShadow = false;
-            if (c.material) {
-              const orig = c.material;
-              c.material = new THREE.MeshBasicMaterial({
-                map: orig.map || null,
-                color: orig.color ? orig.color.clone() : new THREE.Color(0xffffff)
-              });
-            }
-          }
-        });
-        const box = new THREE.Box3().setFromObject(raw);
-        const size = new THREE.Vector3(); box.getSize(size);
-        const scale = 2.85 / Math.max(size.y, 0.001);
-        raw.scale.multiplyScalar(scale);
-        raw.position.y = 0.32;
-        kimPed.add(raw);
-      },
-      undefined,
-      () => {}
-    );
+    loadGlbCached(['/model/kimtrongthuykieu.glb'], {
+      maxTextureSize: 1024,
+      disableMipmaps: true,
+      prepareOptions: {
+        targetSpan: 2.85,
+        fitAxis: 'y',
+        groundY: true,
+        centerXZ: true
+      }
+    })
+      .then((wrapped) => {
+        if (!wrapped) return;
+        wrapped.position.y = 0.32;
+        kimPed.add(wrapped);
+      })
+      .catch(() => {});
 
-    gltfLoader.load(
-      '/model/thuykieu.glb',
-      (gltf) => {
-        const raw = gltf.scene;
-        raw.traverse((c) => {
-          if (c.isMesh) {
-            c.castShadow = false;
-            c.receiveShadow = false;
-            if (c.material) {
-              const orig = c.material;
-              c.material = new THREE.MeshBasicMaterial({
-                map: orig.map || null,
-                color: orig.color ? orig.color.clone() : new THREE.Color(0xffffff)
-              });
-            }
-          }
-        });
-        const box = new THREE.Box3().setFromObject(raw);
-        const size = new THREE.Vector3(); box.getSize(size);
-        const scale = 2.85 / Math.max(size.y, 0.001);
-        raw.scale.multiplyScalar(scale);
-        raw.position.y = 0.32;
-        kieuPed.add(raw);
-      },
-      undefined,
-      () => {}
-    );
+    loadGlbCached(['/model/thuykieu.glb'], {
+      maxTextureSize: 1024,
+      disableMipmaps: true,
+      prepareOptions: {
+        targetSpan: 2.85,
+        fitAxis: 'y',
+        groundY: true,
+        centerXZ: true
+      }
+    })
+      .then((wrapped) => {
+        if (!wrapped) return;
+        wrapped.position.y = 0.32;
+        kieuPed.add(wrapped);
+      })
+      .catch(() => {});
 
-    gltfLoader.load(
-      '/model/thuykieu.glb',
-      (gltf) => {
-        const raw = gltf.scene;
-        raw.traverse((c) => {
-          if (c.isMesh) {
-            c.castShadow = false;
-            c.receiveShadow = false;
-            if (c.material) {
-              const orig = c.material;
-              const mat = new THREE.MeshBasicMaterial({
-                map: orig.map || null,
-                color: orig.color ? orig.color.clone().multiply(new THREE.Color(0xffe680)) : new THREE.Color(0xffe680)
-              });
-              c.material = mat;
-            }
-          }
-        });
-        const box = new THREE.Box3().setFromObject(raw);
-        const size = new THREE.Vector3(); box.getSize(size);
-        const scale = 2.75 / Math.max(size.y, 0.001);
-        raw.scale.multiplyScalar(scale);
-        raw.position.y = 0.32;
-        vanPed.add(raw);
-      },
-      undefined,
-      () => {}
-    );
+    loadGlbCached(['/model/thuykieu.glb'], {
+      maxTextureSize: 1024,
+      disableMipmaps: true,
+      prepareOptions: {
+        targetSpan: 2.75,
+        fitAxis: 'y',
+        groundY: true,
+        centerXZ: true,
+        color: 0xffe680
+      }
+    })
+      .then((wrapped) => {
+        if (!wrapped) return;
+        wrapped.position.y = 0.32;
+        vanPed.add(wrapped);
+      })
+      .catch(() => {});
   }
 
   initNarrativeAndAudioSystems() {
@@ -1341,7 +1346,7 @@ export class KieuWorld {
    * Cập nhật animation trong vòng lặp render
    */
   update(delta = 0.016, elapsedTime = 0) {
-    if (!this.group.visible) return;
+    if (!this._isBuilt || !this.group.visible) return;
 
     // 1. Dòng nước uốn lượn trôi lững lờ ("nao nao dòng nước uốn quanh")
     if (this.waterTexture) {
@@ -1394,6 +1399,9 @@ export class KieuWorld {
   }
 
   setVisible(visible = true) {
+    if (visible && !this._isBuilt) {
+      this.activate();
+    }
     this.group.visible = visible;
     this.narrativeTrigger?.setEnabled(visible);
 

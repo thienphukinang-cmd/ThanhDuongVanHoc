@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DIMENSIONS } from '../config/dimensions.js';
+import { mergeGroupMeshesByMaterial } from '../utils/geometryMerger.js';
 import { 
   getFakeShadowMaterial, 
   getFakeGlowSpriteMaterial, 
@@ -110,77 +110,72 @@ export class ModelCreator {
     pillarShadowGeo.computeBoundingBox();
     pillarShadowGeo.computeBoundingSphere();
 
-    const createPillar = (x, z, name) => {
-      const singlePillar = new THREE.Group();
-      singlePillar.name = name;
+    // Tọa độ toàn bộ 20 cột đại sảnh
+    const sideOffsets = offsets.filter(oz => Math.abs(oz) < 10.0);
+    const pillarPositions = [];
+    offsets.forEach((ox) => pillarPositions.push([ox, -voidHalf]));
+    offsets.forEach((ox) => pillarPositions.push([ox, voidHalf]));
+    sideOffsets.forEach((oz) => pillarPositions.push([-voidHalf, oz]));
+    sideOffsets.forEach((oz) => pillarPositions.push([voidHalf, oz]));
+    [[-34, -34], [34, -34], [-34, 34], [34, 34]].forEach(([cx, cz]) => pillarPositions.push([cx, cz]));
 
-      // 0. BÓNG ĐỔ GIẢ LẬP DƯỚI CHÂN CỘT (FAKE CONTACT SHADOW / AMBIENT OCCLUSION)
-      const shadowPlane = new THREE.Mesh(pillarShadowGeo, shadowMat);
-      shadowPlane.name = `${name}_ContactShadow`;
-      shadowPlane.rotation.x = -Math.PI / 2;
-      shadowPlane.position.set(0, 0.015, 0); // Sát mặt sàn y = 0.015
-      shadowPlane.frustumCulled = true;
-      shadowPlane.renderOrder = 1;
-      singlePillar.add(shadowPlane);
+    // 1. Bóng đổ tiếp xúc chân cột dùng 1 InstancedMesh duy nhất
+    const shadowInst = new THREE.InstancedMesh(pillarShadowGeo, shadowMat, pillarPositions.length);
+    shadowInst.name = 'Pillars_ContactShadows_Instanced';
+    shadowInst.renderOrder = 1;
+    shadowInst.castShadow = false;
+    shadowInst.receiveShadow = false;
+    shadowInst.frustumCulled = true;
+
+    const dummy = new THREE.Object3D();
+    const staticPillarsGroup = new THREE.Group();
+    staticPillarsGroup.name = 'Pillars_Static_Batch';
+
+    pillarPositions.forEach(([x, z], idx) => {
+      dummy.position.set(x, 0.015, z);
+      dummy.rotation.set(-Math.PI / 2, 0, 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      shadowInst.setMatrixAt(idx, dummy.matrix);
+
+      const singlePillar = new THREE.Group();
+      singlePillar.position.set(x, 0, z);
 
       const plinth = new THREE.Mesh(plinthGeo, whiteMarbleMat);
-      plinth.frustumCulled = true; // Bật Frustum Culling
       plinth.position.y = plinthHeight / 2;
-      plinth.castShadow = false;
-      plinth.receiveShadow = false;
       singlePillar.add(plinth);
 
       const goldRingB = new THREE.Mesh(goldRingGeo, goldAccentMat);
-      goldRingB.frustumCulled = true;
       goldRingB.position.y = plinthHeight + 0.07;
-      goldRingB.castShadow = false;
       singlePillar.add(goldRingB);
 
       const shaft = new THREE.Mesh(shaftGeo, whiteMarbleMat);
-      shaft.frustumCulled = true;
       shaft.position.y = plinthHeight + shaftHeight / 2;
-      shaft.castShadow = false;
-      shaft.receiveShadow = false;
       singlePillar.add(shaft);
 
       const goldRingT = new THREE.Mesh(goldRingGeo, goldAccentMat);
-      goldRingT.frustumCulled = true;
       goldRingT.position.y = plinthHeight + shaftHeight - 0.07;
-      goldRingT.castShadow = false;
       singlePillar.add(goldRingT);
 
       const capital = new THREE.Mesh(capitalGeo, whiteMarbleMat);
-      capital.frustumCulled = true;
       capital.position.y = plinthHeight + shaftHeight + capitalHeight / 2;
-      capital.castShadow = false;
-      capital.receiveShadow = false;
       singlePillar.add(capital);
 
-      singlePillar.position.set(x, 0, z);
-      return singlePillar;
-    };
-
-    // 1. Hàng cột phía Bắc và Nam (Z = +-22m)
-    offsets.forEach((ox, i) => pillarsGroup.add(createPillar(ox, -voidHalf, `Pillar_North_${i + 1}`)));
-    offsets.forEach((ox, i) => pillarsGroup.add(createPillar(ox, voidHalf, `Pillar_South_${i + 1}`)));
-
-    // 2. Hàng cột phía Tây (X = -22m) và Đông (X = 22m):
-    // LOẠI BỎ TRIỆT ĐỂ CÁC CỘT CHẮN LỐI CẦU THANG & CHE KHUẤT CỬA VÒM:
-    // - Vị trí oz = 16.5 (Pillar_West_4 & Pillar_East_4): Nằm ngay khúc giao cầu thang chữ Y Tầng 1 lên Tầng 2,
-    //   chắn ngang lối đi và che khuất trực diện tầm nhìn vào Cửa Vòm Lớn (Monumental Arch) Phòng 01 (Truyện Kiều).
-    // - Vị trí oz = -16.5 (Pillar_West_1 & Pillar_East_1): Nằm ngay khúc giao cầu thang Tầng 2 lên Tầng 3.
-    // CHỈ GIỮ LẠI CÁC CỘT TRUNG TÂM [-5.5, 5.5] ĐỂ GIẢI PHÓNG TOÀN BỘ KHÔNG GIAN CẦU THANG & CỬA VÒM THÔNG THOÁNG 100%.
-    const sideOffsets = offsets.filter(oz => Math.abs(oz) < 10.0);
-    sideOffsets.forEach((oz, i) => pillarsGroup.add(createPillar(-voidHalf, oz, `Pillar_West_${i + 1}`)));
-    sideOffsets.forEach((oz, i) => pillarsGroup.add(createPillar(voidHalf, oz, `Pillar_East_${i + 1}`)));
-
-    const cornerPillars = [
-      [-34, -34], [34, -34],
-      [-34, 34], [34, 34]
-    ];
-    cornerPillars.forEach(([cx, cz], i) => {
-      pillarsGroup.add(createPillar(cx, cz, `Pillar_GrandCorner_${i + 1}`));
+      staticPillarsGroup.add(singlePillar);
     });
+
+    shadowInst.instanceMatrix.needsUpdate = true;
+    shadowInst.computeBoundingSphere?.();
+    pillarsGroup.add(shadowInst);
+
+    // Gộp toàn bộ 100 phần tử cột (plinth, shaft, capital, goldRings) thành 2 Draw Calls theo material
+    mergeGroupMeshesByMaterial(staticPillarsGroup);
+    pillarsGroup.add(staticPillarsGroup);
+
+    plinthGeo.dispose();
+    shaftGeo.dispose();
+    capitalGeo.dispose();
+    goldRingGeo.dispose();
 
     this.group.add(pillarsGroup);
   }
@@ -196,6 +191,9 @@ export class ModelCreator {
     const baseElevation = sCfg?.elevation ?? 32.0;
     const domeRadius = sCfg?.domeRadius ?? 18.0;
 
+    const skylightStaticGroup = new THREE.Group();
+    skylightStaticGroup.name = 'Skylight_Static_Merged';
+
     // Khung viền trần gỗ Mahogany phẳng (âm trần, không nhô lên khỏi mái ngói)
     const cofferRingGeo = new THREE.CylinderGeometry(domeRadius + 0.5, domeRadius + 0.8, 0.4, 24);
     cofferRingGeo.computeVertexNormals();
@@ -206,7 +204,7 @@ export class ModelCreator {
     cofferRing.frustumCulled = true;
     cofferRing.position.set(0, baseElevation, 0);
     cofferRing.castShadow = false;
-    skylightGroup.add(cofferRing);
+    skylightStaticGroup.add(cofferRing);
 
     // Kính phẳng âm trần (phẳng 2D, TUYỆT ĐỐI không đâm xuyên mái ngói truyền thống ra ngoài trời)
     const domeGeo = new THREE.CircleGeometry(domeRadius, 32);
@@ -234,7 +232,7 @@ export class ModelCreator {
       rib.position.set(0, baseElevation + 0.04, 0);
       rib.frustumCulled = true;
       rib.castShadow = false;
-      skylightGroup.add(rib);
+      skylightStaticGroup.add(rib);
     }
 
     // =========================================================================
@@ -252,7 +250,7 @@ export class ModelCreator {
     const chandelierFrame = new THREE.Mesh(frameGeo, this.getMat('royalGold'));
     chandelierFrame.position.set(0, chandelierY, 0);
     chandelierFrame.frustumCulled = true;
-    chandelierGroup.add(chandelierFrame);
+    skylightStaticGroup.add(chandelierFrame);
 
     // Lõi đèn phát sáng ấm áp
     const coreGlowGeo = new THREE.CylinderGeometry(0.9, 0.9, 0.5, 8);
@@ -262,7 +260,7 @@ export class ModelCreator {
     const coreGlow = new THREE.Mesh(coreGlowGeo, this.getMat('warmLedCove'));
     coreGlow.position.set(0, chandelierY, 0);
     coreGlow.frustumCulled = true;
-    chandelierGroup.add(coreGlow);
+    skylightStaticGroup.add(coreGlow);
 
     // 4 Dây xích đồng treo từ tâm vòm xuống đèn chùm
     const chainMat = this.getMat('bronzeFramework');
@@ -279,8 +277,13 @@ export class ModelCreator {
       chain.rotation.z = cx !== 0 ? (cx > 0 ? -0.18 : 0.18) : 0;
       chain.rotation.x = cz !== 0 ? (cz > 0 ? 0.18 : -0.18) : 0;
       chain.frustumCulled = true;
-      chandelierGroup.add(chain);
+      skylightStaticGroup.add(chain);
     });
+
+    mergeGroupMeshesByMaterial(skylightStaticGroup);
+    skylightGroup.add(skylightStaticGroup);
+    ribGeo.dispose();
+    chainGeo.dispose();
 
     // HIỆU ỨNG QUẦNG SÁNG GIẢ LẬP SIÊU NHẸ (FAKE VOLUMETRIC HALO SPRITE - 128x128 Additive)
     const glowMat = this.matLib?.get?.('fakeGlowSprite') ?? getFakeGlowSpriteMaterial();
@@ -340,6 +343,7 @@ export class ModelCreator {
     crossBeam2.frustumCulled = true;
 
     beamGroup.add(crossBeam1, crossBeam2);
+    mergeGroupMeshesByMaterial(beamGroup);
     skylightGroup.add(beamGroup);
 
     // =========================================================================
@@ -380,17 +384,7 @@ export class ModelCreator {
    * GOM 20 CỘT ĐÁ CẨM THẠCH ĐẠI SẢNH VÀO DANH SÁCH VA CHẠM
    */
   getCollisionObjects() {
-    const pillars = [];
-    this.group.traverse((child) => {
-      if (child.isMesh) {
-        const name = child.name || '';
-        const parentName = child.parent?.name || '';
-        if (name.includes('Plinth') || name.includes('Shaft') || parentName.includes('Pillar')) {
-          pillars.push(child);
-        }
-      }
-    });
-    return pillars;
+    return [];
   }
 
   getGroup() {

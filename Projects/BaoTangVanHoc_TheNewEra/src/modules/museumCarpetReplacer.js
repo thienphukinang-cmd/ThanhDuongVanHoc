@@ -82,11 +82,18 @@ let SHARED_TIMELINE_CARPET_MATERIAL = null;
 export function getTimelinePatternCarpetMaterial() {
   if (SHARED_TIMELINE_CARPET_MATERIAL) return SHARED_TIMELINE_CARPET_MATERIAL;
 
-  const { albedoMap, normalMap, bumpMap } = generateSculptedNormalAndAlbedoMaps(
-    'museum_timeline_carpet_exact_v6',
-    2048,
-    4096,
-    (aCtx, hCtx, w, h) => {
+  const { albedoMap, normalMap } = generateSculptedNormalAndAlbedoMaps(
+    'museum_timeline_carpet_exact_v7',
+    512,
+    1024,
+    (aCtx, hCtx) => {
+      // Scale virtual 2048x4096 -> 512x1024 (giảm 16x pixel Sobel & VRAM)
+      aCtx.save();
+      hCtx.save();
+      aCtx.scale(0.25, 0.25);
+      hCtx.scale(0.25, 0.25);
+      const w = 2048;
+      const h = 4096;
       // --- A. NỀN VÀNG ĐỒNG ẤM (WARM BRONZE / TAN GOLD) ---
       const bgGrad = aCtx.createLinearGradient(0, 0, w, h);
       bgGrad.addColorStop(0.0, '#deb089');
@@ -316,11 +323,14 @@ export function getTimelinePatternCarpetMaterial() {
           });
         });
       });
+      aCtx.restore();
+      hCtx.restore();
     },
     3.4
   );
 
-  [albedoMap, normalMap, bumpMap].forEach((t) => {
+  [albedoMap, normalMap].forEach((t) => {
+    if (!t) return;
     t.wrapS = THREE.ClampToEdgeWrapping;
     t.wrapT = THREE.ClampToEdgeWrapping;
     t.repeat.set(1, 1);
@@ -331,10 +341,9 @@ export function getTimelinePatternCarpetMaterial() {
     map: albedoMap,
     normalMap: normalMap,
     normalScale: new THREE.Vector2(1.35, 1.35),
-    bumpMap: bumpMap,
-    bumpScale: 0.038,
     roughness: 0.38,
     metalness: 0.65,
+    side: THREE.FrontSide,
     polygonOffset: true,
     polygonOffsetFactor: -1,
     polygonOffsetUnits: -1
@@ -342,6 +351,9 @@ export function getTimelinePatternCarpetMaterial() {
 
   return SHARED_TIMELINE_CARPET_MATERIAL;
 }
+
+const _carpetBoxScratch = new THREE.Box3();
+const _carpetSizeScratch = new THREE.Vector3();
 
 /**
  * 2. GÁN VẬT LIỆU THẢM TRỤC THỜI GIAN VÀO 1 MESH THẢM CỤ THỂ
@@ -351,56 +363,46 @@ export function applyTimelineCarpetToMesh(mesh) {
   if (!mesh || !mesh.isMesh) return;
   const baseCarpetMat = getTimelinePatternCarpetMaterial();
 
+  // Nếu thảm đã dùng chung material & đã xử lý rồi thì bỏ qua (tránh chạy lặp lại)
+  if (mesh.userData.isReplacedCarpet && mesh.material === baseCarpetMat) {
+    return;
+  }
+
   if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
-  const worldBox = new THREE.Box3().setFromObject(mesh);
-  const worldSize = new THREE.Vector3();
-  worldBox.getSize(worldSize);
+  _carpetBoxScratch.setFromObject(mesh);
+  _carpetBoxScratch.getSize(_carpetSizeScratch);
 
   // Xác định chiều dài chính của thảm trong không gian thực
-  let isStretchedAlongX = worldSize.x > worldSize.z * 1.15;
-  if ((worldSize.x === 0 && worldSize.z === 0) || Math.abs(worldSize.x - worldSize.z) < 0.001) {
-    const geoSize = new THREE.Vector3();
-    mesh.geometry.boundingBox.getSize(geoSize);
-    isStretchedAlongX = geoSize.x > geoSize.y * 1.15;
+  let isStretchedAlongX = _carpetSizeScratch.x > _carpetSizeScratch.z * 1.15;
+  if (
+    (_carpetSizeScratch.x === 0 && _carpetSizeScratch.z === 0) ||
+    Math.abs(_carpetSizeScratch.x - _carpetSizeScratch.z) < 0.001
+  ) {
+    mesh.geometry.boundingBox.getSize(_carpetSizeScratch);
+    isStretchedAlongX = _carpetSizeScratch.x > _carpetSizeScratch.y * 1.15;
   }
 
-  // Nếu thảm đã được áp dụng đúng hướng rồi thì không tạo lại texture để tiết kiệm GPU
-  if (mesh.userData.isReplacedCarpet && mesh.material?.map) {
-    const currentRot = mesh.material.map.rotation;
-    const expectedRot = isStretchedAlongX ? Math.PI / 2 : 0;
-    if (Math.abs(currentRot - expectedRot) < 0.01) {
-      return;
+  // Xoay UV trực tiếp trên geometry một lần thay vì clone material & texture tốn VRAM/draw-call
+  if (isStretchedAlongX && !mesh.userData.carpetUvRotated) {
+    const geo = mesh.geometry.clone();
+    const uv = geo.attributes?.uv;
+    if (uv) {
+      for (let i = 0; i < uv.count; i++) {
+        const u = uv.getX(i);
+        const v = uv.getY(i);
+        uv.setXY(i, v, 1.0 - u);
+      }
+      uv.needsUpdate = true;
     }
+    geo.computeBoundingBox();
+    geo.computeBoundingSphere();
+    mesh.geometry = geo;
+    mesh.userData.carpetUvRotated = true;
   }
 
-  const matInstance = baseCarpetMat.clone();
-  matInstance.map = baseCarpetMat.map.clone();
-  matInstance.normalMap = baseCarpetMat.normalMap.clone();
-  matInstance.bumpMap = baseCarpetMat.bumpMap.clone();
-
-  if (isStretchedAlongX) {
-    // Thảm trải dài theo hướng Đông - Tây (trục X): xoay texture 90 độ để trục thời gian chạy dọc chiều dài
-    [matInstance.map, matInstance.normalMap, matInstance.bumpMap].forEach((tex) => {
-      tex.wrapS = THREE.ClampToEdgeWrapping;
-      tex.wrapT = THREE.ClampToEdgeWrapping;
-      tex.center.set(0.5, 0.5);
-      tex.rotation = Math.PI / 2;
-      tex.repeat.set(1, 1);
-      tex.needsUpdate = true;
-    });
-  } else {
-    // Thảm trải dài theo hướng Bắc - Nam (trục Z): giữ thẳng chuẩn
-    [matInstance.map, matInstance.normalMap, matInstance.bumpMap].forEach((tex) => {
-      tex.wrapS = THREE.ClampToEdgeWrapping;
-      tex.wrapT = THREE.ClampToEdgeWrapping;
-      tex.center.set(0, 0);
-      tex.rotation = 0;
-      tex.repeat.set(1, 1);
-      tex.needsUpdate = true;
-    });
-  }
-
-  mesh.material = matInstance;
+  mesh.material = baseCarpetMat;
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
   mesh.userData.ignoreRaycaster = true;
   mesh.userData.isCarpet = true;
   mesh.userData.isReplacedCarpet = true;
@@ -495,10 +497,9 @@ export function replaceAllMuseumCarpetsWithTimelinePattern(rootScene) {
 
     if (isNamedCarpet) {
       // Loại trừ các mặt sàn nền chính rộng lớn (> 36m)
-      const worldBox = new THREE.Box3().setFromObject(child);
-      const worldSize = new THREE.Vector3();
-      worldBox.getSize(worldSize);
-      if (worldSize.x >= 36.0 && worldSize.z >= 36.0) return;
+      _carpetBoxScratch.setFromObject(child);
+      _carpetBoxScratch.getSize(_carpetSizeScratch);
+      if (_carpetSizeScratch.x >= 36.0 && _carpetSizeScratch.z >= 36.0) return;
 
       carpetMeshes.push(child);
     }

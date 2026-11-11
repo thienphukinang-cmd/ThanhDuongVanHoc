@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { loadGlbCached, downscaleTexture, prepareUnlitVividGlbModel as sharedPrepareGlb } from '../utils/modelLoaderHelper.js';
+import { mergeGroupMeshesByMaterial } from '../utils/geometryMerger.js';
 import { registerInteractiveBook } from './PortalInteraction.js';
 import * as VortexCutscene from './bookVortexCutscene.js';
 import { buildSonTinhThuyTinhMasterVfx, separateGodsAndCleanScene } from './sonTinhWaterMountainVfx.js';
@@ -59,31 +60,14 @@ function getCachedTex(key, w, h, drawFn, repeatX = 1, repeatY = 1) {
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(repeatX, repeatY);
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
   if ('colorSpace' in tex && THREE.SRGBColorSpace) {
     tex.colorSpace = THREE.SRGBColorSpace;
   }
   tex.needsUpdate = true;
   STTT_CACHE[key] = tex;
   return tex;
-}
-
-
-
-function loadGlbWithFallback(loader, urls, onSuccess, onFail) {
-  let idx = 0;
-  const tryNext = () => {
-    if (idx >= urls.length) {
-      if (onFail) onFail();
-      return;
-    }
-    loader.load(
-      urls[idx++],
-      (gltf) => onSuccess(gltf.scene),
-      undefined,
-      () => tryNext()
-    );
-  };
-  tryNext();
 }
 
 function createVolumetricLightBeam(topRadius, bottomRadius, height, colorHex, opacity = 0.24) {
@@ -145,8 +129,7 @@ function buildCharacteristicFourWalls(interiorGroup, {
   centerZ = -0.10,
   doorWidth = 14.5,
   doorHeight = 7.6,
-  trimColor = 0xfacc15,
-  gltfLoader = null
+  trimColor = 0xfacc15
 } = {}) {
   const wallsGroup = new THREE.Group();
   wallsGroup.name = 'STTT_4_Characteristic_Walls';
@@ -275,7 +258,7 @@ function buildCharacteristicFourWalls(interiorGroup, {
   // 1. Tường Hậu Cảnh (Đóng kín sát tường sau, Z = backZ)
   const backWall = new THREE.Mesh(
     new THREE.BoxGeometry(width + wallThick * 2, height, wallThick),
-    new THREE.MeshBasicMaterial({ map: backWallTex, side: THREE.DoubleSide, fog: false })
+    new THREE.MeshBasicMaterial({ map: backWallTex, side: THREE.FrontSide, fog: false })
   );
   backWall.position.set(0, height * 0.5, backZ);
   wallsGroup.add(backWall);
@@ -283,7 +266,7 @@ function buildCharacteristicFourWalls(interiorGroup, {
   // 2. Tường Ngăn Bên Trái (Nối liền từ cửa vòm đến mép sau X = -halfW)
   const leftWall = new THREE.Mesh(
     new THREE.BoxGeometry(wallThick, height, depth),
-    new THREE.MeshBasicMaterial({ map: leftWallTex, side: THREE.DoubleSide, fog: false })
+    new THREE.MeshBasicMaterial({ map: leftWallTex, side: THREE.FrontSide, fog: false })
   );
   leftWall.position.set(-halfW, height * 0.5, centerZ);
   wallsGroup.add(leftWall);
@@ -291,7 +274,7 @@ function buildCharacteristicFourWalls(interiorGroup, {
   // 3. Tường Ngăn Bên Phải (Nối liền từ cửa vòm đến mép sau X = +halfW)
   const rightWall = new THREE.Mesh(
     new THREE.BoxGeometry(wallThick, height, depth),
-    new THREE.MeshBasicMaterial({ map: rightWallTex, side: THREE.DoubleSide, fog: false })
+    new THREE.MeshBasicMaterial({ map: rightWallTex, side: THREE.FrontSide, fog: false })
   );
   rightWall.position.set(halfW, height * 0.5, centerZ);
   wallsGroup.add(rightWall);
@@ -299,7 +282,7 @@ function buildCharacteristicFourWalls(interiorGroup, {
   // 4. Vách Mặt Tiền (Z = frontZ): Hướng thẳng ra sảnh bảo tàng, cửa mở rộng 14.5m không bao giờ chắn mặt người chơi
   const halfDoor = doorWidth * 0.5;
   const wingW = Math.max(0.1, halfW - halfDoor);
-  const frontMat = new THREE.MeshBasicMaterial({ map: frontWallTex, side: THREE.DoubleSide, fog: false });
+  const frontMat = new THREE.MeshBasicMaterial({ map: frontWallTex, side: THREE.FrontSide, fog: false });
 
   // 2 cánh tường bên rìa ngoài (X = +-10m đến +-12.6m), để trống toàn bộ lòng cửa 14.5m ở giữa
   const leftFrontWing = new THREE.Mesh(new THREE.BoxGeometry(wingW + wallThick, height, wallThick), frontMat);
@@ -344,143 +327,7 @@ function buildCharacteristicFourWalls(interiorGroup, {
   return wallsGroup;
 }
 
-/**
- * Tạo khối núi đá Tản Viên khổng lồ với địa hình vách đá gồ ghề tự nhiên
- */
-function createColossalMountainPeak(radiusBottom, height, radialSegs, heightSegs, material, seed = 1, flatTopRatio = 0.85) {
-  const geo = new THREE.ConeGeometry(radiusBottom, height, radialSegs, heightSegs, false);
-  const pos = geo.attributes.position;
-  for (let i = 0; i < pos.count; i++) {
-    const vx = pos.getX(i);
-    const vy = pos.getY(i);
-    const vz = pos.getZ(i);
-    const normalizedH = (vy + height * 0.5) / height;
-
-    const angle = Math.atan2(vz, vx);
-    const ridgeNoise =
-      Math.sin(angle * 5 + seed * 1.3) * 0.20 +
-      Math.cos(normalizedH * 8 + seed * 2.1) * 0.15 +
-      Math.sin(angle * 11 - normalizedH * 6) * 0.08;
-
-    const factor = 1 + ridgeNoise * (1 - normalizedH * 0.35);
-    pos.setX(i, vx * factor);
-    pos.setZ(i, vz * factor);
-    if (normalizedH > flatTopRatio) {
-      const capY = height * (flatTopRatio - 0.5);
-      pos.setY(i, capY + (vy - capY) * 0.25);
-    }
-  }
-  geo.computeVertexNormals();
-  return new THREE.Mesh(geo, material);
-}
-
-/**
- * Tạo Bức Tường Sóng Thần Đại Hồng Thủy Uốn Cong Chồm Lên (3D Curving Tsunami Wall)
- * Khi xoay rotation.y = -Math.PI / 2, sóng sẽ chồm trực diện từ hướng +X (Thủy Tinh) đập thẳng vào -X (Núi Tản Viên)
- */
-function createColossalTsunamiWallGeometry(width = 96, height = 50, segW = 48, segH = 28) {
-  const geo = new THREE.PlaneGeometry(width, height, segW, segH);
-  const pos = geo.attributes.position;
-
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i);
-    const y = pos.getY(i);
-    const normH = (y + height * 0.5) / height; // 0 (đáy) -> 1 (đỉnh sóng)
-
-    // Uốn cong mặt sóng chồm về phía trước (+Z cục bộ) để khi xoay sang hướng -X sẽ bổ nhào thẳng vào vách núi
-    const curlForward = Math.pow(normH, 2.0) * 22.0 - Math.sin(normH * Math.PI) * 5.5;
-    const lipDrop = normH > 0.85 ? -Math.pow((normH - 0.85) / 0.15, 2) * 6.5 : 0;
-    const horizontalCurve = Math.cos((x / (width * 0.5)) * Math.PI * 0.45) * 6.5;
-
-    pos.setY(i, normH * height + lipDrop);
-    pos.setZ(i, curlForward + horizontalCurve);
-  }
-  geo.computeVertexNormals();
-  return geo;
-}
-
-/**
- * Tạo Ngọn Sóng Cuộn Dài Đánh Trực Diện Từ Biển Vào Vách Núi (Rolling Wave Crest)
- */
-function createAssaultWaveRollerGeometry(lengthZ = 76, heightY = 14) {
-  const geo = new THREE.CylinderGeometry(heightY * 0.45, heightY * 0.65, lengthZ, 20, 16, true, 0, Math.PI * 1.15);
-  geo.rotateX(Math.PI / 2);
-  return geo;
-}
-
-/**
- * Tạo Tia Sét 3D Phân Nhánh (3D Jagged Lightning Bolt)
- */
-function createLightningBoltMesh(height = 70, colorHex = 0xe0f2fe) {
-  const group = new THREE.Group();
-  const mat = new THREE.MeshBasicMaterial({
-    color: colorHex,
-    transparent: true,
-    opacity: 0.95,
-    fog: false
-  });
-
-  const segs = 10;
-  const segH = height / segs;
-  let curX = 0;
-  let curZ = 0;
-
-  for (let i = 0; i < segs; i++) {
-    const nextX = curX + (Math.random() - 0.5) * 6.5;
-    const nextZ = curZ + (Math.random() - 0.5) * 4.5;
-    const y1 = height - i * segH;
-    const y2 = height - (i + 1) * segH;
-
-    const p1 = new THREE.Vector3(curX, y1, curZ);
-    const p2 = new THREE.Vector3(nextX, y2, nextZ);
-    const dist = p1.distanceTo(p2);
-
-    const boltSeg = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.28 * (1 - i * 0.05), 0.22 * (1 - i * 0.05), dist, 6),
-      mat
-    );
-    boltSeg.position.copy(p1).add(p2).multiplyScalar(0.5);
-    boltSeg.lookAt(p2);
-    boltSeg.rotateX(Math.PI / 2);
-    group.add(boltSeg);
-
-    curX = nextX;
-    curZ = nextZ;
-  }
-
-  group.userData.mat = mat;
-  return group;
-}
-
-/**
- * Tạo Đền Thượng Cổ Kính trên sườn Núi Tản Viên
- */
-function createMountainShrine(goldMat, jadeMat) {
-  const shrine = new THREE.Group();
-  const woodMat = new THREE.MeshLambertMaterial({ color: 0x451a03, emissive: 0x1c0a00 });
-  const roofMat = new THREE.MeshPhongMaterial({ color: 0x991b1b, emissive: 0x3b0707, specular: 0xfacc15 });
-
-  const base = new THREE.Mesh(new THREE.BoxGeometry(5.2, 1.2, 4.2), jadeMat);
-  base.position.y = 0.6;
-  shrine.add(base);
-
-  [[-2.0, -1.5], [2.0, -1.5], [-2.0, 1.5], [2.0, 1.5]].forEach(([px, pz]) => {
-    const col = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 3.2, 8), woodMat);
-    col.position.set(px, 2.8, pz);
-    shrine.add(col);
-  });
-
-  const roof = new THREE.Mesh(new THREE.ConeGeometry(4.6, 2.2, 4), roofMat);
-  roof.position.y = 5.3;
-  roof.rotation.y = Math.PI / 4;
-  shrine.add(roof);
-
-  const finial = new THREE.Mesh(new THREE.OctahedronGeometry(0.5, 0), goldMat);
-  finial.position.y = 6.6;
-  shrine.add(finial);
-
-  return shrine;
-}
+// (Các helper núi/sóng/sét/đền cõi thần thoại do sonTinhWaterMountainVfx.js đảm nhận)
 
 /**
  * Tạo hiện vật 3D đặc trưng của truyền thuyết Sơn Tinh - Thủy Tinh trong Phòng Bảo Tàng:
@@ -489,7 +336,7 @@ function createMountainShrine(goldMat, jadeMat) {
  * 3. Ngựa Chín Hồng Mao (Mô hình Poly Haven CC0 + 9 Bờm Lửa Hồng Mao)
  * 4. Trống Đồng & Ấn Thủy Tộc
  */
-function createSignatureRelicModel(type, mats, gltfLoader = null) {
+function createSignatureRelicModel(type, mats) {
   const group = new THREE.Group();
   const { goldMat, ivoryMat, crimsonMat, jadeMat, oceanMat, bronzeMat } = mats;
 
@@ -499,25 +346,27 @@ function createSignatureRelicModel(type, mats, gltfLoader = null) {
     body.position.y = 0.42;
     fallbackGroup.add(body);
 
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.34, 14, 12), bronzeMat);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.34, 12, 10), bronzeMat);
     head.position.set(0, 0.62, 0.48);
     fallbackGroup.add(head);
 
+    const sharedEarGeo = new THREE.BoxGeometry(0.08, 0.38, 0.28);
     [-1, 1].forEach((side) => {
-      const ear = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.38, 0.28), goldMat);
+      const ear = new THREE.Mesh(sharedEarGeo, goldMat);
       ear.position.set(side * 0.34, 0.62, 0.42);
       ear.rotation.y = side * 0.35;
       fallbackGroup.add(ear);
     });
 
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.14, 0.55, 10), bronzeMat);
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.14, 0.55, 8), bronzeMat);
     trunk.position.set(0, 0.52, 0.78);
     trunk.rotation.x = 0.65;
     fallbackGroup.add(trunk);
 
+    const sharedTuskFallbackGeo = new THREE.ConeGeometry(0.032, 0.48, 6);
     for (let i = 0; i < 9; i++) {
       const offset = (i - 4) * 0.085;
-      const tusk = new THREE.Mesh(new THREE.ConeGeometry(0.032, 0.48, 8), ivoryMat);
+      const tusk = new THREE.Mesh(sharedTuskFallbackGeo, ivoryMat);
       tusk.position.set(offset, 0.52 + Math.abs(i - 4) * 0.02, 0.74);
       tusk.rotation.x = Math.PI * 0.38;
       tusk.rotation.z = -offset * 0.9;
@@ -527,67 +376,62 @@ function createSignatureRelicModel(type, mats, gltfLoader = null) {
     const howdah = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.28, 0.25, 8), jadeMat);
     howdah.position.set(0, 0.82, -0.05);
     fallbackGroup.add(howdah);
+    mergeGroupMeshesByMaterial(fallbackGroup);
+    sharedEarGeo.dispose();
+    sharedTuskFallbackGeo.dispose();
     group.add(fallbackGroup);
 
-    // TÍCH HỢP MÔ HÌNH POLY HAVEN CC0 CHO VOI CHÍN NGÀ
-    if (gltfLoader) {
-      gltfLoader.load(
-        '/model/polyhaven/carved_wooden_elephant/carved_wooden_elephant_1k.gltf',
-        (gltf) => {
-          fallbackGroup.visible = false;
-          const elephantModel = gltf.scene;
-          elephantModel.traverse((child) => {
-            if (child.isMesh) {
-              child.castShadow = false;
-              child.receiveShadow = false;
-              child.frustumCulled = true;
-            }
-          });
-          const box = new THREE.Box3().setFromObject(elephantModel);
-          const size = new THREE.Vector3();
-          box.getSize(size);
-          const maxDim = Math.max(size.x, size.y, size.z);
-          const scale = 1.05 / (maxDim || 1);
-          elephantModel.scale.setScalar(scale);
+    // TÍCH HỢP MÔ HÌNH POLY HAVEN CC0 CHO VOI CHÍN NGÀ (cached + downscaled textures)
+    loadGlbCached(['/model/polyhaven/carved_wooden_elephant/carved_wooden_elephant_1k.gltf'], {
+      maxTextureSize: 512
+    })
+      .then((elephantModel) => {
+        fallbackGroup.visible = false;
+        const box = new THREE.Box3().setFromObject(elephantModel);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const scale = 1.05 / (maxDim || 1);
+        elephantModel.scale.setScalar(scale);
 
-          box.setFromObject(elephantModel);
-          const center = new THREE.Vector3();
-          box.getCenter(center);
-          elephantModel.position.x = -center.x;
-          elephantModel.position.z = -center.z;
-          elephantModel.position.y = -box.min.y;
+        box.setFromObject(elephantModel);
+        const center = new THREE.Vector3();
+        box.getCenter(center);
+        elephantModel.position.x = -center.x;
+        elephantModel.position.z = -center.z;
+        elephantModel.position.y = -box.min.y;
 
-          // 9 Ngà Vàng Hoàng Kim phát sáng quanh đầu voi
-          const tusksGroup = new THREE.Group();
-          for (let i = 0; i < 9; i++) {
-            const offset = (i - 4) * 0.065;
-            const tusk = new THREE.Mesh(new THREE.ConeGeometry(0.022, 0.38, 8), goldMat);
-            tusk.position.set(offset, 0.38 + Math.abs(i - 4) * 0.015, 0.42);
-            tusk.rotation.x = Math.PI * 0.36;
-            tusk.rotation.z = -offset * 0.85;
-            tusksGroup.add(tusk);
-          }
-          elephantModel.add(tusksGroup);
-          group.add(elephantModel);
-        },
-        undefined,
-        (err) => {
-          console.warn('[POLYHAVEN] Dùng fallback cho Voi Chín Ngà:', err);
+        // 9 Ngà Vàng Hoàng Kim phát sáng quanh đầu voi (merged 9 -> 1 DC)
+        const tusksGroup = new THREE.Group();
+        const sharedTuskGeo = new THREE.ConeGeometry(0.022, 0.38, 6);
+        for (let i = 0; i < 9; i++) {
+          const offset = (i - 4) * 0.065;
+          const tusk = new THREE.Mesh(sharedTuskGeo, goldMat);
+          tusk.position.set(offset, 0.38 + Math.abs(i - 4) * 0.015, 0.42);
+          tusk.rotation.x = Math.PI * 0.36;
+          tusk.rotation.z = -offset * 0.85;
+          tusksGroup.add(tusk);
         }
-      );
-    }
+        mergeGroupMeshesByMaterial(tusksGroup);
+        sharedTuskGeo.dispose();
+        elephantModel.add(tusksGroup);
+        group.add(elephantModel);
+      })
+      .catch((err) => {
+        console.warn('[POLYHAVEN] Dùng fallback cho Voi Chín Ngà:', err);
+      });
   } else if (type === 'GA_CHIN_CUA') {
-    const body = new THREE.Mesh(new THREE.SphereGeometry(0.34, 14, 12), goldMat);
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.34, 12, 10), goldMat);
     body.scale.set(0.85, 1.0, 1.25);
     body.position.y = 0.52;
     group.add(body);
 
-    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 0.38, 10), goldMat);
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 0.38, 8), goldMat);
     neck.position.set(0, 0.82, 0.26);
     neck.rotation.x = -0.25;
     group.add(neck);
 
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 10), goldMat);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), goldMat);
     head.position.set(0, 1.02, 0.34);
     group.add(head);
 
@@ -595,29 +439,36 @@ function createSignatureRelicModel(type, mats, gltfLoader = null) {
     crest.position.set(0, 1.16, 0.34);
     group.add(crest);
 
+    const sharedTailGeo = new THREE.ConeGeometry(0.08, 0.55, 6);
     for (let i = 0; i < 5; i++) {
-      const tailFeather = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.55, 6), i % 2 === 0 ? crimsonMat : goldMat);
+      const tailFeather = new THREE.Mesh(sharedTailGeo, i % 2 === 0 ? crimsonMat : goldMat);
       tailFeather.position.set((i - 2) * 0.08, 0.75, -0.38);
       tailFeather.rotation.x = -0.75;
       tailFeather.rotation.z = (i - 2) * 0.18;
       group.add(tailFeather);
     }
 
+    const sharedLegGeo = new THREE.CylinderGeometry(0.035, 0.035, 0.38, 6);
     [-0.14, 0.14].forEach((lx) => {
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.38, 8), bronzeMat);
+      const leg = new THREE.Mesh(sharedLegGeo, bronzeMat);
       leg.position.set(lx, 0.2, 0.05);
       group.add(leg);
     });
 
+    const sharedSpurGeo = new THREE.ConeGeometry(0.025, 0.22, 5);
     for (let i = 0; i < 9; i++) {
       const side = i < 5 ? -0.14 : 0.14;
       const idxOnLeg = i < 5 ? i : i - 5;
-      const spur = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.22, 6), ivoryMat);
+      const spur = new THREE.Mesh(sharedSpurGeo, ivoryMat);
       spur.position.set(side, 0.12 + idxOnLeg * 0.055, -0.04);
       spur.rotation.x = -Math.PI * 0.42;
       spur.rotation.z = side < 0 ? 0.35 : -0.35;
       group.add(spur);
     }
+    mergeGroupMeshesByMaterial(group);
+    sharedTailGeo.dispose();
+    sharedLegGeo.dispose();
+    sharedSpurGeo.dispose();
   } else if (type === 'NGUA_CHIN_HONG_MAO') {
     const fallbackGroup = new THREE.Group();
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.42, 0.92), ivoryMat);
@@ -625,7 +476,7 @@ function createSignatureRelicModel(type, mats, gltfLoader = null) {
     body.rotation.x = -0.15;
     fallbackGroup.add(body);
 
-    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.2, 0.52, 10), ivoryMat);
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.2, 0.52, 8), ivoryMat);
     neck.position.set(0, 0.88, 0.36);
     neck.rotation.x = 0.42;
     fallbackGroup.add(neck);
@@ -635,8 +486,9 @@ function createSignatureRelicModel(type, mats, gltfLoader = null) {
     head.rotation.x = 0.35;
     fallbackGroup.add(head);
 
+    const sharedManeFallbackGeo = new THREE.ConeGeometry(0.055, 0.42, 6);
     for (let i = 0; i < 9; i++) {
-      const mane = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.42, 8), crimsonMat);
+      const mane = new THREE.Mesh(sharedManeFallbackGeo, crimsonMat);
       mane.position.set(
         (i % 2 === 0 ? 1 : -1) * 0.04,
         1.12 - i * 0.055,
@@ -646,81 +498,77 @@ function createSignatureRelicModel(type, mats, gltfLoader = null) {
       fallbackGroup.add(mane);
     }
 
+    const sharedHorseLegGeo = new THREE.CylinderGeometry(0.045, 0.035, 0.48, 6);
     [
       [-0.16, 0.26, 0.32],
       [0.16, 0.26, 0.32],
       [-0.16, 0.24, -0.32],
       [0.16, 0.24, -0.32]
     ].forEach(([x, y, z]) => {
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.035, 0.48, 8), goldMat);
+      const leg = new THREE.Mesh(sharedHorseLegGeo, goldMat);
       leg.position.set(x, y, z);
       fallbackGroup.add(leg);
     });
+    mergeGroupMeshesByMaterial(fallbackGroup);
+    sharedManeFallbackGeo.dispose();
+    sharedHorseLegGeo.dispose();
     group.add(fallbackGroup);
 
-    // TÍCH HỢP MÔ HÌNH POLY HAVEN CC0 CHO NGỰA CHÍN HỒNG MAO
-    if (gltfLoader) {
-      gltfLoader.load(
-        '/model/polyhaven/horse_statue_01/horse_statue_01_1k.gltf',
-        (gltf) => {
-          fallbackGroup.visible = false;
-          const horseModel = gltf.scene;
-          horseModel.traverse((child) => {
-            if (child.isMesh) {
-              child.castShadow = false;
-              child.receiveShadow = false;
-              child.frustumCulled = true;
-            }
-          });
-          const box = new THREE.Box3().setFromObject(horseModel);
-          const size = new THREE.Vector3();
-          box.getSize(size);
-          const maxDim = Math.max(size.x, size.y, size.z);
-          const scale = 1.12 / (maxDim || 1);
-          horseModel.scale.setScalar(scale);
+    // TÍCH HỢP MÔ HÌNH POLY HAVEN CC0 CHO NGỰA CHÍN HỒNG MAO (cached + downscaled textures)
+    loadGlbCached(['/model/polyhaven/horse_statue_01/horse_statue_01_1k.gltf'], {
+      maxTextureSize: 512
+    })
+      .then((horseModel) => {
+        fallbackGroup.visible = false;
+        const box = new THREE.Box3().setFromObject(horseModel);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const scale = 1.12 / (maxDim || 1);
+        horseModel.scale.setScalar(scale);
 
-          box.setFromObject(horseModel);
-          const center = new THREE.Vector3();
-          box.getCenter(center);
-          horseModel.position.x = -center.x;
-          horseModel.position.z = -center.z;
-          horseModel.position.y = -box.min.y;
+        box.setFromObject(horseModel);
+        const center = new THREE.Vector3();
+        box.getCenter(center);
+        horseModel.position.x = -center.x;
+        horseModel.position.z = -center.z;
+        horseModel.position.y = -box.min.y;
 
-          // 9 Chùm Bờm Hồng Mao rực lửa
-          const manesGroup = new THREE.Group();
-          for (let i = 0; i < 9; i++) {
-            const mane = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.32, 8), crimsonMat);
-            mane.position.set(
-              (i % 2 === 0 ? 1 : -1) * 0.035,
-              0.72 - i * 0.04,
-              0.24 - i * 0.045
-            );
-            mane.rotation.x = -0.85;
-            manesGroup.add(mane);
-          }
-          horseModel.add(manesGroup);
-          group.add(horseModel);
-        },
-        undefined,
-        (err) => {
-          console.warn('[POLYHAVEN] Dùng fallback cho Ngựa Chín Hồng Mao:', err);
+        // 9 Chùm Bờm Hồng Mao rực lửa (merged 9 -> 1 DC)
+        const manesGroup = new THREE.Group();
+        const sharedManeGeo = new THREE.ConeGeometry(0.04, 0.32, 6);
+        for (let i = 0; i < 9; i++) {
+          const mane = new THREE.Mesh(sharedManeGeo, crimsonMat);
+          mane.position.set(
+            (i % 2 === 0 ? 1 : -1) * 0.035,
+            0.72 - i * 0.04,
+            0.24 - i * 0.045
+          );
+          mane.rotation.x = -0.85;
+          manesGroup.add(mane);
         }
-      );
-    }
+        mergeGroupMeshesByMaterial(manesGroup);
+        sharedManeGeo.dispose();
+        horseModel.add(manesGroup);
+        group.add(horseModel);
+      })
+      .catch((err) => {
+        console.warn('[POLYHAVEN] Dùng fallback cho Ngựa Chín Hồng Mao:', err);
+      });
   } else {
-    const drumTop = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.38, 0.32, 20), bronzeMat);
+    const drumTop = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.38, 0.32, 16), bronzeMat);
     drumTop.position.y = 0.36;
     group.add(drumTop);
 
-    const drumBase = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.48, 0.24, 20), goldMat);
+    const drumBase = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.48, 0.24, 16), goldMat);
     drumBase.position.y = 0.12;
     group.add(drumBase);
 
-    const oceanOrb = new THREE.Mesh(new THREE.OctahedronGeometry(0.28, 2), oceanMat);
+    const oceanOrb = new THREE.Mesh(new THREE.OctahedronGeometry(0.28, 1), oceanMat);
     oceanOrb.position.y = 0.82;
     group.add(oceanOrb);
 
-    const haloRing = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.03, 10, 28), goldMat);
+    const haloRing = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.03, 8, 20), goldMat);
     haloRing.position.y = 0.82;
     group.add(haloRing);
   }
@@ -744,7 +592,11 @@ function createGiantVoidHologram({
 } = {}) {
   const group = new THREE.Group();
 
-  const tex = getCachedTex(`sttt_holo_v7_${title}_${headerTag}_${width}`, 2048, 1152, (ctx, w, h) => {
+  const tex = getCachedTex(`sttt_holo_v7_${title}_${headerTag}_${width}`, 1024, 576, (ctx) => {
+    ctx.save();
+    ctx.scale(0.5, 0.5);
+    const w = 2048;
+    const h = 1152;
     const bg = ctx.createLinearGradient(0, 0, w, h);
     bg.addColorStop(0.0, 'rgba(6, 15, 28, 0.95)');
     bg.addColorStop(0.5, 'rgba(12, 28, 48, 0.92)');
@@ -815,6 +667,7 @@ function createGiantVoidHologram({
       ctx.fillText(line, 64, curY);
       curY += lineH + 16;
     });
+    ctx.restore();
   });
 
   const screen = new THREE.Mesh(
@@ -844,9 +697,9 @@ function createProceduralSonTinhFigure() {
   group.name = 'Procedural_SonTinh_Hero';
   group.userData = { preserve: true, isHero: true };
 
-  const legMat = new THREE.MeshBasicMaterial({ color: 0x854d0e, side: THREE.DoubleSide, fog: false });
-  const goldArmorMat = new THREE.MeshBasicMaterial({ color: 0xfde047, side: THREE.DoubleSide, fog: false });
-  const bronzeBodyMat = new THREE.MeshBasicMaterial({ color: 0xd97706, side: THREE.DoubleSide, fog: false });
+  const legMat = new THREE.MeshBasicMaterial({ color: 0x854d0e, side: THREE.FrontSide, fog: false });
+  const goldArmorMat = new THREE.MeshBasicMaterial({ color: 0xfde047, side: THREE.FrontSide, fog: false });
+  const bronzeBodyMat = new THREE.MeshBasicMaterial({ color: 0xd97706, side: THREE.FrontSide, fog: false });
   const capeMat = new THREE.MeshBasicMaterial({ color: 0xb91c1c, side: THREE.DoubleSide, fog: false });
 
   // 2 chân uy dũng trên đỉnh Tản Viên
@@ -911,10 +764,10 @@ function createProceduralThuyTinhFigure() {
   group.name = 'Procedural_ThuyTinh_Hero';
   group.userData = { preserve: true, isHero: true };
 
-  const seaBodyMat = new THREE.MeshBasicMaterial({ color: 0x0369a1, side: THREE.DoubleSide, fog: false });
-  const seaArmorMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide, fog: false });
+  const seaBodyMat = new THREE.MeshBasicMaterial({ color: 0x0369a1, side: THREE.FrontSide, fog: false });
+  const seaArmorMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.FrontSide, fog: false });
   const waveCapeMat = new THREE.MeshBasicMaterial({ color: 0x0284c7, side: THREE.DoubleSide, fog: false });
-  const waterGlowMat = new THREE.MeshBasicMaterial({ color: 0xe0f2fe, side: THREE.DoubleSide, fog: false });
+  const waterGlowMat = new THREE.MeshBasicMaterial({ color: 0xe0f2fe, side: THREE.FrontSide, fog: false });
 
   // 2 chân thần biển đạp trên đầu sóng dữ
   const leftLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 1.05, 5.8, 8), seaBodyMat);
@@ -1009,7 +862,6 @@ export function buildSonTinhThuyTinhExhibition({
   let _savedFog = null;
   let _savedBackground = null;
   const savedReturnPosition = new THREE.Vector3();
-  const gltfLoader = new GLTFLoader();
   const interactiveTargets = [];
 
   // =========================================================================
@@ -1045,8 +897,7 @@ export function buildSonTinhThuyTinhExhibition({
     centerZ: ROOM_CENTER_Z,
     doorWidth: 14.5,
     doorHeight: DOOR_H,
-    trimColor: 0xfacc15,
-    gltfLoader
+    trimColor: 0xfacc15
   });
 
   // A1.0 NÂNG CẤP HỌA TIẾT TƯỜNG 3 TẦNG, PHÀO CHỈ, 4 TRANH PHÙ ĐIÊU & BÌNH PHONG HẮT SÁNG
@@ -1182,27 +1033,24 @@ export function buildSonTinhThuyTinhExhibition({
     bronzeLanterns.push({ group: lGroup, phase: i * 0.8 });
   }
 
-  // NẠP MÔ HÌNH ĐÈN LỒNG CỔ .GLB (den_long_co.glb / den_long_treo.glb) VÀO 8 ĐÈN TREO TRẦN
-  if (gltfLoader) {
-    loadGlbWithFallback(
-      gltfLoader,
-      ['/model/den_long_co.glb', '/models/den_long_co.glb', '/model/den_long_treo.glb'],
-      (rawScene) => {
-        bronzeLanterns.forEach((item) => {
-          const lModel = prepareUnlitVividGlbModel(rawScene.clone(true), {
-            targetSpan: 0.95,
-            fitAxis: 'y',
-            groundY: false,
-            color: 0xfacc15,
-            castShadow: false,
-            receiveShadow: false
-          });
-          lModel.position.set(0, -0.35, 0);
-          item.group.add(lModel);
+  // NẠP MÔ HÌNH ĐÈN LỒNG TREO .GLB NHẸ (den_long_treo.glb) VÀO 8 ĐÈN TREO TRẦN
+  loadGlbCached(['/model/den_long_treo.glb', '/models/den_long_treo.glb'], { maxTextureSize: 512 })
+    .then((rawScene) => {
+      bronzeLanterns.forEach((item) => {
+        const lModel = prepareUnlitVividGlbModel(rawScene.clone(true), {
+          targetSpan: 0.95,
+          fitAxis: 'y',
+          groundY: false,
+          color: 0xfacc15,
+          castShadow: false,
+          receiveShadow: false,
+          maxTextureSize: 512
         });
-      }
-    );
-  }
+        lModel.position.set(0, -0.35, 0);
+        item.group.add(lModel);
+      });
+    })
+    .catch(() => {});
 
   // A4. Sàn Trống Đồng Đông Sơn - Đông Hải (Full-Size 25.32m x 27.30m)
   const grandFloorTex = getCachedTex('sttt_grand_dongson_floor_v6', 1024, 1024, (ctx, w, h) => {
@@ -1327,30 +1175,30 @@ export function buildSonTinhThuyTinhExhibition({
   interiorGroup.add(bookAltar);
 
   // NẠP MÔ HÌNH ÁN THƯ GỖ .GLB CHUẨN CAO 1.15m (fitAxis: 'y')
-  if (gltfLoader) {
-    loadGlbWithFallback(
-      gltfLoader,
-      ['/model/an_thu_go.glb', '/models/an_thu_go.glb', '/model/polyhaven/an_thu_go_co/an_thu_go_co_1k.gltf'],
-      (rawScene) => {
-        const table = prepareUnlitVividGlbModel(rawScene, {
-          targetSpan: 1.15,
-          fitAxis: 'y',
-          groundY: true,
-          color: 0x54260f,
-          castShadow: false,
-          receiveShadow: false
-        });
-        table.position.set(0, 0, 0);
-        bookAltar.add(table);
-      }
-    );
-  } else {
-    const step1 = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 2.7, 0.28, 16), woodMat);
-    step1.position.y = 0.14;
-    const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.92, 1.12, 0.95, 16), bronzeMat);
-    pedestal.position.y = 0.75;
-    bookAltar.add(step1, pedestal);
-  }
+  loadGlbCached(
+    ['/model/an_thu_go.glb', '/models/an_thu_go.glb', '/model/polyhaven/an_thu_go_co/an_thu_go_co_1k.gltf'],
+    { maxTextureSize: 512 }
+  )
+    .then((rawScene) => {
+      const table = prepareUnlitVividGlbModel(rawScene, {
+        targetSpan: 1.15,
+        fitAxis: 'y',
+        groundY: true,
+        color: 0x54260f,
+        castShadow: false,
+        receiveShadow: false,
+        maxTextureSize: 512
+      });
+      table.position.set(0, 0, 0);
+      bookAltar.add(table);
+    })
+    .catch(() => {
+      const step1 = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 2.7, 0.28, 12), woodMat);
+      step1.position.y = 0.14;
+      const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.92, 1.12, 0.95, 12), bronzeMat);
+      pedestal.position.y = 0.75;
+      bookAltar.add(step1, pedestal);
+    });
 
   const bookMeshGroup = new THREE.Group();
   bookMeshGroup.position.set(0, 1.25, 0);
@@ -1424,7 +1272,7 @@ export function buildSonTinhThuyTinhExhibition({
 
   const rotatingRelicModels = [];
   relicDefinitions.forEach((def, idx) => {
-    const modelHolder = createSignatureRelicModel(def.type, relicMats, gltfLoader);
+    const modelHolder = createSignatureRelicModel(def.type, relicMats);
     modelHolder.position.y = 1.25;
     modelHolder.scale.setScalar(1.22);
 
@@ -1463,31 +1311,28 @@ export function buildSonTinhThuyTinhExhibition({
     const pedGroup = new THREE.Group();
     pedGroup.position.copy(def.pos);
 
-    // NẠP BỆ ĐÁ CỔ .GLB (be_da_co.glb) CHUẨN 1.15m CHO TỪNG BỆ HIỆN VẬT
-    if (gltfLoader) {
-      loadGlbWithFallback(
-        gltfLoader,
-        ['/model/be_da_co.glb', '/models/be_da_co.glb'],
-        (rawScene) => {
-          const stonePed = prepareUnlitVividGlbModel(rawScene.clone(true), {
-            targetSpan: 1.15,
-            fitAxis: 'y',
-            groundY: true,
-            color: 0x473e35,
-            castShadow: false,
-            receiveShadow: false
-          });
-          stonePed.position.set(0, 0, 0);
-          pedGroup.add(stonePed);
-        }
-      );
-    } else {
-      const baseStep = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.3, 0.25, 14), woodMat);
-      baseStep.position.y = 0.125;
-      const pedBody = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1.0, 1.0, 14), bronzeMat);
-      pedBody.position.y = 0.72;
-      pedGroup.add(baseStep, pedBody);
-    }
+    // NẠP BỆ ĐÁ CỔ .GLB (be_da_co.glb) CHUẨN 1.15m CHO TỪNG BỆ HIỆN VẬT (cached)
+    loadGlbCached(['/model/be_da_co.glb', '/models/be_da_co.glb'], { maxTextureSize: 512 })
+      .then((rawScene) => {
+        const stonePed = prepareUnlitVividGlbModel(rawScene, {
+          targetSpan: 1.15,
+          fitAxis: 'y',
+          groundY: true,
+          color: 0x473e35,
+          castShadow: false,
+          receiveShadow: false,
+          maxTextureSize: 512
+        });
+        stonePed.position.set(0, 0, 0);
+        pedGroup.add(stonePed);
+      })
+      .catch(() => {
+        const baseStep = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.3, 0.25, 12), woodMat);
+        baseStep.position.y = 0.125;
+        const pedBody = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1.0, 1.0, 12), bronzeMat);
+        pedBody.position.y = 0.72;
+        pedGroup.add(baseStep, pedBody);
+      });
 
     const relicRay = createVolumetricLightBeam(0.38, 1.2, 6.4, def.ray, 0.18);
     relicRay.position.y = 4.2;
@@ -1607,20 +1452,22 @@ export function buildSonTinhThuyTinhExhibition({
   thuyTinhInitialFigure.rotation.y = -Math.PI * 0.5; // Thủy Tinh nhìn sang trái đối diện Sơn Tinh (-X)
   thuyTinhModelRotator.add(thuyTinhInitialFigure);
 
-  // 4. NẠP MÔ HÌNH .GLB SƠN TINH & THỦY TINH VÀ XOAY ĐỐI ĐẦU NHAU 76M
-  loadGlbWithFallback(
-    gltfLoader,
+  // 4. NẠP MÔ HÌNH .GLB SƠN TINH & THỦY TINH VÀ XOAY ĐỐI ĐẦU NHAU 76M (cached)
+  loadGlbCached(
     ['/model/sontinh.glb', '/models/sontinh.glb', './model/sontinh.glb', './models/sontinh.glb', '/model/SonTinh.glb', '/models/SonTinh.glb'],
-    (rawScene) => {
+    { maxTextureSize: 512 }
+  )
+    .then((rawScene) => {
       // Khi nạp xong .GLB, thay thế procedural figure bằng GLB chi tiết cao
       const oldFigure = sonTinhModelRotator.getObjectByName('Procedural_SonTinh_Hero');
       if (oldFigure) sonTinhModelRotator.remove(oldFigure);
 
       // Trong Thế Giới Thần Thoại: Sơn Tinh đứng trên đỉnh núi cao (Y = 42m), quay mặt +90 độ (+Math.PI / 2) nhìn sang phải đối diện Thủy Tinh
-      const stHero = prepareUnlitVividGlbModel(rawScene.clone(true), {
+      const stHero = prepareUnlitVividGlbModel(rawScene, {
         targetSpan: 17.5,
         fitAxis: 'y',
-        color: 0xfef08a
+        color: 0xfef08a,
+        maxTextureSize: 512
       });
       stHero.name = 'SonTinh_Glb_Hero';
       stHero.rotation.y = Math.PI * 0.5; // SƠN TINH QUAY +90 ĐỘ ĐỐI MẶT THỦY TINH (+X)
@@ -1630,7 +1477,8 @@ export function buildSonTinhThuyTinhExhibition({
       const stRoomStatue = prepareUnlitVividGlbModel(rawScene.clone(true), {
         targetSpan: 3.5,
         fitAxis: 'y',
-        color: 0xfbbf24
+        color: 0xfbbf24,
+        maxTextureSize: 512
       });
       stRoomStatue.rotation.y = Math.PI * 0.42;
       stRoomHolder.add(stRoomStatue);
@@ -1643,22 +1491,24 @@ export function buildSonTinhThuyTinhExhibition({
           padding: 0.12
         });
       }
-    }
-  );
+    })
+    .catch(() => {});
 
-  loadGlbWithFallback(
-    gltfLoader,
+  loadGlbCached(
     ['/model/thuytinh.glb', '/models/thuytinh.glb', './model/thuytinh.glb', './models/thuytinh.glb', '/model/ThuyTinh.glb', '/models/ThuyTinh.glb'],
-    (rawScene) => {
+    { maxTextureSize: 512 }
+  )
+    .then((rawScene) => {
       // Khi nạp xong .GLB, thay thế procedural figure bằng GLB chi tiết cao
       const oldFigure = thuyTinhModelRotator.getObjectByName('Procedural_ThuyTinh_Hero');
       if (oldFigure) thuyTinhModelRotator.remove(oldFigure);
 
       // Trong Thế Giới Thần Thoại: Thủy Tinh đứng ở dưới thấp (Y = 18.5m), quay mặt -90 độ (-Math.PI / 2) nhìn sang trái đối diện Sơn Tinh
-      const ttHero = prepareUnlitVividGlbModel(rawScene.clone(true), {
+      const ttHero = prepareUnlitVividGlbModel(rawScene, {
         targetSpan: 16.5,
         fitAxis: 'y',
-        color: 0x38bdf8
+        color: 0x38bdf8,
+        maxTextureSize: 512
       });
       ttHero.name = 'ThuyTinh_Glb_Hero';
       ttHero.rotation.y = -Math.PI * 0.5; // THỦY TINH QUAY -90 ĐỘ ĐỐI MẶT SƠN TINH (-X)
@@ -1668,7 +1518,8 @@ export function buildSonTinhThuyTinhExhibition({
       const ttRoomStatue = prepareUnlitVividGlbModel(rawScene.clone(true), {
         targetSpan: 3.4,
         fitAxis: 'y',
-        color: 0x38bdf8
+        color: 0x38bdf8,
+        maxTextureSize: 512
       });
       ttRoomStatue.rotation.y = -Math.PI * 0.42;
       ttRoomHolder.add(ttRoomStatue);
@@ -1683,8 +1534,8 @@ export function buildSonTinhThuyTinhExhibition({
       }
 
       separateGodsAndCleanScene(battleRealm, sonTinhHolder, thuyTinhHolder);
-    }
-  );
+    })
+    .catch(() => {});
 
   separateGodsAndCleanScene(battleRealm, sonTinhHolder, thuyTinhHolder);
 
@@ -1820,12 +1671,35 @@ export function buildSonTinhThuyTinhExhibition({
   // =========================================================================
   let clockTime = 0;
 
-  function stepAnimation(dt = 0.016) {
+  function stepAnimation(dt = 0.016, _et = 0, cam = null) {
     clockTime += dt;
+    if (cam) _camera = cam;
+
+    if (_isInsideRealm) {
+      if (!battleRealm.visible) return;
+      returnCrystal.rotation.y += dt * 1.5;
+
+      // 2. Animation Thế Giới Thần Thoại: Cập nhật Master VFX (Shader Biển Bayer 4x4, Đá thần, Hào quang & Sấm sét)
+      updateMasterVfx?.(clockTime);
+
+      // Sơn Tinh (trên đỉnh núi cao Y = 42m) & Thủy Tinh (dưới sóng thấp Y = 18.5m) luôn nhìn thẳng đối đầu nhau
+      sonTinhHolder.position.y = Math.sin(clockTime * 1.8) * 0.35;
+      sonTinhModelRotator.rotation.z = -0.06 + Math.sin(clockTime * 1.5) * 0.03;
+
+      thuyTinhHolder.position.y = Math.sin(clockTime * 2.2 + 1.0) * 0.65;
+      thuyTinhModelRotator.rotation.z = 0.08 + Math.cos(clockTime * 1.7) * 0.04;
+
+      sonTinhHalo.rotation.z += dt * 0.45;
+      thuyTinhHalo.rotation.z -= dt * 0.65;
+      return;
+    }
+
+    if (!roomGroup.visible) return;
+    const activeCam = cam || _camera || (typeof window !== 'undefined' ? window.__camera : null);
+    if (activeCam && activeCam.position.distanceToSquared(roomCenter) > 42 * 42) return;
 
     // 1. Animation trong Phòng Trưng Bày Bảo Tàng
     bookMeshGroup.position.y = 1.78 + Math.sin(clockTime * 2.2) * 0.06;
-    returnCrystal.rotation.y += dt * 1.5;
 
     rotatingRelicModels.forEach((item) => {
       item.mesh.rotation.y += dt * 0.75;
@@ -1838,19 +1712,6 @@ export function buildSonTinhThuyTinhExhibition({
 
     stRoomHolder.position.y = 1.12 + Math.sin(clockTime * 1.8) * 0.04;
     ttRoomHolder.position.y = 0.76 + Math.sin(clockTime * 2.0 + 1.2) * 0.04;
-
-    // 2. Animation Thế Giới Thần Thoại: Cập nhật Master VFX (Shader Biển Bayer 4x4, Đá thần, Hào quang & Sấm sét)
-    updateMasterVfx?.(clockTime);
-
-    // Sơn Tinh (trên đỉnh núi cao Y = 42m) & Thủy Tinh (dưới sóng thấp Y = 18.5m) luôn nhìn thẳng đối đầu nhau
-    sonTinhHolder.position.y = Math.sin(clockTime * 1.8) * 0.35;
-    sonTinhModelRotator.rotation.z = -0.06 + Math.sin(clockTime * 1.5) * 0.03;
-
-    thuyTinhHolder.position.y = Math.sin(clockTime * 2.2 + 1.0) * 0.65;
-    thuyTinhModelRotator.rotation.z = 0.08 + Math.cos(clockTime * 1.7) * 0.04;
-
-    sonTinhHalo.rotation.z += dt * 0.45;
-    thuyTinhHalo.rotation.z -= dt * 0.65;
   }
 
   // =========================================================================
@@ -2100,6 +1961,11 @@ export function buildSonTinhThuyTinhExhibition({
     }
     const { cam } = findActiveCameraAndPlayer();
     if (!cam) return;
+    if (_isInsideRealm) {
+      if (!battleRealm.visible) return;
+    } else {
+      if (!roomGroup.visible || cam.position.distanceToSquared(roomCenter) > 32 * 32) return;
+    }
     if (document.pointerLockElement) {
       clickMouse.set(0, 0);
     } else if (event.clientX !== undefined && event.clientY !== undefined) {
@@ -2156,10 +2022,10 @@ export function buildSonTinhThuyTinhExhibition({
     enterRealm: teleportToBattleRealm,
     exitRealm: teleportBackToMuseum,
     updateRealm: (dt, et, cam) => {
-      stepAnimation(dt);
+      stepAnimation(dt, et, cam);
     },
     update: (dt, et, cam) => {
-      stepAnimation(dt);
+      stepAnimation(dt, et, cam);
     },
     teleportBook: bookMeshGroup,
     interactiveTargets,
@@ -2187,8 +2053,8 @@ export function buildSonTinhThuyTinhExhibition({
   root.enterRealm = () => teleportToBattleRealm();
   root.exitRealm = () => teleportBackToMuseum();
   root.teleportBook = bookMeshGroup;
-  root.updateRealm = (dt, et, cam) => stepAnimation(dt);
-  root.update = (dt, et, cam) => stepAnimation(dt);
+  root.updateRealm = (dt, et, cam) => stepAnimation(dt, et, cam);
+  root.update = (dt, et, cam) => stepAnimation(dt, et, cam);
   root.setupContext = function({
     scene = null,
     battleScene = null,

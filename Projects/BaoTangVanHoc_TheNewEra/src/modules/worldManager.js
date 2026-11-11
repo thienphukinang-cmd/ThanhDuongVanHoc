@@ -28,6 +28,8 @@ export class WorldManager {
     this.renderer = renderer;
     this.cameraManager = cameraManager;
 
+    this.app = options.app ?? null;
+    this.ensureKieuWorld = options.ensureKieuWorld ?? null;
     this.atriumGroup = options.atriumGroup ?? null;
     this.kieuWorld = options.kieuWorld ?? null;
     this.portalInteraction = options.portalInteraction ?? null;
@@ -35,6 +37,12 @@ export class WorldManager {
 
     this.currentState = WORLD_STATES.MUSEUM_ATRIUM;
     this.isTransitioning = false;
+    this._transitionToken = 0;
+
+    this._kieuFog = new THREE.FogExp2(0xe8c5b0, 0.008);
+    this._kieuBg = new THREE.Color(0xf5cb98);
+    this._atriumFog = new THREE.FogExp2(0xdca878, 0.00075);
+    this._atriumBg = new THREE.Color(0xdca878);
 
     this.raycaster = new THREE.Raycaster();
     this.raycaster.far = 25.0; // Tầm tương tác 25m với cuốn thư
@@ -111,11 +119,9 @@ export class WorldManager {
             bottom: 80px;
             left: 50%;
             transform: translateX(-50%) translateY(20px);
-            background: rgba(12, 28, 22, 0.94);
+            background: rgba(12, 28, 22, 0.96);
             border: 1.5px solid #39e58c;
             box-shadow: 0 0 25px rgba(57, 229, 140, 0.4), 0 10px 30px rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
             color: #eafff4;
             font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
             font-size: 13px;
@@ -227,6 +233,7 @@ export class WorldManager {
   transitionTo(targetWorld) {
     if (this.isTransitioning || this.currentState === targetWorld) return;
     this.isTransitioning = true;
+    const token = ++this._transitionToken;
 
     console.log(`%c[WORLD MANAGER] Khởi động chuyển cảnh: ${this.currentState} ➔ ${targetWorld}`, "color: #39e58c; font-weight: bold; font-size: 14px;");
 
@@ -253,14 +260,21 @@ export class WorldManager {
     this.audioManager?.crossfadeTo?.(targetWorld, 1.5);
 
     setTimeout(() => {
+      if (token !== this._transitionToken) return;
       try {
+        const appRef = this.app || (typeof window !== 'undefined' ? window.__app : null);
+
         if (targetWorld === WORLD_STATES.KIEU_WORLD) {
-          // KÍCH HOẠT THẾ GIỚI TỰ SỰ TRUYỆN KIỀU CHÍNH GỐC: TIẾT THANH MINH (KIEUWORLD)
+          // Lazy-init KieuWorld chỉ khi thực sự kích hoạt fallback WorldManager
+          if (!this.kieuWorld && typeof this.ensureKieuWorld === 'function') {
+            this.kieuWorld = this.ensureKieuWorld();
+          }
+
           if (this.atriumGroup) this.atriumGroup.visible = false;
-          const targetScene = this.app?.truyenKieuScene || window.__truyenKieuScene || this.scene;
-          if (this.app?.setActiveScene) {
-            this.app.setActiveScene(targetScene);
-          } else if (window.__truyenKieuScene) {
+          const targetScene = appRef?.truyenKieuScene || (typeof window !== 'undefined' ? window.__truyenKieuScene : null) || this.scene;
+          if (appRef?.setActiveScene) {
+            appRef.setActiveScene(targetScene);
+          } else if (typeof window !== 'undefined' && window.__truyenKieuScene) {
             window.__activeScene = window.__truyenKieuScene;
           }
           if (this.kieuWorld) this.kieuWorld.setVisible(true);
@@ -269,8 +283,8 @@ export class WorldManager {
             this.truyenKieuStoryWorld.isInsideWorld = false;
           }
 
-          targetScene.fog = new THREE.FogExp2(0xe8c5b0, 0.008);
-          targetScene.background = new THREE.Color(0xf5cb98);
+          targetScene.fog = this._kieuFog;
+          targetScene.background = this._kieuBg;
 
           this.camera.position.set(0, 1.8, 15.0);
           this.camera.lookAt(0, 2.2, 0);
@@ -288,7 +302,10 @@ export class WorldManager {
           this.currentState = WORLD_STATES.KIEU_WORLD;
         } else if (targetWorld === WORLD_STATES.MUSEUM_ATRIUM) {
           // --- QUAY TRỞ LẠI BẢO TÀNG VĂN HỌC ---
-          if (window.__scene) {
+          const mainTarget = appRef?.mainScene || (typeof window !== 'undefined' ? window.__scene : null) || this.scene;
+          if (appRef?.setActiveScene) {
+            appRef.setActiveScene(mainTarget);
+          } else if (typeof window !== 'undefined' && window.__scene) {
             window.__activeScene = window.__scene;
           }
           if (this.truyenKieuStoryWorld && this.truyenKieuStoryWorld.isInsideWorld) {
@@ -302,8 +319,8 @@ export class WorldManager {
           }
 
           // C. Khôi phục sương khói chiều sâu bảo tàng hoàng hôn ấm áp (#dca878, 0.00075)
-          this.scene.fog = new THREE.FogExp2(0xdca878, 0.00075);
-          this.scene.background = new THREE.Color(0xdca878);
+          this.scene.fog = this._atriumFog;
+          this.scene.background = this._atriumBg;
 
           // Gỡ bỏ floor provider của KieuWorld
           if (this.cameraManager?.cameraController) {
@@ -332,6 +349,7 @@ export class WorldManager {
         this.setFade(0.0, 1.0);
 
         setTimeout(() => {
+          if (token !== this._transitionToken) return;
           // Mở khóa điều khiển camera
           try {
             if (this.cameraManager?.controls) {
@@ -358,13 +376,40 @@ export class WorldManager {
     }, 1200);
   }
 
+  forceExitImmediate() {
+    this._transitionToken++;
+    this.isTransitioning = false;
+    this.isHoveringWaypoint = false;
+    this.returnPromptElement?.classList?.remove?.('visible');
+    this.setFade(0.0, 0.1);
+    if (this.kieuWorld) {
+      this.kieuWorld.setVisible(false);
+    }
+    if (this.atriumGroup) {
+      this.atriumGroup.visible = true;
+    }
+    if (this.cameraManager?.cameraController) {
+      this.cameraManager.cameraController.floorHeightProvider = null;
+      this.cameraManager.cameraController.isEnabled = true;
+    }
+    if (this.cameraManager?.controls) {
+      this.cameraManager.controls.enabled = true;
+    }
+    this.directoryHUD?.hideToggle?.(false);
+    const appRef = this.app || (typeof window !== 'undefined' ? window.__app : null);
+    const mainTarget = appRef?.mainScene || (typeof window !== 'undefined' ? window.__scene : null) || this.scene;
+    if (appRef?.setActiveScene && mainTarget) {
+      appRef.setActiveScene(mainTarget);
+    }
+    this.currentState = WORLD_STATES.MUSEUM_ATRIUM;
+  }
+
   /**
    * Cập nhật vòng lặp Render & Raycast tương tác Cuốn Thư (Chỉ raycast khi có sự kiện di chuột)
    */
   update(delta = 0.016, elapsedTime = 0) {
     if (this.currentState === WORLD_STATES.KIEU_WORLD) {
-      this.kieuWorld?.update?.(delta, elapsedTime);
-      // Chỉ raycast khi người dùng di chuột thực tế, tuyệt đối không lặp vô hạn mỗi frame
+      // KieuWorld.update() đã được main.js gọi 1 lần/frame trong nhánh truyenKieuScene
       if (this.mouseMoved) {
         this.mouseMoved = false;
         this.updateWaypointRaycasting();

@@ -3,6 +3,7 @@ import {
   createCarvedHeritagePbrMaterial,
   createSculptedCloudScrollBracket3D
 } from './museumReliefSculptor.js';
+import { mergeGroupMeshesByMaterial } from '../utils/geometryMerger.js';
 
 /**
  * ============================================================================
@@ -105,7 +106,9 @@ export function separateGodsAndCleanScene(realmGroup, sonTinhHolder = null, thuy
  * Chính giữa: Vết nứt năng lượng thiên địa sấm chớp phát sáng
  */
 function createColossalSplitSkyDome() {
-  const geo = new THREE.SphereGeometry(420, 56, 36);
+  const geo = new THREE.SphereGeometry(420, 32, 20);
+  geo.computeBoundingBox();
+  geo.computeBoundingSphere();
   const uniforms = {
     uTime: { value: 0 }
   };
@@ -182,8 +185,10 @@ function createColossalPixelFxOceanAndTsunamis() {
   const waterGroup = new THREE.Group();
   waterGroup.userData.ignoreRaycaster = true;
 
-  const geo = new THREE.PlaneGeometry(340, 280, 112, 112);
+  const geo = new THREE.PlaneGeometry(340, 280, 48, 48);
   geo.rotateX(-Math.PI / 2);
+  geo.computeBoundingBox();
+  geo.computeBoundingSphere();
 
   const uniforms = {
     uTime: { value: 0 },
@@ -197,7 +202,7 @@ function createColossalPixelFxOceanAndTsunamis() {
   const oceanMat = new THREE.ShaderMaterial({
     uniforms,
     transparent: true,
-    side: THREE.DoubleSide,
+    side: THREE.FrontSide,
     vertexShader: /* glsl */ `
       uniform float uTime;
       varying float vHeight;
@@ -313,8 +318,10 @@ function createColossalPixelFxOceanAndTsunamis() {
   const tsunamiWaveMeshes = [];
 
   tsunamiConfigs.forEach((cfg) => {
-    const tGeo = new THREE.CylinderGeometry(cfg.radius, cfg.radius, cfg.len, 32, 1, true, 0, Math.PI * 0.88);
+    const tGeo = new THREE.CylinderGeometry(cfg.radius, cfg.radius, cfg.len, 20, 1, true, 0, Math.PI * 0.88);
     tGeo.rotateX(Math.PI / 2);
+    tGeo.computeBoundingBox();
+    tGeo.computeBoundingSphere();
 
     const waveUniforms = {
       uTime: { value: 0 },
@@ -443,15 +450,17 @@ function createColossalMountainsBarricadeAndDeck(hitboxManager = null, worldOffs
     { rt: 4.0, rb: 24, h: 44.0, pos: [-22, 22.0, -48] }   // Vách đá kẹp sườn
   ];
 
+  const peaksGroup = new THREE.Group();
+  peaksGroup.name = 'Colossal_TanVien_Peaks_Merged';
   colossalPeaks.forEach((p) => {
-    const mesh = new THREE.Mesh(
-      new THREE.CylinderGeometry(p.rt, p.rb, p.h, 12, 6),
-      cliffMat
-    );
+    const geo = new THREE.CylinderGeometry(p.rt, p.rb, p.h, 10, 4);
+    const mesh = new THREE.Mesh(geo, cliffMat);
     mesh.position.set(...p.pos);
     mesh.userData.ignoreRaycaster = true;
-    terrainGroup.add(mesh);
+    peaksGroup.add(mesh);
   });
+  mergeGroupMeshesByMaterial(peaksGroup);
+  terrainGroup.add(peaksGroup);
 
   // THÁC NƯỚC THẦN ĐỔ TỪ ĐỈNH TẢN VIÊN XUỐNG ĐẠI DƯƠNG (ANIMATED WATERFALL)
   const waterfallUniforms = { uTime: { value: 0 } };
@@ -490,19 +499,26 @@ function createColossalMountainsBarricadeAndDeck(hitboxManager = null, worldOffs
   // THÀNH LŨY 24 CỘT ĐÁ LỤC GIÁC TỰ DÂNG CAO CHẮN SÓNG ("Nước dâng bao nhiêu, núi cao bấy nhiêu")
   const pillarCount = 24;
   const pillarGeo = new THREE.CylinderGeometry(1.15, 1.35, 22.0, 6);
+  pillarGeo.computeBoundingSphere();
   const pillarMat = createCarvedHeritagePbrMaterial('lotusGold', 2, 4);
   const risingBarricade = new THREE.InstancedMesh(pillarGeo, pillarMat, pillarCount);
   risingBarricade.userData.ignoreRaycaster = true;
+  risingBarricade.frustumCulled = true;
+  risingBarricade.boundingSphere = new THREE.Sphere(new THREE.Vector3(-15.5, 15, -13), 50);
   terrainGroup.add(risingBarricade);
 
   // 36 TẢNG ĐÁ THẦN LỰC HOÀNG KIM BAY XOAY VÒNG QUANH ĐỈNH NÚI SƠN TINH
   const rockCount = 36;
+  const rockGeo = new THREE.DodecahedronGeometry(1.55, 0);
+  rockGeo.computeBoundingSphere();
   const floatingRocks = new THREE.InstancedMesh(
-    new THREE.DodecahedronGeometry(1.55, 1),
+    rockGeo,
     new THREE.MeshBasicMaterial({ color: 0xfbbf24 }),
     rockCount
   );
   floatingRocks.userData.ignoreRaycaster = true;
+  floatingRocks.frustumCulled = true;
+  floatingRocks.boundingSphere = new THREE.Sphere(SON_TINH_LOCAL_POS.clone(), 45);
   terrainGroup.add(floatingRocks);
 
   const dummy = new THREE.Object3D();
@@ -519,14 +535,17 @@ function createColossalMountainsBarricadeAndDeck(hitboxManager = null, worldOffs
   deckFloor.position.y = -1.25;
   deckGroup.add(deckFloor);
 
-  // 12 Đầu dư vân mây chạm lộng 3D quanh lan can đài
+  // 12 Đầu dư vân mây chạm lộng 3D quanh lan can đài -> gộp mesh
+  const bracketsGroup = new THREE.Group();
   for (let i = 0; i < 12; i++) {
     const ang = (i / 12) * Math.PI * 2;
     const bracket = createSculptedCloudScrollBracket3D({ scale: 0.65 });
     bracket.position.set(Math.cos(ang) * 7.5, 0.45, Math.sin(ang) * 7.5);
     bracket.rotation.y = -ang;
-    deckGroup.add(bracket);
+    bracketsGroup.add(bracket);
   }
+  mergeGroupMeshesByMaterial(bracketsGroup);
+  deckGroup.add(bracketsGroup);
   terrainGroup.add(deckGroup);
 
   // ĐĂNG KÝ VÒNG 12 HITBOX LAN CAN BAO QUANH ĐÀI QUAN SÁT (Bán kính 7.8m, cao 3m)
@@ -617,24 +636,26 @@ function createColossalSealsLightningAndStormParticles() {
     })
   );
 
-  // Vành trung tâm: 14 Tia sáng Mặt Trời Đông Sơn rực rỡ
+  // Vành trung tâm: 14 Tia sáng Mặt Trời Đông Sơn rực rỡ (merged 14 -> 1 DC)
   const sunRayRing = new THREE.Group();
   const rayCount = 14;
+  const sharedRayGeo = new THREE.ConeGeometry(0.75, 4.2, 3);
+  const rayMat = new THREE.MeshBasicMaterial({
+    color: 0xfbbf24,
+    transparent: true,
+    opacity: 0.88,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide
+  });
   for (let r = 0; r < rayCount; r++) {
     const angle = (r / rayCount) * Math.PI * 2;
-    const rayGeo = new THREE.ConeGeometry(0.75, 4.2, 3);
-    const rayMat = new THREE.MeshBasicMaterial({
-      color: 0xfbbf24,
-      transparent: true,
-      opacity: 0.88,
-      blending: THREE.AdditiveBlending,
-      side: THREE.DoubleSide
-    });
-    const rayMesh = new THREE.Mesh(rayGeo, rayMat);
+    const rayMesh = new THREE.Mesh(sharedRayGeo, rayMat);
     rayMesh.position.set(Math.cos(angle) * 9.5, Math.sin(angle) * 9.5, 0);
     rayMesh.rotation.z = angle - Math.PI / 2;
     sunRayRing.add(rayMesh);
   }
+  mergeGroupMeshesByMaterial(sunRayRing);
+  sharedRayGeo.dispose();
 
   // Vành tâm trống đồng (Bán kính 6.8m)
   const innerDongSonCore = new THREE.Mesh(
@@ -680,22 +701,23 @@ function createColossalSealsLightningAndStormParticles() {
     })
   );
 
-  // 8 Dải xoáy Sóng Thủy Ba cuộn tròn
+  // 8 Dải xoáy Sóng Thủy Ba cuộn tròn (merged 8 -> 1 DC)
   const waveSpirals = new THREE.Group();
   const spiralCount = 8;
+  const sMat = new THREE.MeshBasicMaterial({
+    color: 0x0284c7,
+    transparent: true,
+    opacity: 0.78,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide
+  });
   for (let s = 0; s < spiralCount; s++) {
     const angle = (s / spiralCount) * Math.PI * 2;
-    const sGeo = new THREE.RingGeometry(7.2, 9.8, 24, 1, angle, Math.PI * 0.32);
-    const sMat = new THREE.MeshBasicMaterial({
-      color: 0x0284c7,
-      transparent: true,
-      opacity: 0.78,
-      blending: THREE.AdditiveBlending,
-      side: THREE.DoubleSide
-    });
+    const sGeo = new THREE.RingGeometry(7.2, 9.8, 16, 1, angle, Math.PI * 0.32);
     const sMesh = new THREE.Mesh(sGeo, sMat);
     waveSpirals.add(sMesh);
   }
+  mergeGroupMeshesByMaterial(waveSpirals);
 
   // Tâm cuộn xoáy hải triều
   const innerVortex = new THREE.Mesh(
@@ -780,6 +802,11 @@ function createColossalSealsLightningAndStormParticles() {
 
   pGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   pGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  pGeo.boundingBox = new THREE.Box3(
+    new THREE.Vector3(-75, 10, -70),
+    new THREE.Vector3(95, 90, 40)
+  );
+  pGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(10, 50, -15), 115);
 
   const pMat = new THREE.PointsMaterial({
     size: 0.92,
@@ -791,6 +818,7 @@ function createColossalSealsLightningAndStormParticles() {
   });
 
   const stormParticles = new THREE.Points(pGeo, pMat);
+  stormParticles.frustumCulled = true;
   stormParticles.userData.ignoreRaycaster = true;
   fxGroup.add(stormParticles);
 

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGroupMeshesByMaterial } from '../utils/geometryMerger.js';
 
 /**
  * BIFURCATED GRAND STAIRCASE MODULE (CẦU THANG CHỮ Y LỘNG LẪY)
@@ -18,10 +19,20 @@ export class BifurcatedStaircase {
     this.buildTier1To2Staircase();
     this.buildTier2To3Staircase();
 
+    // Gộp toàn bộ các bậc thang, nẹp vàng, con tiện, tay vịn và gầm thang tĩnh theo vật liệu (553 Draw Calls -> 3 Draw Calls)
+    mergeGroupMeshesByMaterial(this.group, {
+      namePrefix: 'Merged_Staircase',
+      forceNoShadow: true,
+      excludeFromCollision: true,
+      ignoreRaycaster: true
+    });
+
     // Vô hiệu hóa va chạm lưới trên toàn bộ cầu thang (cao độ đã xử lý toán học bằng getFloorHeightAt)
     this.group.traverse((child) => {
       child.userData = child.userData || {};
       child.userData.excludeFromCollision = true;
+      child.userData.preventMerge = true;
+      child.userData.ignoreRaycaster = true;
     });
   }
 
@@ -116,6 +127,7 @@ export class BifurcatedStaircase {
     }
 
     // 4. Lan can uốn lượn bằng Kim loại vàng hoàng gia (Royal Gold Balustrade)
+    const scratchNorm = new THREE.Vector3();
     const buildHandrail = (offsetSide) => {
       const railPoints = [];
       const samples = 36;
@@ -123,9 +135,9 @@ export class BifurcatedStaircase {
         const u = s / samples;
         const p = curve.getPoint(u);
         const tan = curve.getTangent(u);
-        const norm = new THREE.Vector3(-tan.z, 0, tan.x).normalize();
+        scratchNorm.set(-tan.z, 0, tan.x).normalize();
 
-        const railPt = p.clone().add(norm.multiplyScalar(offsetSide * (flightWidth / 2 - 0.12)));
+        const railPt = p.clone().addScaledVector(scratchNorm, offsetSide * (flightWidth / 2 - 0.12));
         railPt.y += 0.95;
         railPoints.push(railPt);
       }
@@ -151,13 +163,14 @@ export class BifurcatedStaircase {
         const u = b / samples;
         const p = curve.getPoint(u);
         const tan = curve.getTangent(u);
-        const norm = new THREE.Vector3(-tan.z, 0, tan.x).normalize();
+        scratchNorm.set(-tan.z, 0, tan.x).normalize();
 
-        const basePt = p.clone().add(norm.multiplyScalar(offsetSide * (flightWidth / 2 - 0.12)));
+        const bx = p.x + scratchNorm.x * offsetSide * (flightWidth / 2 - 0.12);
+        const bz = p.z + scratchNorm.z * offsetSide * (flightWidth / 2 - 0.12);
         const baluster = new THREE.Mesh(balusterGeo, goldTrimMat);
         baluster.name = `Stair_Baluster_${name}`;
         baluster.frustumCulled = true;
-        baluster.position.set(basePt.x, basePt.y + 0.45, basePt.z);
+        baluster.position.set(bx, p.y + 0.45, bz);
         baluster.castShadow = false; // Tối ưu hóa bóng đổ GPU
         flightGroup.add(baluster);
       }
@@ -292,7 +305,8 @@ export class BifurcatedStaircase {
     landingMesh.name = "Stair_Landing_L2_L3";
     landingMesh.frustumCulled = true;
     landingMesh.position.set(0, midY - 0.2, -7.5);
-    landingMesh.receiveShadow = true;
+    landingMesh.receiveShadow = false;
+    landingMesh.castShadow = false;
     groupT2T3.add(landingMesh);
 
     const leftPoints = [
