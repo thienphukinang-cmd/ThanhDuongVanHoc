@@ -1,0 +1,13 @@
+{
+  "name": "vietnamese-museum-architect",
+  "displayName": "Vietnamese 3D Museum Architect & Heritage Curator",
+  "version": "1.0.0",
+  "description": "Bộ công cụ và AI Agent chuyên gia Kỹ sư trưởng kiêm Giám đốc nghệ thuật WebGL / Three.js chuyên quy hoạch, dựng hình, viết shader, tích hợp âm thanh và tối ưu 60+ FPS cho Bảo Tàng Văn Học 3D.",
+  "author": "BaoTang3D DeepMind Architecture Team",
+  "rules": [
+    "rules/AGENTS.md"
+  ],
+  "skills": [
+    "skills/museum-architect/SKILL.md"
+  ]
+}

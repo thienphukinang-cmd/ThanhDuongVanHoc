@@ -29,6 +29,56 @@ export function getMuseumHitboxManager(scene = null) {
 }
 
 /**
+ * Kiểm tra đối tượng hoặc tổ tiên của nó có gắn cờ ignoreRaycaster / là nguồn sáng hay không
+ */
+export function isObjectIgnoredByRaycaster(obj, stopAt = null) {
+  if (!obj) return true;
+  if (
+    obj.isLight ||
+    obj.userData?.ignoreRaycaster === true ||
+    obj.userData?.isPlaqueSpotLight === true ||
+    obj.userData?.isLightTarget === true
+  ) {
+    return true;
+  }
+
+  const isExplicitProxy = Boolean(
+    (obj.userData?.isPlaqueProxy === true || obj.userData?.isClickProxy === true) &&
+    obj.userData?.ignoreRaycaster !== true
+  );
+
+  let cur = obj.parent;
+  while (cur && cur !== stopAt) {
+    if (
+      cur.isLight ||
+      cur.userData?.isPlaqueSpotLight === true ||
+      cur.userData?.isLightTarget === true
+    ) {
+      return true;
+    }
+    if (!isExplicitProxy && cur.userData?.ignoreRaycaster === true) {
+      return true;
+    }
+    cur = cur.parent;
+  }
+  return false;
+}
+
+/**
+ * Kiểm tra đối tượng có hiển thị từ bản thân lên tới root hay không
+ */
+export function isObjectHierarchyVisible(obj, stopAt = null) {
+  if (!obj) return false;
+  let cur = obj;
+  while (cur) {
+    if (cur.visible === false) return false;
+    if (cur === stopAt) break;
+    cur = cur.parent;
+  }
+  return true;
+}
+
+/**
  * Hàm tính toán bounding box ôm khít vật lý của một Object3D
  * Loại bỏ hoàn toàn đèn, camera, hạt particle, tia sáng god ray, sprite hào quang
  */
@@ -878,6 +928,27 @@ export class MuseumHitboxManager {
     console.log(
       `%c[Hitbox Architect] Đã đăng ký ${hitboxes.length} hitbox riêng biệt cho cõi: ${realmName}`,
       'color: #38bdf8; font-weight: bold;'
+    );
+  }
+
+  /**
+   * Đăng ký danh sách Proxy Hitbox tương tác cho một phòng trưng bày cụ thể.
+   */
+  registerRoomHitboxes(roomName, hitboxes = []) {
+    if (!Array.isArray(hitboxes) || hitboxes.length === 0) return;
+    hitboxes.forEach((h) => {
+      if (!h) return;
+      h.userData = h.userData || {};
+      h.userData.isClickProxy = true;
+      h.userData.isArtifact3D = true;
+      if (!h.userData.roomId) h.userData.roomId = roomName;
+      if (!this.clickProxies.includes(h)) {
+        this.clickProxies.push(h);
+      }
+    });
+    console.log(
+      `%c[Hitbox Architect] Đã đăng ký ${hitboxes.length} proxy hitbox tương tác cho phòng: ${roomName}`,
+      'color: #f59e0b; font-weight: bold;'
     );
   }
 

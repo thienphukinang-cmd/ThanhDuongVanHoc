@@ -1,6 +1,11 @@
 import * as THREE from 'three';
-import { LITERATURE_REGISTRY } from '../config/literatureRegistry.js';
-import { ALCOVE_CENTERS, CUSTOM_ROOM_IDS } from '../modules/RoomGenerator.js';
+import {
+  LITERATURE_REGISTRY,
+  CUSTOM_ROOM_IDS,
+  getRoomCode,
+  getRoomWorldPose,
+  localRoomToWorld
+} from '../config/literatureRegistry.js';
 
 /**
  * INTERACTIVE DIRECTORY HUD (BẢNG THƯ MỤC ĐIỀU HƯỚNG TÁC PHẨM & FAST-TRAVEL)
@@ -10,32 +15,31 @@ import { ALCOVE_CENTERS, CUSTOM_ROOM_IDS } from '../modules/RoomGenerator.js';
  * 2. Phím tắt kích hoạt: Nhấn 'M' (Map/Menu) hoặc nút bấm nhỏ góc trên màn hình.
  * 3. 3 cột tương ứng 3 Tầng: Tầng 1 (Dân gian & Sử thi), Tầng 2 (Trung đại), Tầng 3 (Hiện đại).
  * 4. Fast-Travel: Click vào tác phẩm -> đóng HUD -> camera lướt điện ảnh 1.8s power2.inOut
- *    đến điểm quan sát lý tưởng (cách sách 3.5m, mắt nhìn ngang tầm sách).
+ *    đến điểm quan sát lý tưởng (cách sách 3.5m theo trục cửa vòm phòng, mắt nhìn ngang tầm sách).
  */
 
 export function getRoomFastTravelTarget(item) {
-  const alcove = ALCOVE_CENTERS[item.roomIndex] || ALCOVE_CENTERS[0];
-  const floorElevation = (item.floor - 1) * 10.0;
-  const bookPos = new THREE.Vector3(alcove.x, floorElevation + 1.58, alcove.z);
-
-  // Vector từ bệ sách hướng về tâm giếng trời sảnh chính (0, 0)
-  const dirX = 0.0 - alcove.x;
-  const dirZ = 0.0 - alcove.z;
-  const len = Math.hypot(dirX, dirZ) || 1.0;
-  const uX = dirX / len;
-  const uZ = dirZ / len;
-
-  // Điểm quan sát lý tưởng: đứng cách sách 3.5m theo phương hướng về tâm, mắt nhìn ngang tầm sách (1.7m)
-  const camPos = new THREE.Vector3(
-    alcove.x + uX * 3.5,
-    floorElevation + 1.7,
-    alcove.z + uZ * 3.5
-  );
+  const pose = getRoomWorldPose(item);
+  if (item?.id === 'day_thon_vi_da') {
+    const viewOrigin = localRoomToWorld(pose, 0.0, 1.85, 11.8);
+    const lookTarget = localRoomToWorld(pose, 0.0, 1.65, 4.1);
+    return {
+      cameraPosition: new THREE.Vector3(viewOrigin.x, viewOrigin.y, viewOrigin.z),
+      lookAtTarget: new THREE.Vector3(lookTarget.x, lookTarget.y, lookTarget.z),
+      bookPosition: new THREE.Vector3(lookTarget.x, lookTarget.y, lookTarget.z),
+      pose,
+      item
+    };
+  }
+  const bookPos = new THREE.Vector3(pose.x, pose.y + 1.58, pose.z);
+  const viewOrigin = localRoomToWorld(pose, 0.0, 1.7, 3.5);
+  const camPos = new THREE.Vector3(viewOrigin.x, viewOrigin.y, viewOrigin.z);
 
   return {
     cameraPosition: camPos,
     lookAtTarget: bookPos,
     bookPosition: bookPos,
+    pose,
     item
   };
 }
@@ -165,7 +169,7 @@ export class DirectoryHUD {
       const container = floorContainers[item.floor];
       if (!container) return;
 
-      const roomCode = `${item.floor}0${item.roomIndex + 1}`;
+      const roomCode = getRoomCode(item);
       const isPortalReady = item.portalReady === true;
       const isRoomCompleted = isPortalReady || item.roomCompleted === true || CUSTOM_ROOM_IDS.has(item.id);
       if (isRoomCompleted) completedCount++;
@@ -176,8 +180,9 @@ export class DirectoryHUD {
         : (isRoomCompleted ? '✓ [ĐÃ HOÀN THÀNH]' : '[SẢNH TRƯNG BÀY]');
 
       const card = document.createElement('div');
-      card.className = `dir-room-card ${isRoomCompleted ? 'portal-ready-card' : ''}`;
+      card.className = `dir-room-card ${isRoomCompleted ? 'portal-ready-card completed-room-card' : ''}`;
       card.dataset.id = item.id;
+      card.dataset.completed = String(isRoomCompleted);
 
       card.innerHTML = `
         <div class="card-top-row">
@@ -213,14 +218,22 @@ export class DirectoryHUD {
     this.close();
 
     const target = getRoomFastTravelTarget(item);
-    const roomCode = `${item.floor}0${item.roomIndex + 1}`;
+    const roomCode = getRoomCode(item);
 
     this.showToast(`✨ Đang lướt camera tới Phòng ${roomCode}: ${item.name}...`);
 
-    if (this.cameraManager?.fastTravelTo) {
-      this.cameraManager.fastTravelTo(target.cameraPosition, target.lookAtTarget, () => {
-        this.showToast(`✓ Đã đến sảnh trưng bày: ${item.name}`);
-      });
+    const runFastTravel = () => {
+      if (this.cameraManager?.fastTravelTo) {
+        this.cameraManager.fastTravelTo(target.cameraPosition, target.lookAtTarget, () => {
+          this.showToast(`✓ Đã đến sảnh trưng bày: ${item.name}`);
+        });
+      }
+    };
+
+    if (typeof window !== 'undefined' && typeof window.__exitAllRealmsSafely === 'function') {
+      window.__exitAllRealmsSafely(runFastTravel);
+    } else {
+      runFastTravel();
     }
   }
 
@@ -434,7 +447,7 @@ export class DirectoryHUD {
         display: inline-block;
         font-size: 10px;
         font-weight: 800;
-        letter-spacing: 2px;
+        letter-spacing: 0.6px;
         color: #ffd700;
         background: rgba(212, 175, 55, 0.15);
         border: 1px solid rgba(212, 175, 55, 0.4);
@@ -448,7 +461,7 @@ export class DirectoryHUD {
         margin: 0 0 6px 0;
         font-size: 22px;
         font-weight: 800;
-        letter-spacing: 1.5px;
+        letter-spacing: 0.4px;
         background: linear-gradient(135deg, #fff5d0 0%, #d4af37 60%, #b8860b 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
@@ -479,6 +492,7 @@ export class DirectoryHUD {
         background: rgba(255, 255, 255, 0.05);
         border: 1px solid rgba(212, 175, 55, 0.35);
         color: #ffd700;
+        font-family: inherit;
         width: 34px;
         height: 34px;
         border-radius: 50%;
@@ -550,7 +564,7 @@ export class DirectoryHUD {
       .col-title {
         font-size: 15px;
         font-weight: 800;
-        letter-spacing: 0.8px;
+        letter-spacing: 0.3px;
         color: #fff;
         margin-bottom: 2px;
       }
@@ -692,7 +706,7 @@ export class DirectoryHUD {
       /* TOAST NOTIFICATION */
       #fast-travel-toast {
         position: fixed;
-        bottom: 80px;
+        bottom: 100px;
         left: 50%;
         transform: translateX(-50%) translateY(20px);
         background: rgba(14, 18, 26, 0.96);

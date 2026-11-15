@@ -1,3 +1,5 @@
+import { DIMENSIONS, ALCOVE_CENTERS } from './dimensions.js';
+
 /**
  * LITERATURE REGISTRY (DANH MỤC DỮ LIỆU CHUẨN HÓA 15 TÁC PHẨM VĂN HỌC & DIORAMA ENGINE)
  * Lead Architect & Art Director WebGL Specification
@@ -228,65 +230,16 @@ export const LITERATURE_REGISTRY = [
 
   // =========================================================================
   // TẦNG 2: VĂN HỌC TRUNG ĐẠI (ELEVATION Y = 10.0)
+  // Trật tự biên niên sử: 201 (1077) -> 202 (1284) -> 203 (1428) -> 204 (TK XVI) -> 205 (Cuối TK XVIII - Đầu XIX)
   // Sàn tiểu cảnh: Gỗ trắc cổ sơn mài bóng mạ đồng
   // =========================================================================
-  {
-    id: 'truyen_kieu',
-    name: 'Truyện Kiều',
-    author: 'Đại thi hào Nguyễn Du (1765 – 1820)',
-    era: 'Truyện thơ Nôm (Văn học Trung đại)',
-    floor: 2,
-    roomIndex: 0, // Cánh Tây-Nam (Phòng mẫu 01)
-    themeColor: 0x39e58c, // Lam ngọc bích phát sáng
-    quote: 'Đoạn trường tân thanh – Khúc ca bi tráng về tài mệnh tương đố, tấm lòng nhân đạo bao la và khát vọng tự do ngút trời.',
-    roomCompleted: true,
-    portalReady: true, // ĐÃ KẾT NỐI KIEUWORLD
-    atmosphere: {
-      primaryColor: 0xffb703, // Cam hổ phách ấm áp (Warm Amber)
-      secondaryColor: 0x2a1b38, // Tím than chạng vạng u buồn (Deep Violet)
-      moonlightColor: 0xe8f0ff, // Ánh trăng thu bàng bạc dịu mát
-      lightIntensity: 2.0,
-      fogDensity: 0.015,
-      particleType: 'petals' // Cánh hoa đào rơi / Bụi thời gian
-    },
-    dioramaAssets: [
-      {
-        file: 'binh_phong.glb',
-        name: 'Bình phong gỗ chạm hoa sen',
-        scale: 1.8,
-        offset: { x: 0.0, y: 0.0, z: -1.2 },
-        prompt: 'A traditional Asian wooden folding screen room divider, carved lotus pattern, dark wood, elegant, game-ready 3D asset'
-      },
-      {
-        file: 'an_thu.glb',
-        name: 'Án thư cổ gỗ gụ',
-        scale: 1.2,
-        offset: { x: 0.0, y: 0.0, z: 0.0 },
-        prompt: 'An elegant antique Vietnamese scholar desk, carved dark mahogany wood, traditional Asian furniture, highly detailed, game-ready 3D model'
-      },
-      {
-        file: 'ban_tho_tho.glb',
-        name: 'Lọ hoa sen & Khay mực bút lông',
-        scale: 0.45,
-        offset: { x: -0.35, y: 0.70, z: 0.0 },
-        prompt: 'A vintage ceramic vase with blooming lotus flowers next to a traditional inkstone and calligraphy brush, game-ready 3D prop'
-      },
-      {
-        file: 'dan_ty_ba.glb',
-        name: 'Đàn Tỳ Bà khảm xà cừ',
-        scale: 0.95,
-        offset: { x: 0.25, y: 0.70, z: 0.05 },
-        prompt: 'An antique Vietnamese lacquer Pipa lute, traditional musical instrument, dark red mahogany wood, mother-of-pearl floral inlay, clean topology, game-ready 3D asset'
-      }
-    ]
-  },
   {
     id: 'nam_quoc_son_ha',
     name: 'Nam quốc sơn hà',
     author: 'Tương truyền Lý Thường Kiệt (1019 – 1105)',
     era: 'Thơ ca Trung đại (Thời Lý)',
     floor: 2,
-    roomIndex: 1, // Cánh Tây-Bắc
+    roomIndex: 0, // Cánh Tây-Nam (201)
     themeColor: 0xf1c40f, // Hoàng kim đế vương
     quote: 'Nam quốc sơn hà Nam đế cư, tiệt nhiên định phận tại thiên thư – Bản tuyên ngôn độc lập đầu tiên khẳng định chủ quyền sông núi.',
     roomCompleted: true,
@@ -335,7 +288,7 @@ export const LITERATURE_REGISTRY = [
     author: 'Hưng Đạo Đại Vương Trần Quốc Tuấn (1228 – 1300)',
     era: 'Văn nghị luận Trung đại (Thời Trần)',
     floor: 2,
-    roomIndex: 2, // Cánh Bắc - Đại Gian
+    roomIndex: 1, // Cánh Tây-Bắc (202)
     themeColor: 0xe74c3c, // Khí phách Đông A rực lửa
     quote: 'Ta thường tới bữa quên ăn, nửa đêm vỗ gối, ruột đau như cắt, nước mắt đầm đìa... – Hào khí Đông A bách chiến bách thắng.',
     portalReady: false,
@@ -376,7 +329,7 @@ export const LITERATURE_REGISTRY = [
     author: 'Đại thi hào Nguyễn Trãi (1380 – 1442)',
     era: 'Văn cáo Trung đại (Thời Hậu Lê)',
     floor: 2,
-    roomIndex: 3, // Cánh Đông-Bắc
+    roomIndex: 2, // Cánh Bắc - Đại Gian (203)
     themeColor: 0xe67e22, // Hổ phách đại nghĩa
     quote: 'Đem đại nghĩa để thắng hung tàn, lấy chí nhân để thay cường bạo – Thiên cổ hùng văn muôn đời vang vọng.',
     portalReady: false,
@@ -417,15 +370,16 @@ export const LITERATURE_REGISTRY = [
     author: 'Nguyễn Dữ (Thế kỷ XVI)',
     era: 'Truyền kỳ mạn lục',
     floor: 2,
-    roomIndex: 4, // Cánh Đông-Nam
+    roomIndex: 3, // Cánh Đông-Bắc (204)
     themeColor: 0x9b59b6, // Tím sương khói Hoàng Giang
-    quote: 'Nỗi oan tiết liệt của người phụ nữ đức hạnh, bóng mờ ảo vọng trên vách tường và bến Hoàng Giang sương khói ngút ngàn.',
-    portalReady: false,
+    quote: 'Ngọn đèn dầu in bóng trên vách nứa và bến Hoàng Giang sương khói – Bản bi ca tiết liệt, nhân đạo về nỗi oan khiên của Vũ Thị Thiết.',
+    roomCompleted: true,
+    portalReady: true,
     atmosphere: {
-      primaryColor: 0x9b59b6,
-      secondaryColor: 0x3498db,
+      primaryColor: 0xff9d3b,
+      secondaryColor: 0x1a2a4a,
       lightIntensity: 1.8,
-      fogDensity: 0.025,
+      fogDensity: 0.045,
       particleType: 'fog'
     },
     dioramaAssets: [
@@ -452,49 +406,142 @@ export const LITERATURE_REGISTRY = [
       }
     ]
   },
+  {
+    id: 'truyen_kieu',
+    name: 'Truyện Kiều',
+    author: 'Đại thi hào Nguyễn Du (1765 – 1820)',
+    era: 'Truyện thơ Nôm (Văn học Trung đại)',
+    floor: 2,
+    roomIndex: 4, // Cánh Đông-Nam (205)
+    themeColor: 0x39e58c, // Lam ngọc bích phát sáng
+    quote: 'Đoạn trường tân thanh – Khúc ca bi tráng về tài mệnh tương đố, tấm lòng nhân đạo bao la và khát vọng tự do ngút trời.',
+    roomCompleted: true,
+    portalReady: true, // ĐÃ KẾT NỐI KIEUWORLD
+    atmosphere: {
+      primaryColor: 0xffb703, // Cam hổ phách ấm áp (Warm Amber)
+      secondaryColor: 0x2a1b38, // Tím than chạng vạng u buồn (Deep Violet)
+      moonlightColor: 0xe8f0ff, // Ánh trăng thu bàng bạc dịu mát
+      lightIntensity: 2.0,
+      fogDensity: 0.015,
+      particleType: 'petals' // Cánh hoa đào rơi / Bụi thời gian
+    },
+    dioramaAssets: [
+      {
+        file: 'binh_phong.glb',
+        name: 'Bình phong gỗ chạm hoa sen',
+        scale: 1.8,
+        offset: { x: 0.0, y: 0.0, z: -1.2 },
+        prompt: 'A traditional Asian wooden folding screen room divider, carved lotus pattern, dark wood, elegant, game-ready 3D asset'
+      },
+      {
+        file: 'an_thu.glb',
+        name: 'Án thư cổ gỗ gụ',
+        scale: 1.2,
+        offset: { x: 0.0, y: 0.0, z: 0.0 },
+        prompt: 'An elegant antique Vietnamese scholar desk, carved dark mahogany wood, traditional Asian furniture, highly detailed, game-ready 3D model'
+      },
+      {
+        file: 'ban_tho_tho.glb',
+        name: 'Lọ hoa sen & Khay mực bút lông',
+        scale: 0.45,
+        offset: { x: -0.35, y: 0.70, z: 0.0 },
+        prompt: 'A vintage ceramic vase with blooming lotus flowers next to a traditional inkstone and calligraphy brush, game-ready 3D prop'
+      },
+      {
+        file: 'dan_ty_ba.glb',
+        name: 'Đàn Tỳ Bà khảm xà cừ',
+        scale: 0.95,
+        offset: { x: 0.25, y: 0.70, z: 0.05 },
+        prompt: 'An antique Vietnamese lacquer Pipa lute, traditional musical instrument, dark red mahogany wood, mother-of-pearl floral inlay, clean topology, game-ready 3D asset'
+      }
+    ]
+  },
 
   // =========================================================================
   // TẦNG 3: VĂN HỌC CẬN – HIỆN ĐẠI (ELEVATION Y = 20.0)
+  // Trật tự biên niên sử: 301 (1936) -> 302 (1938) -> 303 (1939) -> 304 (1941) -> 305 (1945)
   // Sàn tiểu cảnh: Nền gạch vỡ / Xi măng rêu phong thời chiến
   // =========================================================================
   {
-    id: 'chi_pheo',
-    name: 'Chí Phèo',
-    author: 'Nam Cao (1915 – 1951)',
-    era: 'Hiện thực phê phán (1930 – 1945)',
+    id: 'so_do',
+    name: 'Số đỏ',
+    author: 'Vũ Trọng Phụng (1912 – 1939)',
+    era: 'Tiểu thuyết trào phúng Hiện đại',
     floor: 3,
-    roomIndex: 0, // Cánh Tây-Nam
-    themeColor: 0xc0392b, // Đỏ son bi phẫn
-    quote: 'Ai cho tao lương thiện? – Tiếng kêu đòi lương tri nhức nhối xé toang đêm tối làng Vũ Đại trước bờ vực tha hóa.',
+    roomIndex: 0, // Cánh Tây-Nam (301)
+    themeColor: 0x8e44ad, // Tím trào phúng kịch cỡm
+    quote: 'Kiệt tác trào phúng đỉnh cao vạch trần xã hội Âu hóa rởm đời, nhố nhăng đồi bại của một thời thị dân nửa mùa.',
     portalReady: false,
     atmosphere: {
-      primaryColor: 0xc0392b,
-      secondaryColor: 0xd35400,
-      lightIntensity: 2.0,
-      fogDensity: 0.018,
+      primaryColor: 0x8e44ad,
+      secondaryColor: 0xe74c3c,
+      lightIntensity: 2.4,
+      fogDensity: 0.01,
       particleType: 'dust'
     },
     dioramaAssets: [
       {
-        file: 'lo_gach_cu.glb',
-        name: 'Lò gạch cũ hoang phế',
-        scale: 2.8,
-        offset: { x: -0.9, y: 0.0, z: -0.6 },
-        prompt: 'Weathered abandoned old red clay brick kiln with crumbling archway and wild weeds, Vu Dai village realism'
+        file: 'manocanh_ngay_tho.glb',
+        name: 'Ma-nơ-canh mốt "Ngây Thơ"',
+        scale: 2.1,
+        offset: { x: -0.9, y: 0.0, z: 0.4 },
+        prompt: '1930s flamboyant Indochine art deco tailor mannequin wearing eccentric modern reform European suit'
       },
       {
-        file: 'chai_ruou_va_chong_tre.glb',
-        name: 'Chõng tre & Chai rượu sứt',
-        scale: 1.8,
-        offset: { x: 0.9, y: 0.0, z: 0.6 },
-        prompt: 'Old rustic bamboo cot bed with broken glass rice wine bottle and chipped tea bowl, rural Vietnam 1930s'
+        file: 'vot_tennis_va_mu_phot.glb',
+        name: 'Vợt quần vợt & Mũ phớt Xuân',
+        scale: 1.5,
+        offset: { x: 0.9, y: 0.0, z: 0.7 },
+        prompt: 'Vintage wooden tennis racket and stylish felt fedora hat on velvet brass stool, satirical bourgeois Hanoi'
       },
       {
-        file: 'bat_chao_hanh.glb',
-        name: 'Bát cháo hành Thị Nở',
-        scale: 0.9,
-        offset: { x: 0.1, y: 0.0, z: 1.1 },
-        prompt: 'Traditional clay bowl of steaming onion porridge with rough ceramic spoon on wooden stool, poignant human warmth'
+        file: 'xe_keo_tay_co.glb',
+        name: 'Xe kéo tay tư sản Hà thành',
+        scale: 2.6,
+        offset: { x: 0.1, y: 0.0, z: -0.8 },
+        prompt: 'Antique Hanoi two-wheeled rickshaw carriage with red lacquered accents and wooden canopy, 1930s urban'
+      }
+    ]
+  },
+  {
+    id: 'day_thon_vi_da',
+    name: 'Đây thôn Vĩ Dạ',
+    author: 'Hàn Mặc Tử (1912 – 1940)',
+    era: 'Phong trào Thơ Mới (1932 – 1945)',
+    floor: 3,
+    roomIndex: 1, // Cánh Tây-Bắc (302)
+    themeColor: 0x1abc9c, // Trắng bạc ngọc bích sương mờ
+    quote: 'Sao anh không về chơi thôn Vĩ? – Bức tranh xứ Huế thơ mộng mờ sương và nỗi hoài niệm u uẩn, khắc khoải tình đời.',
+    roomCompleted: true,
+    portalReady: true,
+    atmosphere: {
+      primaryColor: 0x1abc9c,
+      secondaryColor: 0x16a085,
+      lightIntensity: 2.0,
+      fogDensity: 0.022,
+      particleType: 'fog'
+    },
+    dioramaAssets: [
+      {
+        file: 'hang_cau_muot_xanh.glb',
+        name: 'Hàng cau nắng mới Vĩ Dạ',
+        scale: 2.9,
+        offset: { x: -1.1, y: 0.0, z: -0.6 },
+        prompt: 'A pair of graceful slender green areca palm trees with morning sunlight dewdrops, poetic garden of Vi Da'
+      },
+      {
+        file: 'thuyen_trang_song_huong.glb',
+        name: 'Thuyền chở trăng sông Hương',
+        scale: 2.4,
+        offset: { x: 0.9, y: 0.0, z: 0.4 },
+        prompt: 'A slender wooden river boat sampan floating over misty calm water ripples under moonlit night, poetic romance'
+      },
+      {
+        file: 'khung_cua_la_truc.glb',
+        name: 'Lá trúc che ngang mặt chữ điền',
+        scale: 2.2,
+        offset: { x: 0.0, y: 0.0, z: -1.2 },
+        prompt: 'Traditional bamboo lattice window frame with silhouetted bamboo leaves, nostalgic Hue architecture'
       }
     ]
   },
@@ -504,7 +551,7 @@ export const LITERATURE_REGISTRY = [
     author: 'Ngô Tất Tố (1893 – 1954)',
     era: 'Hiện thực phê phán',
     floor: 3,
-    roomIndex: 1, // Cánh Tây-Bắc
+    roomIndex: 2, // Cánh Bắc - Đại Gian (303)
     themeColor: 0x34495e, // Đen xám nông thôn bế tắc
     quote: 'Bức tranh đêm đen nghẹt thở của nông thôn Việt Nam trước cách mạng và ngọn lửa quật khởi bừng cháy của chị Dậu.',
     roomCompleted: true,
@@ -541,43 +588,43 @@ export const LITERATURE_REGISTRY = [
     ]
   },
   {
-    id: 'so_do',
-    name: 'Số đỏ',
-    author: 'Vũ Trọng Phụng (1912 – 1939)',
-    era: 'Tiểu thuyết trào phúng Hiện đại',
+    id: 'chi_pheo',
+    name: 'Chí Phèo',
+    author: 'Nam Cao (1915 – 1951)',
+    era: 'Hiện thực phê phán (1930 – 1945)',
     floor: 3,
-    roomIndex: 2, // Cánh Bắc - Đại Gian
-    themeColor: 0x8e44ad, // Tím trào phúng kịch cỡm
-    quote: 'Kiệt tác trào phúng đỉnh cao vạch trần xã hội Âu hóa rởm đời, nhố nhăng đồi bại của một thời thị dân nửa mùa.',
+    roomIndex: 3, // Cánh Đông-Bắc (304)
+    themeColor: 0xc0392b, // Đỏ son bi phẫn
+    quote: 'Ai cho tao lương thiện? – Tiếng kêu đòi lương tri nhức nhối xé toang đêm tối làng Vũ Đại trước bờ vực tha hóa.',
     portalReady: false,
     atmosphere: {
-      primaryColor: 0x8e44ad,
-      secondaryColor: 0xe74c3c,
-      lightIntensity: 2.4,
-      fogDensity: 0.01,
+      primaryColor: 0xc0392b,
+      secondaryColor: 0xd35400,
+      lightIntensity: 2.0,
+      fogDensity: 0.018,
       particleType: 'dust'
     },
     dioramaAssets: [
       {
-        file: 'manocanh_ngay_tho.glb',
-        name: 'Ma-nơ-canh mốt "Ngây Thơ"',
-        scale: 2.1,
-        offset: { x: -0.9, y: 0.0, z: 0.4 },
-        prompt: '1930s flamboyant Indochine art deco tailor mannequin wearing eccentric modern reform European suit'
+        file: 'lo_gach_cu.glb',
+        name: 'Lò gạch cũ hoang phế',
+        scale: 2.8,
+        offset: { x: -0.9, y: 0.0, z: -0.6 },
+        prompt: 'Weathered abandoned old red clay brick kiln with crumbling archway and wild weeds, Vu Dai village realism'
       },
       {
-        file: 'vot_tennis_va_mu_phot.glb',
-        name: 'Vợt quần vợt & Mũ phớt Xuân',
-        scale: 1.5,
-        offset: { x: 0.9, y: 0.0, z: 0.7 },
-        prompt: 'Vintage wooden tennis racket and stylish felt fedora hat on velvet brass stool, satirical bourgeois Hanoi'
+        file: 'chai_ruou_va_chong_tre.glb',
+        name: 'Chõng tre & Chai rượu sứt',
+        scale: 1.8,
+        offset: { x: 0.9, y: 0.0, z: 0.6 },
+        prompt: 'Old rustic bamboo cot bed with broken glass rice wine bottle and chipped tea bowl, rural Vietnam 1930s'
       },
       {
-        file: 'xe_keo_tay_co.glb',
-        name: 'Xe kéo tay tư sản Hà thành',
-        scale: 2.6,
-        offset: { x: 0.1, y: 0.0, z: -0.8 },
-        prompt: 'Antique Hanoi two-wheeled rickshaw carriage with red lacquered accents and wooden canopy, 1930s urban'
+        file: 'bat_chao_hanh.glb',
+        name: 'Bát cháo hành Thị Nở',
+        scale: 0.9,
+        offset: { x: 0.1, y: 0.0, z: 1.1 },
+        prompt: 'Traditional clay bowl of steaming onion porridge with rough ceramic spoon on wooden stool, poignant human warmth'
       }
     ]
   },
@@ -587,7 +634,7 @@ export const LITERATURE_REGISTRY = [
     author: 'Kim Lân (1920 – 2007)',
     era: 'Văn học Hiện thực Cách mạng',
     floor: 3,
-    roomIndex: 3, // Cánh Đông-Bắc
+    roomIndex: 4, // Cánh Đông-Nam (305)
     themeColor: 0xd35400, // Hoàng hôn nạn đói ấm áp tình người
     quote: 'Sức sống kỳ diệu, tình người cưu mang và niềm tin hướng về sự sống trước thềm nạn đói kinh hoàng 1945.',
     roomCompleted: true,
@@ -622,48 +669,81 @@ export const LITERATURE_REGISTRY = [
         prompt: 'Humble two-dime kerosene wedding lamp on rough wooden crate table, warm beacon of hope in darkness'
       }
     ]
-  },
-  {
-    id: 'day_thon_vi_da',
-    name: 'Đây thôn Vĩ Dạ',
-    author: 'Hàn Mặc Tử (1912 – 1940)',
-    era: 'Phong trào Thơ Mới (1932 – 1945)',
-    floor: 3,
-    roomIndex: 4, // Cánh Đông-Nam
-    themeColor: 0x1abc9c, // Trắng bạc ngọc bích sương mờ
-    quote: 'Sao anh không về chơi thôn Vĩ? – Bức tranh xứ Huế thơ mộng mờ sương và nỗi hoài niệm u uẩn, khắc khoải tình đời.',
-    portalReady: false,
-    atmosphere: {
-      primaryColor: 0x1abc9c,
-      secondaryColor: 0x16a085,
-      lightIntensity: 2.0,
-      fogDensity: 0.022,
-      particleType: 'fog'
-    },
-    dioramaAssets: [
-      {
-        file: 'hang_cau_muot_xanh.glb',
-        name: 'Hàng cau nắng mới Vĩ Dạ',
-        scale: 2.9,
-        offset: { x: -1.1, y: 0.0, z: -0.6 },
-        prompt: 'A pair of graceful slender green areca palm trees with morning sunlight dewdrops, poetic garden of Vi Da'
-      },
-      {
-        file: 'thuyen_trang_song_huong.glb',
-        name: 'Thuyền chở trăng sông Hương',
-        scale: 2.4,
-        offset: { x: 0.9, y: 0.0, z: 0.4 },
-        prompt: 'A slender wooden river boat sampan floating over misty calm water ripples under moonlit night, poetic romance'
-      },
-      {
-        file: 'khung_cua_la_truc.glb',
-        name: 'Lá trúc che ngang mặt chữ điền',
-        scale: 2.2,
-        offset: { x: 0.0, y: 0.0, z: -1.2 },
-        prompt: 'Traditional bamboo lattice window frame with silhouetted bamboo leaves, nostalgic Hue architecture'
-      }
-    ]
   }
 ];
+
+export const CUSTOM_ROOM_IDS = new Set([
+  'truyen_kieu',
+  'thanh_giong',
+  'son_tinh_thuy_tinh',
+  'nam_quoc_son_ha',
+  'an_duong_vuong',
+  'vo_nhat',
+  'tat_den',
+  'nguoi_con_gai_nam_xuong',
+  'day_thon_vi_da'
+]);
+
+const REGISTRY_BY_ID = new Map(LITERATURE_REGISTRY.map((item) => [item.id, item]));
+
+export function getLiteratureItem(itemOrId) {
+  if (!itemOrId) return null;
+  if (typeof itemOrId === 'string') return REGISTRY_BY_ID.get(itemOrId) || null;
+  if (typeof itemOrId === 'object' && itemOrId.id) {
+    return REGISTRY_BY_ID.get(itemOrId.id) || itemOrId;
+  }
+  return null;
+}
+
+export function getFloorElevation(floor = 1) {
+  const level = DIMENSIONS?.levels?.find((lvl) => lvl.id === floor);
+  if (level && typeof level.elevation === 'number') return level.elevation;
+  return (Math.max(1, Number(floor) || 1) - 1) * 10.0;
+}
+
+export function getRoomCode(itemOrId) {
+  const item = getLiteratureItem(itemOrId);
+  if (!item) return '101';
+  return `${item.floor}0${item.roomIndex + 1}`;
+}
+
+export function getRoomWorldPose(itemOrId) {
+  const item = getLiteratureItem(itemOrId);
+  const idx = item?.roomIndex ?? 0;
+  const alcove = ALCOVE_CENTERS[idx] || ALCOVE_CENTERS[0];
+  const floor = item?.floor ?? 1;
+  const y = getFloorElevation(floor);
+  return {
+    id: item?.id || null,
+    item,
+    floor,
+    roomIndex: idx,
+    roomCode: `${floor}0${idx + 1}`,
+    x: alcove.x,
+    y,
+    z: alcove.z,
+    rotY: alcove.rotY ?? 0,
+    alcoveName: alcove.name,
+    isNorthHall: Boolean(alcove.isNorthHall),
+    localWidth: alcove.localWidth ?? (alcove.isNorthHall ? 44 : 26),
+    localDepth: alcove.localDepth ?? 28,
+    doorWidth: alcove.doorwayWidth ?? (alcove.isNorthHall ? 8.0 : 6.2)
+  };
+}
+
+export function localRoomToWorld(poseOrId, localX = 0, localY = 0, localZ = 0) {
+  const pose = poseOrId && typeof poseOrId.x === 'number' && typeof poseOrId.rotY === 'number'
+    ? poseOrId
+    : getRoomWorldPose(poseOrId);
+  const cosR = Math.cos(pose.rotY);
+  const sinR = Math.sin(pose.rotY);
+  return {
+    x: pose.x + localX * cosR + localZ * sinR,
+    y: pose.y + localY,
+    z: pose.z - localX * sinR + localZ * cosR
+  };
+}
+
+export { ALCOVE_CENTERS };
 
 export default LITERATURE_REGISTRY;

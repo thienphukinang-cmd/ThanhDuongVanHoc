@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Infographic Khổ Ngang 16:9 | Thánh Đường Văn Học – Bảo Tàng Ảo 3D</title>
+  
+  <!-- Phông chữ tiếng Việt chuẩn quốc tế hiển thị sắc nét 100% -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Cinzel:wght@600;700;800;900&family=Playfair+Display:ital,wght@0,600;0,700;0,800;0,900;1,400;1,700&display=swap" rel="stylesheet" />
+
+  <!-- Thư viện html2canvas xuất ảnh 4K -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <style>
+    :root {
+      --bg-dark: #08070b;
+      --bg-surface: #0e0c14;
+      --bg-card: rgba(18, 15, 25, 0.88);
+      --bg-card-hover: rgba(28, 22, 38, 0.95);
+      --gold-primary: #d4af37;
+      --gold-light: #f7e089;
+      --gold-dark: #8c6a1a;
+      --jade-cyan: #00f5d4;
+      --jade-glow: rgba(0, 245, 212, 0.35);
+      --amber-glow: rgba(212, 175, 55, 0.28);
+      --seal-red: #9e1919;
+      --text-white: #fbf9f4;
+      --text-dim: #d1c8b8;
+      --text-muted: #958a77;
+      --border-gold: rgba(212, 175, 55, 0.35);
+      --border-subtle: rgba(212, 175, 55, 0.16);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      background-color: #040306;
+      color: var(--text-white);
+      font-family: 'Be Vietnam Pro', system-ui, -apple-system, sans-serif;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      overflow-x: auto;
+    }
+
+    /* THANH CÔNG CỤ NỔI NHỎ GỌN Ở GÓC MÀN HÌNH */
+    .floating-toolbar {
+      position: fixed;
+      top: 14px;
+      right: 20px;
+      z-index: 99999;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(14, 11, 18, 0.92);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--border-gold);
+      padding: 6px 14px;
+      border-radius: 40px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.8), 0 0 15px rgba(212, 175, 55, 0.25);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    .tool-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      font-family: 'Be Vietnam Pro', sans-serif;
+      font-size: 12.5px;
+      font-weight: 700;
+      border-radius: 30px;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+      text-decoration: none;
+      letter-spacing: 0.3px;
+    }
+
+    .tool-btn-gold {
+      background: linear-gradient(135deg, #f7e089 0%, #d4af37 60%, #9e7a1e 100%);
+      color: #120e06;
+      box-shadow: 0 3px 10px rgba(212, 175, 55, 0.4);
+    }
+    .tool-btn-gold:hover {
+      transform: translateY(-1.5px);
+      filter: brightness(1.12);
+      box-shadow: 0 5px 15px rgba(212, 175, 55, 0.6);
+    }
+
+    .tool-btn-cyan {
+      background: rgba(0, 245, 212, 0.12);
+      color: var(--jade-cyan);
+      border: 1px solid var(--jade-cyan);
+    }
+    .tool-btn-cyan:hover {
+      background: var(--jade-cyan);
+      color: #060b0e;
+      box-shadow: 0 0 14px var(--jade-cyan);
+    }
+
+    .tool-btn-ghost {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-dim);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+    .tool-btn-ghost:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+    }
+
+    /* BỘ BAO QUANH ĐỂ TỰ ĐỘNG THÍCH ỨNG MÀN HÌNH NHỎ (AUTO SCALER) */
+    .canvas-scaler-wrapper {
+      width: 1920px;
+      height: 1080px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      position: relative;
+    }
+
+    /* KHUNG HIỂN THỊ CỐ ĐỊNH CHUẨN KHỔ NGANG 16:9 (1920x1080px) */
+    .infographic-canvas-wrap {
+      width: 1920px;
+      height: 1080px;
+      flex-shrink: 0;
+      background: radial-gradient(circle at 50% 0%, #1a1426 0%, #0d0a14 45%, #050408 100%);
+      border: 2px solid var(--gold-primary);
+      box-shadow: 0 0 60px rgba(212, 175, 55, 0.2), 0 30px 80px rgba(0, 0, 0, 0.95);
+      border-radius: 8px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      padding: 20px 28px 18px;
+    }
+
+    /* HỌA TIẾT HOA VĂN TRỐNG ĐỒNG ĐÔNG SƠN MỜ ẢO */
+    .dongson-bg-left {
+      position: absolute;
+      top: -120px;
+      left: -120px;
+      width: 600px;
+      height: 600px;
+      opacity: 0.045;
+      pointer-events: none;
+      background: radial-gradient(circle, #f7e089 12%, transparent 70%);
+    }
+
+    .dongson-bg-right {
+      position: absolute;
+      bottom: -150px;
+      right: -150px;
+      width: 700px;
+      height: 700px;
+      opacity: 0.04;
+      pointer-events: none;
+      background: radial-gradient(circle, var(--jade-cyan) 10%, transparent 68%);
+    }
+
+    .corner-dec {
+      position: absolute;
+      width: 32px;
+      height: 32px;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .c-tl { top: 8px; left: 8px; border-top: 2px solid var(--gold-primary); border-left: 2px solid var(--gold-primary); }
+    .c-tr { top: 8px; right: 8px; border-top: 2px solid var(--gold-primary); border-right: 2px solid var(--gold-primary); }
+    .c-bl { bottom: 8px; left: 8px; border-bottom: 2px solid var(--gold-primary); border-left: 2px solid var(--gold-primary); }
+    .c-br { bottom: 8px; right: 8px; border-bottom: 2px solid var(--gold-primary); border-right: 2px solid var(--gold-primary); }
+
+    /* =========================================================================
+       1. THANH TIÊU ĐỀ TRÊN CÙNG (TOP HEADER – ~14% CHIỀU CAO: ~140px)
+       ========================================================================= */
+    .top-header {
+      height: 130px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-gold);
+      padding-bottom: 14px;
+      margin-bottom: 14px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .header-left {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .header-tagline {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--gold-light);
+    }
+
+    .seal-badge-sm {
+      background: var(--seal-red);
+      color: #fff;
+      font-family: 'Cinzel', serif;
+      width: 20px;
+      height: 20px;
+      border-radius: 3px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 900;
+      box-shadow: 0 0 6px rgba(184, 40, 40, 0.7);
+    }
+
+    .main-brand-title {
+      font-family: 'Cinzel', 'Playfair Display', serif;
+      font-size: 34px;
+      font-weight: 900;
+      letter-spacing: 1.8px;
+      text-transform: uppercase;
+      background: linear-gradient(135deg, #ffffff 0%, #fae69e 40%, #d4af37 75%, #aa8218 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      line-height: 1.15;
+      text-shadow: 0 4px 18px rgba(212, 175, 55, 0.25);
+    }
+
+    .brand-subtext {
+      font-size: 13px;
+      color: var(--text-dim);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .brand-subtext span.highlight {
+      color: var(--jade-cyan);
+      font-weight: 600;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .header-stat-badge {
+      background: rgba(20, 16, 28, 0.85);
+      border: 1px solid var(--border-gold);
+      border-radius: 8px;
+      padding: 10px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 175px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+    }
+    .stat-num {
+      font-family: 'Cinzel', serif;
+      font-size: 26px;
+      font-weight: 900;
+      color: var(--gold-light);
+      line-height: 1;
+    }
+    .stat-num.cyan {
+      color: var(--jade-cyan);
+      text-shadow: 0 0 10px var(--jade-glow);
+    }
+    .stat-info {
+      display: flex;
+      flex-direction: column;
+    }
+    .stat-title {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: #fff;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .stat-sub {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    /* =========================================================================
+       BỐ CỤC 3 CỘT CHÍNH (MAIN BODY 3 COLUMNS – ~886px CHIỀU CAO)
+       ========================================================================= */
+    .infographic-body {
+      display: grid;
+      grid-template-columns: 460px 896px 460px;
+      gap: 20px;
+      height: 886px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .column-title-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 6px;
+      margin-bottom: 12px;
+    }
+    .column-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--gold-light);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .column-tag {
+      font-size: 10.5px;
+      color: var(--jade-cyan);
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    /* -------------------------------------------------------------------------
+       CỘT TRÁI (~26%): 5 TRỤ CỘT CÔNG NGHỆ & NGHỆ THUẬT
+       ------------------------------------------------------------------------- */
+    .left-col {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .pillars-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      height: 100%;
+    }
+
+    .pillar-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border-gold);
+      border-radius: 6px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex: 1;
+      transition: all 0.2s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .pillar-box::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: var(--gold-primary);
+      transition: width 0.2s ease, background-color 0.2s ease;
+    }
+    .pillar-box:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--jade-cyan);
+      transform: translateX(4px);
+    }
+    .pillar-box:hover::before {
+      background: var(--jade-cyan);
+      width: 5px;
+    }
+
+    .pillar-icon-wrap {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(212, 175, 55, 0.2) 0%, rgba(12, 10, 16, 0.9) 75%);
+      border: 1px solid var(--gold-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+      color: var(--gold-light);
+    }
+    .pillar-box:hover .pillar-icon-wrap {
+      border-color: var(--jade-cyan);
+      color: var(--jade-cyan);
+      box-shadow: 0 0 10px var(--jade-glow);
+    }
+
+    .pillar-detail {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .pillar-head {
+      font-family: 'Playfair Display', serif;
+      font-size: 14px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .pillar-text {
+      font-size: 11.5px;
+      color: var(--text-dim);
+      line-height: 1.45;
+    }
+
+    /* -------------------------------------------------------------------------
+       CỘT GIỮA (~48%): LƯỚI BENTO GRID 2x3 HIỂN THỊ ẢNH CHỤP THẬT 3D
+       ------------------------------------------------------------------------- */
+    .center-col {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .bento-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      gap: 12px;
+      height: 100%;
+    }
+
+    .bento-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-gold);
+      border-radius: 6px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+      transition: all 0.25s ease;
+    }
+    .bento-card:hover {
+      border-color: var(--gold-light);
+      transform: translateY(-3px);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.8), 0 0 16px rgba(212, 175, 55, 0.22);
+    }
+
+    .bento-media {
+      width: 100%;
+      height: 170px;
+      position: relative;
+      overflow: hidden;
+      background: #000;
+    }
+    .bento-media img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: transform 0.35s ease;
+    }
+    .bento-card:hover .bento-media img {
+      transform: scale(1.05);
+    }
+
+    .bento-badge-floor {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      background: rgba(10, 8, 14, 0.88);
+      border: 1px solid var(--gold-primary);
+      color: var(--gold-light);
+      font-size: 9.5px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 3px;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+    }
+
+    .bento-badge-portal {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: rgba(0, 245, 212, 0.16);
+      border: 1px solid var(--jade-cyan);
+      color: var(--jade-cyan);
+      font-size: 9.5px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 3px;
+      backdrop-filter: blur(4px);
+    }
+
+    .bento-desc-wrap {
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      background: linear-gradient(180deg, rgba(16, 13, 22, 0.95) 0%, rgba(10, 8, 14, 0.98) 100%);
+      flex-grow: 1;
+    }
+
+    .bento-card-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--gold-light);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .bento-author-sm {
+      font-size: 10.5px;
+      color: var(--jade-cyan);
+      font-weight: 500;
+    }
+
+    .bento-summary {
+      font-size: 11.5px;
+      color: var(--text-dim);
+      line-height: 1.45;
+      font-style: italic;
+    }
+
+    /* -------------------------------------------------------------------------
+       CỘT PHẢI (~26%): HÀNH TRÌNH 4 BƯỚC & GIÁ TRỊ GIÁO DỤC
+       ------------------------------------------------------------------------- */
+    .right-col {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .steps-container {
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+
+    .tour-step-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-gold);
+      border-radius: 6px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      transition: all 0.2s ease;
+    }
+    .tour-step-card:hover {
+      border-color: var(--gold-light);
+      background: var(--bg-card-hover);
+      transform: translateX(-3px);
+    }
+
+    .step-idx {
+      width: 28px;
+      height: 28px;
+      background: #09070c;
+      border: 1.5px solid var(--gold-primary);
+      border-radius: 50%;
+      color: var(--gold-light);
+      font-family: 'Cinzel', serif;
+      font-size: 12px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      box-shadow: 0 0 8px rgba(212, 175, 55, 0.3);
+    }
+    .tour-step-card:hover .step-idx {
+      border-color: var(--jade-cyan);
+      color: var(--jade-cyan);
+      box-shadow: 0 0 10px var(--jade-glow);
+    }
+
+    .step-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .step-h {
+      font-family: 'Playfair Display', serif;
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .step-p {
+      font-size: 11px;
+      color: var(--text-dim);
+      line-height: 1.4;
+    }
+
+    /* KHUNG TÓM TẮT Ý NGHĨA GIÁO DỤC */
+    .edu-highlight-box {
+      background: rgba(24, 17, 30, 0.85);
+      border: 1px solid var(--gold-primary);
+      border-radius: 6px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: auto;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+      position: relative;
+    }
+
+    .edu-header-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .edu-seal-sm {
+      background: #841616;
+      border: 1px solid #e28888;
+      color: #fff;
+      font-family: 'Cinzel', serif;
+      width: 32px;
+      height: 32px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 900;
+      flex-shrink: 0;
+      box-shadow: 0 0 10px rgba(184, 40, 40, 0.5);
+    }
+
+    .edu-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--gold-light);
+      line-height: 1.25;
+    }
+
+    .edu-content {
+      font-size: 11.5px;
+      color: var(--text-dim);
+      line-height: 1.5;
+    }
+
+    /* FOOTER CHÂN TRANG */
+    .infographic-footer {
+      border-top: 1px solid var(--border-subtle);
+      padding-top: 8px;
+      margin-top: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 10.5px;
+      color: var(--text-muted);
+    }
+
+    /* =========================================================================
+       PRINT CONFIG CHO KHỔ NGANG (LANDSCAPE PDF)
+       ========================================================================= */
+    @page {
+      size: 1920px 1080px landscape;
+      margin: 0;
+    }
+
+    @media print {
+      body {
+        background: #040306 !important;
+        padding: 0 !important;
+      }
+      .floating-toolbar {
+        display: none !important;
+      }
+      .canvas-scaler-wrapper {
+        width: 1920px !important;
+        height: 1080px !important;
+        transform: none !important;
+      }
+      .infographic-canvas-wrap {
+        border: none !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        transform: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- THANH CÔNG CỤ NỔI NHỎ GỌN Ở GÓC MÀN HÌNH (TỰ ẨN KHI IN / CHỤP) -->
+  <div class="floating-toolbar">
+    <button id="btn-download-ngang" class="tool-btn tool-btn-gold" onclick="downloadInfographicNgangPNG()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Tải Infographic Ngang (PNG 4K)
+    </button>
+    <button class="tool-btn tool-btn-cyan" onclick="window.print()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      Xuất PDF Khổ Ngang
+    </button>
+    <a href="/" class="tool-btn tool-btn-ghost">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      Bảo Tàng 3D
+    </a>
+  </div>
+
+  <div class="canvas-scaler-wrapper">
+    <!-- CONTAINER INFOGRAPHIC CỐ ĐỊNH CHUẨN KHỔ NGANG 16:9 (1920x1080px) -->
+    <main id="infographic-landscape-root" class="infographic-canvas-wrap">
+      <!-- Họa tiết góc & hoa văn Đông Sơn mờ ảo -->
+      <div class="corner-dec c-tl"></div>
+      <div class="corner-dec c-tr"></div>
+      <div class="corner-dec c-bl"></div>
+      <div class="corner-dec c-br"></div>
+      <div class="dongson-bg-left"></div>
+      <div class="dongson-bg-right"></div>
+
+      <!-- =========================================================================
+           1. THANH TIÊU ĐỀ TRÊN CÙNG (TOP HEADER – ~15% CHIỀU CAO)
+           ========================================================================= -->
+      <header class="top-header">
+        <div class="header-left">
+          <div class="header-tagline">
+            <span class="seal-badge-sm">文</span>
+            DỰ ÁN SỐ HÓA & BẢO TỒN DI SẢN VĂN HỌC VIỆT NAM • THỰC CẢNH 3D ĐA VŨ TRỤ
+          </div>
+          <h1 class="main-brand-title">THÁNH ĐƯỜNG VĂN HỌC – BẢO TÀNG ẢO 3D</h1>
+          <div class="brand-subtext">
+            Đưa trang văn kinh điển bước ra thế giới ba chiều — Đánh thức hồn thiêng sông núi qua <span class="highlight">Three.js PBR & WebXR</span>
+          </div>
+        </div>
+
+        <div class="header-right">
+          <div class="header-stat-badge">
+            <div class="stat-num">15+</div>
+            <div class="stat-info">
+              <span class="stat-title">Không Gian Di Sản</span>
+              <span class="stat-sub">3 Tầng quy hoạch biên niên sử</span>
+            </div>
+          </div>
+
+          <div class="header-stat-badge">
+            <div class="stat-num cyan">WebXR</div>
+            <div class="stat-info">
+              <span class="stat-title">Thực Tế Ảo 3D</span>
+              <span class="stat-sub">PC, Mobile & Kính VR Meta/Vision</span>
+            </div>
+          </div>
+
+          <div class="header-stat-badge">
+            <div class="stat-num cyan">60+</div>
+            <div class="stat-info">
+              <span class="stat-title">Khung Hình / Giây</span>
+              <span class="stat-sub">Tối ưu Draco & InstancedMesh</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- =========================================================================
+           BỐ CỤC 3 CỘT NGANG CÂN ĐỐI (TRÁI: 26% • GIỮA: 48% • PHẢI: 26%)
+           ========================================================================= -->
+      <div class="infographic-body">
+        
+        <!-- -----------------------------------------------------------------------
+             CỘT TRÁI: 5 TRỤ CỘT CÔNG NGHỆ & NGHỆ THUẬT (LEFT COLUMN)
+             ----------------------------------------------------------------------- -->
+        <section class="left-col">
+          <div class="column-title-bar">
+            <h2 class="column-title">⚙ 5 Trụ Cột Công Nghệ</h2>
+            <span class="column-tag">Nền Tảng WebGL</span>
+          </div>
+
+          <div class="pillars-stack">
+            <!-- Trụ Cột 1 -->
+            <div class="pillar-box">
+              <div class="pillar-icon-wrap">🎨</div>
+              <div class="pillar-detail">
+                <div class="pillar-head">Đồ Họa PBR & Ánh Sáng Chiaroscuro</div>
+                <div class="pillar-text">
+                  Vật liệu gỗ gụ, đồng cổ, đất nung tương phản điện ảnh sâu thẳm, tôn nghiêm vẻ đẹp di sản.
+                </div>
+              </div>
+            </div>
+
+            <!-- Trụ Cột 2 -->
+            <div class="pillar-box">
+              <div class="pillar-icon-wrap">🌀</div>
+              <div class="pillar-detail">
+                <div class="pillar-head">Cổng Dịch Chuyển Cõi Mở (Portal)</div>
+                <div class="pillar-text">
+                  Kiến trúc Multi-Scene: Bước qua cổng quang học để dịch chuyển tức thì vào thế giới tự sự 3D.
+                </div>
+              </div>
+            </div>
+
+            <!-- Trụ Cột 3 -->
+            <div class="pillar-box">
+              <div class="pillar-icon-wrap">🎧</div>
+              <div class="pillar-detail">
+                <div class="pillar-head">Âm Thanh Không Gian 3D Positional</div>
+                <div class="pillar-text">
+                  Định vị nguồn âm 3D: Tiếng đàn tỳ bà, sóng vỗ Như Nguyệt, sấm bão thay đổi chân thực theo cự ly.
+                </div>
+              </div>
+            </div>
+
+            <!-- Trụ Cột 4 -->
+            <div class="pillar-box">
+              <div class="pillar-icon-wrap">📜</div>
+              <div class="pillar-detail">
+                <div class="pillar-head">Kho Lore Học Thuật 4 Chương & Quiz</div>
+                <div class="pillar-text">
+                  Hệ thống dữ liệu chuẩn mực: Tác giả, Hoàn cảnh, Biểu tượng nghệ thuật và Câu đố tương tác.
+                </div>
+              </div>
+            </div>
+
+            <!-- Trụ Cột 5 -->
+            <div class="pillar-box">
+              <div class="pillar-icon-wrap">🥽</div>
+              <div class="pillar-detail">
+                <div class="pillar-head">Auto-Tour & Kính Thực Tế Ảo WebXR</div>
+                <div class="pillar-text">
+                  Thước phim bay Cinematic tự động dẫn tour; tích hợp kính VR cho phép bước đi như người thật.
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- -----------------------------------------------------------------------
+             CỘT GIỮA: LƯỚI KHÔNG GIAN DI SẢN 3D THỰC TẾ (BENTO GRID 2x3)
+             ----------------------------------------------------------------------- -->
+        <section class="center-col">
+          <div class="column-title-bar">
+            <h2 class="column-title">🏛 Không Gian Di Sản 3D Thực Tế</h2>
+            <span class="column-tag">Ảnh Chụp Thực Tế Từ Bảo Tàng</span>
+          </div>
+
+          <div class="bento-grid">
+            
+            <!-- THẺ 1: ĐẠI SẢNH & CUỐN SÁCH THIÊN THƯ -->
+            <article class="bento-card">
+              <div class="bento-media">
+                <img src="/infographic_assets/shot_atrium_thienthu.png" alt="Đại Sảnh & Cuốn Sách Thiên Thư 3D" />
+                <span class="bento-badge-floor">Tâm Điểm Sảnh</span>
+                <span class="bento-badge-portal">⚡ Khởi Nguyên</span>
+              </div>
+              <div class="bento-desc-wrap">
+                <div class="bento-card-title">
+                  Đại Sảnh & Sách Thiên Thư 3D
+                  <span class="bento-author-sm">Trái Tim Bảo Tàng</span>
+                </div>
+                <p class="bento-summary">
+                  Cuốn sách cổ khổng lồ mở ra giữa giếng trời hoàng kim, hoa văn Trống Đồng trên sàn cẩm thạch.
+                </p>
+              </div>
+            </article>
+
+            <!-- THẺ 2: AN DƯƠNG VƯƠNG & CỔ LOA THÀNH -->
+            <article class="bento-card">
+              <div class="bento-media">
+                <img src="/infographic_assets/shot_an_duong_vuong.png" alt="An Dương Vương & Cổ Loa Thành" />
+                <span class="bento-badge-floor">Tầng 1 • P.103</span>
+                <span class="bento-badge-portal">🌀 Cõi Cổ Loa 240m</span>
+              </div>
+              <div class="bento-desc-wrap">
+                <div class="bento-card-title">
+                  An Dương Vương & Mỵ Châu
+                  <span class="bento-author-sm">Truyền Thuyết Lịch Sử</span>
+                </div>
+                <p class="bento-summary">
+                  Nỏ thần Kim Quy uy nghiêm, sa bàn xoắn ốc Cổ Loa thành và cõi mở đại dương 240m ngút ngàn.
+                </p>
+              </div>
+            </article>
+
+            <!-- THẺ 3: THÁNH GIÓNG -->
+            <article class="bento-card">
+              <div class="bento-media">
+                <img src="/infographic_assets/shot_thanh_giong.png" alt="Thánh Gióng – Phù Đổng Thiên Vương" />
+                <span class="bento-badge-floor">Tầng 1 • P.101</span>
+                <span class="bento-badge-portal">🌀 Cõi Sóc Sơn</span>
+              </div>
+              <div class="bento-desc-wrap">
+                <div class="bento-card-title">
+                  Thánh Gióng – Phù Đổng
+                  <span class="bento-author-sm">Sử Thi Dân Gian</span>
+                </div>
+                <p class="bento-summary">
+                  Bệ đá Trống Đồng rực lửa, tượng đài Phù Đổng cưỡi ngựa sắt và lũy tre đằng ngà cứu nước.
+                </p>
+              </div>
+            </article>
+
+            <!-- THẺ 4: ĐÂY THÔN VĨ DẠ -->
+            <article class="bento-card">
+              <div class="bento-media">
+                <img src="/infographic_assets/shot_day_thon_vi_da.png" alt="Đây Thôn Vĩ Dạ – Hàn Mặc Tử" />
+                <span class="bento-badge-floor">Tầng 3 • P.302</span>
+                <span class="bento-badge-portal">🌀 Sông Trăng Xứ Huế</span>
+              </div>
+              <div class="bento-desc-wrap">
+                <div class="bento-card-title">
+                  Đây Thôn Vĩ Dạ
+                  <span class="bento-author-sm">Hàn Mặc Tử (1912–1940)</span>
+                </div>
+                <p class="bento-summary">
+                  Hàng cau nắng mới xanh mướt, thuyền nan chở trăng sông Hương và làn sương khói mờ xứ Huế.
+                </p>
+              </div>
+            </article>
+
+            <!-- THẺ 5: TẮT ĐÈN -->
+            <article class="bento-card">
+              <div class="bento-media">
+                <img src="/infographic_assets/shot_tat_den.png" alt="Tắt Đèn – Ngô Tất Tố" />
+                <span class="bento-badge-floor">Tầng 3 • P.303</span>
+                <span class="bento-badge-portal">🌀 Đêm Đông Xá</span>
+              </div>
+              <div class="bento-desc-wrap">
+                <div class="bento-card-title">
+                  Tắt Đèn – Ngô Tất Tố
+                  <span class="bento-author-sm">Hiện Thực Phê Phán</span>
+                </div>
+                <p class="bento-summary">
+                  Ngọn đèn dầu lay lắt trong đêm giông bão, gông cùm sưu thuế và ngọn lửa quật khởi của chị Dậu.
+                </p>
+              </div>
+            </article>
+
+            <!-- THẺ 6: VỢ NHẶT -->
+            <article class="bento-card">
+              <div class="bento-media">
+                <img src="/infographic_assets/shot_vo_nhat.png" alt="Vợ Nhặt – Kim Lân" />
+                <span class="bento-badge-floor">Tầng 3 • P.305</span>
+                <span class="bento-badge-portal">🌀 Xóm Ngụ Cư 1945</span>
+              </div>
+              <div class="bento-desc-wrap">
+                <div class="bento-card-title">
+                  Vợ Nhặt – Kim Lân
+                  <span class="bento-author-sm">Hiện Thực Cách Mạng</span>
+                </div>
+                <p class="bento-summary">
+                  Chiếc xe bò kéo thóc của Tràng, nồi cháo cám tình thương và ngọn đèn cưới hai hào thắp sáng hy vọng.
+                </p>
+              </div>
+            </article>
+
+          </div>
+        </section>
+
+        <!-- -----------------------------------------------------------------------
+             CỘT PHẢI: HÀNH TRÌNH TRẢI NGHIỆM & Ý NGHĨA GIÁO DỤC (RIGHT COLUMN)
+             ----------------------------------------------------------------------- -->
+        <section class="right-col">
+          <div class="column-title-bar">
+            <h2 class="column-title">🗺 Lộ Trình Tham Quan</h2>
+            <span class="column-tag">4 Bước Hành Hương</span>
+          </div>
+
+          <div class="steps-container">
+            <!-- Bước 1 -->
+            <div class="tour-step-card">
+              <div class="step-idx">1</div>
+              <div class="step-text">
+                <div class="step-h">Khai Mở Sách Thiên Thư</div>
+                <div class="step-p">
+                  Xuất phát tại sảnh chính, tiếp cận tri thức nguồn cội và chọn lộ trình thời gian qua Directory HUD.
+                </div>
+              </div>
+            </div>
+
+            <!-- Bước 2 -->
+            <div class="tour-step-card">
+              <div class="step-idx">2</div>
+              <div class="step-text">
+                <div class="step-h">Đắm Chìm Không Gian Nghệ Thuật</div>
+                <div class="step-p">
+                  Chiêm ngưỡng hiện vật 3D tinh xảo, lắng nghe âm thanh không gian bản địa của từng tác phẩm.
+                </div>
+              </div>
+            </div>
+
+            <!-- Bước 3 -->
+            <div class="tour-step-card">
+              <div class="step-idx">3</div>
+              <div class="step-text">
+                <div class="step-h">Bước Qua Cổng Dịch Chuyển</div>
+                <div class="step-p">
+                  Xuyên không vào cõi mở tự sự sống động (Thành Cổ Loa, sông trăng Vĩ Dạ, xóm ngụ cư 1945).
+                </div>
+              </div>
+            </div>
+
+            <!-- Bước 4 -->
+            <div class="tour-step-card">
+              <div class="step-idx">4</div>
+              <div class="step-text">
+                <div class="step-h">Tương Tác Lore & Quiz Học Thuật</div>
+                <div class="step-p">
+                  Giải mã biểu tượng nghệ thuật, thử thách câu đố và bồi đắp niềm tự hào văn hóa dân tộc.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- KHUNG TÓM TẮT Ý NGHĨA GIÁO DỤC -->
+          <div class="edu-highlight-box">
+            <div class="edu-header-row">
+              <div class="edu-seal-sm">文</div>
+              <div class="edu-title">Ý Nghĩa Giáo Dục & Đổi Mới Dạy Học Ngữ Văn</div>
+            </div>
+            <p class="edu-content">
+              Dự án chuyển hóa những trang văn kinh điển trừu tượng thành không gian trực quan đa giác quan 3D. Giúp học sinh, sinh viên "sống" cùng tác phẩm, khơi gợi cảm xúc thẩm mỹ và niềm say mê nghiên cứu văn học dân tộc trong kỷ nguyên chuyển đổi số.
+            </p>
+          </div>
+
+          <!-- FOOTER BẢN QUYỀN NHỎ GỌN -->
+          <div class="infographic-footer">
+            <span>© 2026 Thánh Đường Văn Học (BaoTang3D)</span>
+            <span>Lead WebGL Architect & Cultural Engine</span>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- JAVASCRIPT ĐIỀU CHỈNH TỰ ĐỘNG THÍCH ỨNG & XUẤT ẢNH PNG 4K -->
+  <script>
+    function fitToScreen() {
+      const root = document.getElementById('infographic-landscape-root');
+      const wrapper = document.querySelector('.canvas-scaler-wrapper');
+      if (!root || !wrapper) return;
+
+      const availWidth = window.innerWidth;
+      const availHeight = window.innerHeight;
+      const scale = Math.min(1, (availWidth - 16) / 1920, (availHeight - 16) / 1080);
+
+      if (scale < 0.999) {
+        root.style.transform = `scale(${scale})`;
+        root.style.transformOrigin = 'top center';
+        wrapper.style.height = `${Math.ceil(1080 * scale)}px`;
+      } else {
+        root.style.transform = 'none';
+        wrapper.style.height = '1080px';
+      }
+    }
+
+    window.addEventListener('resize', fitToScreen);
+    window.addEventListener('DOMContentLoaded', fitToScreen);
+
+    async function downloadInfographicNgangPNG() {
+      const btn = document.getElementById('btn-download-ngang');
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '⏳ Đang kết xuất ảnh 4K...';
+      btn.style.opacity = '0.7';
+      btn.disabled = true;
+
+      const root = document.getElementById('infographic-landscape-root');
+      const prevTransform = root.style.transform;
+      root.style.transform = 'none';
+
+      try {
+        const canvas = await html2canvas(root, {
+          scale: 2, // Độ phân giải 3840x2160px siêu nét (4K)
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: '#040306',
+          logging: false,
+          width: 1920,
+          height: 1080
+        });
+
+        const link = document.createElement('a');
+        link.download = 'infographic-bao-tang-3d-ngang-4k.png';
+        link.href = canvas.toDataURL('image/png', 0.95);
+        link.click();
+      } catch (err) {
+        console.error('Lỗi xuất ảnh infographic ngang:', err);
+        alert('Không thể tạo file ảnh tự động. Bạn có thể sử dụng tính năng Xuất PDF Khổ Ngang.');
+      } finally {
+        root.style.transform = prevTransform;
+        btn.innerHTML = originalText;
+        btn.style.opacity = '1';
+        btn.disabled = false;
+      }
+    }
+  </script>
+
+</body>
+</html>

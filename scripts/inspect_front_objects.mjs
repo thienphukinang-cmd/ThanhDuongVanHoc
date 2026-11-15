@@ -1,0 +1,108 @@
+import { spawn } from 'child_process';
+import path from 'path';
+
+const CDP_PORT = 9225;
+const EDGE_PATH = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
+const TEMP_USER_DATA_DIR = path.resolve(process.env.TEMP || 'C:\\Temp', 'edge_inspect_front_' + Date.now());
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function run() {
+  const edgeProc = spawn(EDGE_PATH, [
+    '--headless=new',
+    `--remote-debugging-port=${CDP_PORT}`,
+    `--user-data-dir=${TEMP_USER_DATA_DIR}`,
+    '--disable-gpu-sandbox',
+    'http://localhost:5173/'
+  ]);
+
+  let wsUrl = null;
+  for (let i = 0; i < 30; i++) {
+    try {
+      const res = await fetch(`http://127.0.0.1:${CDP_PORT}/json/list`);
+      if (res.ok) {
+        const list = await res.json();
+        const page = list.find((item) => item.type === 'page');
+        if (page && page.webSocketDebuggerUrl) {
+          wsUrl = page.webSocketDebuggerUrl;
+          break;
+        }
+      }
+    } catch (_) {}
+    await sleep(500);
+  }
+
+  if (!wsUrl) {
+    edgeProc.kill();
+    process.exit(1);
+  }
+
+  const ws = new WebSocket(wsUrl);
+  await new Promise((resolve) => { ws.onopen = resolve; });
+
+  let id = 1;
+  function send(method, params = {}) {
+    return new Promise((resolve, reject) => {
+      const msgId = id++;
+      const handler = (evt) => {
+        const data = JSON.parse(evt.data);
+        if (data.id === msgId) {
+          ws.removeEventListener('message', handler);
+          if (data.error) reject(data.error);
+          else resolve(data.result);
+        }
+      };
+      ws.addEventListener('message', handler);
+      ws.send(JSON.stringify({ id: msgId, method, params }));
+    });
+  }
+
+  await send('Runtime.enable');
+  await sleep(4000);
+
+  const evalResult = await send('Runtime.evaluate', {
+    expression: `
+      (() => {
+        try {
+          const scene = window.__app?.scene || window.__mainScene || window.__scene;
+          const found = [];
+          scene.traverse(o => {
+            if (o.isMesh || o.isPoints || o.isInstancedMesh) {
+              const p = o.getWorldPosition(new o.position.constructor());
+              // Look around entrance and hall
+              if (p.z >= 0 && p.z <= 30 && Math.abs(p.x) <= 15 && p.y <= 6) {
+                found.push({
+                  name: o.name || '(unnamed)',
+                  parent: o.parent?.name || '',
+                  grandparent: o.parent?.parent?.name || '',
+                  type: o.type,
+                  count: o.count,
+                  visible: o.visible,
+                  materialColor: o.material?.color ? o.material.color.getHexString() : (Array.isArray(o.material) ? 'multi' : 'none'),
+                  pos: { x: +p.x.toFixed(1), y: +p.y.toFixed(1), z: +p.z.toFixed(1) }
+                });
+              }
+            }
+          });
+          return found;
+        } catch (err) {
+          return { error: err.message };
+        }
+      })()
+    `,
+    returnByValue: true
+  });
+
+  console.log('FRONT OBJECTS COUNT:', evalResult?.result?.value?.length);
+  console.log('FRONT OBJECTS SAMPLE:', JSON.stringify(evalResult?.result?.value?.slice(0, 30), null, 2));
+
+  edgeProc.kill();
+  process.exit(0);
+}
+
+run().catch(e => {
+  console.error(e);
+  process.exit(1);
+});

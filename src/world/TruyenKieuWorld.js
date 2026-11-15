@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { loadGlbCached } from '../utils/modelLoaderHelper.js';
 import { mergeGroupMeshesByMaterial, mergeAllMeshesIntoSingleUnifiedMesh, disposeHierarchy } from '../utils/geometryMerger.js';
+import { getRoomCode, localRoomToWorld } from '../config/literatureRegistry.js';
 
 // Tọa độ gốc độc lập của Thế giới Truyện Kiều trong Scene riêng biệt (truyenKieuScene - Multi-Scene Architecture)
 export const KIEU_WORLD_ORIGIN = new THREE.Vector3(0, 0, 0);
@@ -177,20 +178,21 @@ function createPoeticSignboard(title, poemLine1, poemLine2, subTitle = '— Th�
   ctx.strokeRect(12, 12, 488, 232);
 
   ctx.fillStyle = '#ffd97d';
-  ctx.font = 'bold 22px "Georgia", serif';
+  ctx.font = 'bold 22px "Times New Roman", "Segoe UI", serif';
   ctx.textAlign = 'center';
-  ctx.fillText(title, 256, 65);
+  ctx.fillText(title, 256, 65, 472);
 
   ctx.fillStyle = '#fff5e4';
-  ctx.font = 'italic 17px "Georgia", serif';
-  ctx.fillText(`"${poemLine1}"`, 256, 128);
-  ctx.fillText(`"${poemLine2}"`, 256, 163);
+  ctx.font = 'italic 17px "Times New Roman", "Segoe UI", serif';
+  ctx.fillText(`"${poemLine1}"`, 256, 128, 472);
+  ctx.fillText(`"${poemLine2}"`, 256, 163, 472);
 
   ctx.fillStyle = '#c99738';
-  ctx.font = '12px sans-serif';
-  ctx.fillText(subTitle, 256, 212);
+  ctx.font = '12px "Segoe UI", sans-serif';
+  ctx.fillText(subTitle, 256, 212, 472);
 
   const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
   tex.generateMipmaps = false;
   tex.minFilter = THREE.LinearFilter;
   const mesh = new THREE.Mesh(
@@ -246,6 +248,7 @@ function createPortalWaypoint(targetZoneId, title, subText) {
   ctx.fillText('[CLICK CHUỘT ĐỂ ĐẾN]', 256, 420);
 
   const signTex = new THREE.CanvasTexture(canvas);
+  signTex.colorSpace = THREE.SRGBColorSpace;
   signTex.generateMipmaps = false;
   signTex.minFilter = THREE.LinearFilter;
   const signMesh = new THREE.Mesh(
@@ -276,6 +279,7 @@ function createPortalWaypoint(targetZoneId, title, subText) {
   rctx.stroke();
 
   const runeTex = new THREE.CanvasTexture(runeCanvas);
+  runeTex.colorSpace = THREE.SRGBColorSpace;
   runeTex.generateMipmaps = false;
   runeTex.minFilter = THREE.LinearFilter;
   const runeMesh = new THREE.Mesh(
@@ -354,13 +358,14 @@ function createReturnMuseumPortalStele() {
 
   ctx.fillStyle = '#b0e0e6';
   ctx.font = 'italic 26px sans-serif';
-  ctx.fillText('Trở về Phòng 01 Nguyễn Du', 256, 310);
+  ctx.fillText(`Trở về Phòng ${getRoomCode('truyen_kieu')} Nguyễn Du`, 256, 310);
 
   ctx.fillStyle = '#5effa5';
   ctx.font = 'bold 26px sans-serif';
   ctx.fillText('[CLICK ĐỂ QUAY VỀ]', 256, 400);
 
   const mirrorTex = new THREE.CanvasTexture(canvas);
+  mirrorTex.colorSpace = THREE.SRGBColorSpace;
   mirrorTex.generateMipmaps = false;
   mirrorTex.minFilter = THREE.LinearFilter;
   const mirrorMesh = new THREE.Mesh(
@@ -390,10 +395,12 @@ function createReturnMuseumPortalStele() {
   rctx.beginPath();
   rctx.arc(128, 128, 80, 0, Math.PI * 2);
   rctx.stroke();
+  const returnRuneTex = new THREE.CanvasTexture(runeCanvas);
+  returnRuneTex.colorSpace = THREE.SRGBColorSpace;
   const runeMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(2.4, 2.4),
     new THREE.MeshBasicMaterial({
-      map: new THREE.CanvasTexture(runeCanvas),
+      map: returnRuneTex,
       transparent: true,
       opacity: 0.85,
       depthWrite: false,
@@ -449,8 +456,10 @@ export class TruyenKieuStoryWorld {
     this.worldGroup.position.copy(KIEU_WORLD_ORIGIN);
     this.worldGroup.visible = true; // Luôn visible bên trong truyenKieuScene, việc ẩn hiện do renderer.render(activeScene) quản lý!
 
-    this.savedPos = new THREE.Vector3(-44.5, 11.8, 19.0);
-    this.savedTarget = new THREE.Vector3(-48.0, 11.2, 19.0);
+    const kieuBookWorld = localRoomToWorld('truyen_kieu', 0, 1.20, 0.6);
+    const kieuStandWorld = localRoomToWorld('truyen_kieu', 0, 1.80, 4.1);
+    this.savedPos = new THREE.Vector3(kieuStandWorld.x, kieuStandWorld.y, kieuStandWorld.z);
+    this.savedTarget = new THREE.Vector3(kieuBookWorld.x, kieuBookWorld.y, kieuBookWorld.z);
     this.savedFog = null;
     this.savedBackground = null;
     this.savedExposure = 1.0;
@@ -698,12 +707,13 @@ export class TruyenKieuStoryWorld {
     group.add(tombGroup);
 
     // 5. CÂY CỔ THỤ HOA LÊ & ĐÀO HỒNG (5 Cây cách điệu Low-poly - Merged theo vật liệu: 3 Draw Calls)
+    // Đặt ngoài vòng đài quan sát & phía sau các bảng hologram để không che khuất BẢNG 01–04
     const treePositions = [
-      { x: -9.5, z: -8.0, mat: ThanhMinhMaterials.pearBlossom, s: 1.2 },
-      { x: -11.0, z: 9.0, mat: ThanhMinhMaterials.peachBlossom, s: 1.1 },
-      { x: 10.5, z: -10.0, mat: ThanhMinhMaterials.peachBlossom, s: 1.3 },
-      { x: 12.0, z: 7.5, mat: ThanhMinhMaterials.pearBlossom, s: 1.15 },
-      { x: -14.0, z: 0.5, mat: ThanhMinhMaterials.pearBlossom, s: 1.0 }
+      { x: -21.5, z: -14.5, mat: ThanhMinhMaterials.pearBlossom, s: 1.2 },
+      { x: -15.5, z: 13.5, mat: ThanhMinhMaterials.peachBlossom, s: 1.1 },
+      { x: 21.5, z: -14.5, mat: ThanhMinhMaterials.peachBlossom, s: 1.3 },
+      { x: 16.5, z: 13.0, mat: ThanhMinhMaterials.pearBlossom, s: 1.15 },
+      { x: -23.0, z: 4.5, mat: ThanhMinhMaterials.pearBlossom, s: 1.0 }
     ];
 
     const trunkGeo = new THREE.CylinderGeometry(0.35, 0.65, 4.2, 8);
@@ -996,6 +1006,7 @@ export class TruyenKieuStoryWorld {
 
       const tex = cv ? new THREE.CanvasTexture(cv) : null;
       if (tex) {
+        tex.colorSpace = THREE.SRGBColorSpace;
         tex.generateMipmaps = false;
         tex.minFilter = THREE.LinearFilter;
         tex.magFilter = THREE.LinearFilter;
@@ -1050,6 +1061,7 @@ export class TruyenKieuStoryWorld {
         ctx.fillText(`"${poem2}"`, 256, 122);
 
         const plateTex = new THREE.CanvasTexture(cv);
+        plateTex.colorSpace = THREE.SRGBColorSpace;
         const plate = new THREE.Mesh(
           new THREE.PlaneGeometry(2.4, 0.8),
           new THREE.MeshBasicMaterial({ map: plateTex, transparent: true, side: THREE.DoubleSide, fog: false })
@@ -1464,7 +1476,8 @@ export class TruyenKieuStoryWorld {
       tctx.fill();
     }
     const tigerTex = new THREE.CanvasTexture(tigerCanvas);
-  tigerTex.generateMipmaps = false;
+    tigerTex.colorSpace = THREE.SRGBColorSpace;
+    tigerTex.generateMipmaps = false;
   tigerTex.minFilter = THREE.LinearFilter;
     const tigerMat = new THREE.MeshLambertMaterial({ map: tigerTex });
     const tigerCouch = new THREE.Mesh(couchGeo, tigerMat);
@@ -1571,6 +1584,7 @@ export class TruyenKieuStoryWorld {
           fctx.textAlign = 'center';
           fctx.fillText(flagText, 256, 235);
           const ftex = new THREE.CanvasTexture(fcanvas);
+          ftex.colorSpace = THREE.SRGBColorSpace;
           ftex.generateMipmaps = false;
           ftex.minFilter = THREE.LinearFilter;
           flagMat = attachFlagWaveShader(new THREE.MeshLambertMaterial({ map: ftex, side: THREE.DoubleSide }), 'tex');
@@ -2069,19 +2083,22 @@ export class TruyenKieuStoryWorld {
       this.renderer.toneMappingExposure = 1.30;
     }
 
-    // Vị trí tâm cuốn sách mở ở Phòng 01 trong world space
-    const bookCenter = new THREE.Vector3(-48.0, 11.20, 19.0);
+    // Vị trí tâm cuốn sách mở ở Phòng Truyện Kiều trong world space
+    const bookWorld = localRoomToWorld('truyen_kieu', 0, 1.20, 0.6);
+    const diveWorld = localRoomToWorld('truyen_kieu', 0, 1.25, 0.88);
+    const standWorld = localRoomToWorld('truyen_kieu', 0, 1.80, 4.1);
+    const bookCenter = new THREE.Vector3(bookWorld.x, bookWorld.y, bookWorld.z);
     // Điểm zoom-in sát mặt sách: cách tâm sách chỉ 0.28m
-    const bookDiveTarget = new THREE.Vector3(-47.72, 11.25, 19.0);
+    const bookDiveTarget = new THREE.Vector3(diveWorld.x, diveWorld.y, diveWorld.z);
 
     // Khóa điều khiển người chơi trong khi camera dive
     if (document.exitPointerLock) document.exitPointerLock();
     if (this.cameraManager?.controls) this.cameraManager.controls.enabled = false;
     if (this.cameraController) this.cameraController.isEnabled = false;
 
-    // Nếu người chơi đang đứng xa Phòng 01 (> 12m), dịch chuyển nhanh về góc nhìn trước bục sách
+    // Nếu người chơi đang đứng xa Phòng (> 12m), dịch chuyển nhanh về góc nhìn trước bục sách
     if (this.camera.position.distanceTo(bookCenter) > 12.0) {
-      this.camera.position.set(-44.5, 11.8, 19.0);
+      this.camera.position.set(standWorld.x, standWorld.y, standWorld.z);
       this.camera.lookAt(bookCenter);
     }
 
@@ -2179,12 +2196,15 @@ export class TruyenKieuStoryWorld {
     this.showWarpOverlay(
       'active',
       '🏛️ ĐANG TRỞ VỀ BẢO TÀNG VĂN HỌC... 🏛️',
-      'PHÒNG TRƯNG BÀY 01 • BỤC SÁCH NGUYỄN DU'
+      `PHÒNG TRƯNG BÀY ${getRoomCode('truyen_kieu')} • BỤC SÁCH NGUYỄN DU`
     );
 
-    const bookCenter = new THREE.Vector3(-48.0, 11.45, 19.40);
-    const bookReturnNear = new THREE.Vector3(-48.0, 11.70, 22.80);
-    const idealMuseumView = new THREE.Vector3(-48.0, 11.70, 22.80);
+    const bookWorld = localRoomToWorld('truyen_kieu', 0, 1.45, 0.6);
+    const nearWorld = localRoomToWorld('truyen_kieu', 0, 1.55, 1.5);
+    const viewWorld = localRoomToWorld('truyen_kieu', 0, 1.70, 4.4);
+    const bookCenter = new THREE.Vector3(bookWorld.x, bookWorld.y, bookWorld.z);
+    const bookReturnNear = new THREE.Vector3(nearWorld.x, nearWorld.y, nearWorld.z);
+    const idealMuseumView = new THREE.Vector3(viewWorld.x, viewWorld.y, viewWorld.z);
 
     setTimeout(() => {
       this.isInsideWorld = false;

@@ -1,0 +1,16 @@
+yarn-error.log
+.yarn/*
+!.yarn/cache
+!.yarn/patches
+!.yarn/releases
+!.yarn/plugins
+!.vscode
+
+.DS_Store
+node_modules/
+dist/
+packages/nipplejs/e2e/public/
+.claude/
+.superpowers/
+.astro/
+.vitrine/

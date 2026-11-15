@@ -277,9 +277,10 @@ export async function overhaulExhibitionRoom(roomGroup, {
     c.name && (c.name.includes('Traditional_Archway') || c.name.includes('Mai_Dao'))
   );
   if (!hasArchway) {
+    const targetArchWidth = themeKey === 'anDuongVuong' ? 7.6 : 6.2;
     try {
       const blenderArch = await loadCachedGlbModel('/model/heritage/mai_dao_archway.glb', {
-        targetSpan: 6.2,
+        targetSpan: targetArchWidth,
         fitAxis: 'y'
       });
       blenderArch.position.set(0, 0, 12.0);
@@ -289,7 +290,7 @@ export async function overhaulExhibitionRoom(roomGroup, {
         roomTitle,
         leftCouplet,
         rightCouplet,
-        archWidth: 6.2,
+        archWidth: targetArchWidth,
         archHeight: 4.8
       });
       proceduralArch.position.set(0, 0, 12.0);
@@ -297,34 +298,35 @@ export async function overhaulExhibitionRoom(roomGroup, {
     }
   }
 
-  // Nạp Án Thư Gỗ Cổ (ancient_wooden_table.glb) & Lục Bình Đồng Cổ (antique_vase.glb) từ Web vào phòng
-  try {
-    const ancientTable = await loadCachedGlbModel('/model/web/ancient_wooden_table.glb', {
-      targetSpan: 2.8,
-      fitAxis: 'y'
-    });
-    ancientTable.position.set(0, 0, -8.6);
-    ancientTable.userData.ignoreRaycaster = true;
-    overhaulContainer.add(ancientTable);
-  } catch {}
-
-  try {
-    const antiqueVase = await loadCachedGlbModel('/model/web/antique_vase.glb', {
-      targetSpan: 1.75,
-      fitAxis: 'y'
-    });
-    const instancedVases = createInstancedBranchGroup(
-      antiqueVase,
-      [
-        { x: -6.5, y: 0, z: -8.2 },
-        { x: 6.5, y: 0, z: -8.2 }
-      ],
-      'Instanced_Room_Antique_Vases',
-      new THREE.Vector3(0, 0.9, -8.2),
-      8.0
-    );
-    overhaulContainer.add(instancedVases);
-  } catch {}
+  // Không đặt án thư tại (0, 0, -8.6) để tránh đè lên bệ tượng trung tâm (0, 0, -8.5) ở An Dương Vương / Vợ Nhặt
+  // hoặc chen sau cặp bệ đôi (Z=-6.2/-6.4) dưới Trăng Thề ở Truyện Kiều / Sơn Tinh - Thủy Tinh.
+  // Chỉ bổ sung cặp lục bình đồng cổ ở các góc hậu cảnh thoáng đãng theo kích thước từng phòng.
+  const vaseXByTheme = {
+    anDuongVuong: 11.5,
+    truyenKieu: 8.2,
+    sonTinhThuyTinh: 8.2,
+    voNhat: 6.5
+  };
+  const vaseOffsetX = vaseXByTheme[themeKey];
+  if (vaseOffsetX) {
+    try {
+      const antiqueVase = await loadCachedGlbModel('/model/web/antique_vase.glb', {
+        targetSpan: 1.75,
+        fitAxis: 'y'
+      });
+      const instancedVases = createInstancedBranchGroup(
+        antiqueVase,
+        [
+          { x: -vaseOffsetX, y: 0, z: -9.5 },
+          { x: vaseOffsetX, y: 0, z: -9.5 }
+        ],
+        'Instanced_Room_Antique_Vases',
+        new THREE.Vector3(0, 0.9, -9.5),
+        vaseOffsetX + 2.0
+      );
+      overhaulContainer.add(instancedVases);
+    } catch {}
+  }
 
   targetInterior.add(overhaulContainer);
 
@@ -456,18 +458,6 @@ export class MuseumTotalOverhaulEngine {
         stationTitle: 'Sính Lễ Tản Viên Sơn',
         stationSubtitle: 'Voi chín ngà, gà chín cựa, ngựa chín hồng mao',
         stationPos: new THREE.Vector3(4.8, 0, -3.2)
-      },
-      {
-        roomGroup: app.anDuongVuongRoom,
-        themeKey: 'anDuongVuong',
-        roomTitle: 'ÂU LẠC HOÀNG THÀNH',
-        leftCouplet: 'Nỏ thần một phát tan vạn giặc',
-        rightCouplet: 'Móng rùa ngàn thu giữ giang sơn',
-        accentColor: 0x22c55e,
-        loreKey: 'adv_noThan',
-        stationTitle: 'Linh Quy Kim Trảo',
-        stationSubtitle: 'Bảo vật giữ nước của vua An Dương Vương',
-        stationPos: new THREE.Vector3(-4.8, 0, -3.2)
       },
       {
         roomGroup: app.voNhatRoom,

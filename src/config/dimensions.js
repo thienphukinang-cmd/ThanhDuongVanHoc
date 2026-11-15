@@ -14,8 +14,8 @@ export const GOLDEN_RATIO = 1.61803398875;
 export const DIMENSIONS = {
   // Sảnh chính (Grand Atrium) - Monumental Scale
   atrium: {
-    width: 88,             // 88 meters total building core width
-    depth: 88,             // 88 meters total building core depth
+    width: 125,            // 125 meters total building core width
+    depth: 125,            // 125 meters total building core depth
     voidWidth: 44,         // Central open lightwell void width
     voidDepth: 44,         // Central open lightwell void depth
     height: 38.2,          // Golden ratio height to skylight apex
@@ -57,22 +57,25 @@ export const DIMENSIONS = {
 
   // Quy hoạch 5 Phòng trên mỗi tầng (Total = 15 phòng)
   // Bố trí dọc theo hành lang các cánh Tây, Bắc, Đông bao quanh sảnh chính
+  // Khớp 100% hình học thực tế trong proceduralArchitecture.js & museumHitboxSystem.js
   roomSpecs: [
-    // Cánh Tây (2 phòng)
-    { id: 'west_south', name: 'Phòng Tây-Nam', center: [-46, 0, 16], size: [24, 28], archFacing: 'east', archPos: [-34, 16] },
-    { id: 'west_north', name: 'Phòng Tây-Bắc', center: [-46, 0, -16], size: [24, 28], archFacing: 'east', archPos: [-34, -16] },
-    // Cánh Bắc (1 đại gian trung tâm)
-    { id: 'north_center', name: 'Phòng Bắc - Đại Gian', center: [0, 0, -46], size: [40, 24], archFacing: 'south', archPos: [0, -34] },
-    // Cánh Đông (2 phòng)
-    { id: 'east_north', name: 'Phòng Đông-Bắc', center: [46, 0, -16], size: [24, 28], archFacing: 'west', archPos: [34, -16] },
-    { id: 'east_south', name: 'Phòng Đông-Nam', center: [46, 0, 16], size: [24, 28], archFacing: 'west', archPos: [34, 16] }
+    // Cánh Tây (2 phòng, 28m sâu theo trục X x 26m rộng theo trục Z)
+    { id: 'west_south', name: 'Phòng Tây-Nam', center: [-48, 0, 19], size: [28, 26], archFacing: 'east', archPos: [-34, 19], rotY: Math.PI * 0.5, doorwayWidth: 6.2 },
+    { id: 'west_north', name: 'Phòng Tây-Bắc', center: [-48, 0, -19], size: [28, 26], archFacing: 'east', archPos: [-34, -19], rotY: Math.PI * 0.5, doorwayWidth: 6.2 },
+    // Cánh Bắc (1 đại gian trung tâm, 44m rộng theo trục X x 28m sâu theo trục Z)
+    { id: 'north_center', name: 'Phòng Bắc - Đại Gian', center: [0, 0, -48], size: [44, 28], archFacing: 'south', archPos: [0, -34], rotY: 0.0, doorwayWidth: 8.0 },
+    // Cánh Đông (2 phòng, 28m sâu theo trục X x 26m rộng theo trục Z)
+    { id: 'east_north', name: 'Phòng Đông-Bắc', center: [48, 0, -19], size: [28, 26], archFacing: 'west', archPos: [34, -19], rotY: -Math.PI * 0.5, doorwayWidth: 6.2 },
+    { id: 'east_south', name: 'Phòng Đông-Nam', center: [48, 0, 19], size: [28, 26], archFacing: 'west', archPos: [34, 19], rotY: -Math.PI * 0.5, doorwayWidth: 6.2 }
   ],
 
   // Cửa vòm lớn (Monumental Arch Doorways)
   archDoorway: {
-    width: 6.5,
-    height: 7.8,
-    archRadius: 3.25,
+    width: 6.2,
+    northWidth: 8.0,
+    height: 7.5,
+    archRadius: 3.1,
+    northArchRadius: 4.0,
     wallThickness: 0.6,
   },
 
@@ -105,3 +108,25 @@ export const DIMENSIONS = {
     handrailHeight: 1.05,
   }
 };
+
+/**
+ * Nguồn chân lý duy nhất cho tâm 5 gian hiên trên mỗi tầng, suy xuất trực tiếp từ DIMENSIONS.roomSpecs
+ */
+export const ALCOVE_CENTERS = DIMENSIONS.roomSpecs.map((spec) => {
+  const isNorthHall = spec.id === 'north_center';
+  return {
+    id: spec.id,
+    x: spec.center[0],
+    z: spec.center[2],
+    name: spec.name.replace(/^Phòng\s+/, ''),
+    rotY: spec.rotY,
+    archPos: spec.archPos,
+    archFacing: spec.archFacing,
+    worldSizeX: spec.size[0],
+    worldSizeZ: spec.size[1],
+    localWidth: isNorthHall ? spec.size[0] : spec.size[1],
+    localDepth: isNorthHall ? spec.size[1] : spec.size[0],
+    doorwayWidth: spec.doorwayWidth,
+    isNorthHall
+  };
+});

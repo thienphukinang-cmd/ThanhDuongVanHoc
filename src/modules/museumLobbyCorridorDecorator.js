@@ -2,6 +2,13 @@ import * as THREE from 'three';
 import { loadGlbCached } from '../utils/modelLoaderHelper.js';
 import { upgradeRoomWallArchitecture } from './museumWallArchitectureSystem.js';
 import { replaceAllMuseumCarpetsWithTimelinePattern, applyTimelineCarpetToMesh } from './museumCarpetReplacer.js';
+import {
+  createLobbyCornersLotusPonds,
+  createCorridorLiteraryStream
+} from './museumLobbyVFXAndArtifacts.js';
+import {
+  createMuseumSpaceEnrichmentSystem
+} from './museumSpaceEnrichmentSystem.js';
 
 const _lobbyBoxScratch = new THREE.Box3();
 const _lobbyVecScratch = new THREE.Vector3();
@@ -1018,6 +1025,33 @@ export function decorateMuseumGrandLobbyAndCorridors(container, {
   // 9. Nâng Cấp Kiến Trúc Tường, Phù Điêu Mặt Nguyệt Trống Đồng & Vách Bình Phong Hắt Sáng
   upgradeRoomWallArchitecture(lobbyGroup, { themeKey: 'lobby', isLobby: true });
 
+  // 10. TIỂU CẢNH 2 HỒ SEN NON BỘ GÓC SẢNH CHÍNH (TÂY-BẮC & ĐÔNG-BẮC)
+  const lotusPonds = createLobbyCornersLotusPonds({
+    hitboxManager: typeof window !== 'undefined' ? window.__museumHitboxManager : null,
+    audioManager: typeof window !== 'undefined' ? window.__audioManager : null
+  });
+  lobbyGroup.add(lotusPonds);
+
+  // 11. HÀNH LANG "DÒNG CHẢY VĂN HỌC": CỘT GỖ LIM, ĐÈN LỒNG, TRANH SƠN MÀI, 5 TỦ KÍNH BẢO VẬT & DÒNG SÔNG CHỮ
+  const corridorStream = createCorridorLiteraryStream({
+    hitboxManager: typeof window !== 'undefined' ? window.__museumHitboxManager : null,
+    loreGuide: typeof window !== 'undefined' ? window.__loreGuide : null
+  });
+  lobbyGroup.add(corridorStream);
+
+  // 12. HỆ THỐNG ĐẠI QUY HOẠCH & LẤP ĐẦY KHÔNG GIAN BẢO TÀNG (SPACE ENRICHMENT SYSTEM)
+  const spaceEnrichmentRes = createMuseumSpaceEnrichmentSystem({
+    scene: lobbyGroup,
+    hitboxManager: typeof window !== 'undefined' ? window.__museumHitboxManager : null,
+    loreGuide: typeof window !== 'undefined' ? window.__loreGuide : null,
+    audioManager: typeof window !== 'undefined' ? window.__audioManager : null
+  });
+  const spaceEnrichment = spaceEnrichmentRes?.rootGroup || spaceEnrichmentRes?.group || spaceEnrichmentRes;
+  if (spaceEnrichment && spaceEnrichment.isObject3D) {
+    spaceEnrichment.name = 'Museum_Space_Enrichment_Root';
+    lobbyGroup.add(spaceEnrichment);
+  }
+
   if (container) {
     container.add(lobbyGroup);
   }
@@ -1040,11 +1074,27 @@ export function decorateMuseumGrandLobbyAndCorridors(container, {
       lobbyGroup.userData.chandelier.rotation.y = timeSec * 0.12;
       lobbyGroup.userData.chandelier.rotation.z = Math.sin(timeSec * 1.2) * 0.025;
     }
+
+    // 4. Cập nhật hồ sen & hành lang dòng chảy văn học
+    lotusPonds?.userData?.update?.(timeSec);
+    corridorStream?.userData?.update?.(timeSec);
+
+    // 5. Cập nhật hệ thống lấp đầy không gian (Living VFX, đom đóm, khói trầm, đèn xoay)
+    spaceEnrichment?.userData?.update?.(timeSec);
   };
+
+  const registerHitboxes = (hb) => {
+    lotusPonds?.userData?.registerHitboxes?.(hb);
+    corridorStream?.userData?.registerHitboxes?.(hb);
+    spaceEnrichment?.userData?.registerHitboxes?.(hb);
+  };
+
+  lobbyGroup.userData.registerHitboxes = registerHitboxes;
 
   return {
     group: lobbyGroup,
     lobbyGroup,
-    updateLobby
+    updateLobby,
+    registerHitboxes
   };
 }

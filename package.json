@@ -11,9 +11,16 @@
     "fetch-lobby": "node scripts/fetchLobbyModels.mjs"
   },
   "dependencies": {
-    "three": "^0.186.1"
+    "three": "^0.186.1",
+    "three-mesh-bvh": "^0.9.18",
+    "three-stdlib": "^2.36.1"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.5.1",
+    "@gltf-transform/extensions": "^4.5.1",
+    "@gltf-transform/functions": "^4.5.1",
+    "draco3dgltf": "^1.5.9",
+    "sharp": "^0.35.5",
     "vite": "^8.3.5"
   }
 }

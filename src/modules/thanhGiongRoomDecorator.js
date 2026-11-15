@@ -2,6 +2,11 @@ import * as THREE from 'three';
 import { loadGlbCached, sanitizeGeometryBuffers } from '../utils/modelLoaderHelper.js';
 import { mergeGroupMeshesByMaterial } from '../utils/geometryMerger.js';
 import { createThanhGiongStoryRealm } from './thanhGiongStoryRealm.js';
+import {
+  createAutoSynthesizedRoomPlaque,
+  registerPlaqueWithSystems,
+  syncPlaqueWorldMetadata
+} from './roomInfoPlaque.js';
 
 /**
  * ============================================================================
@@ -255,24 +260,67 @@ function createBronzePlaqueTexture(title, subtitle, bodyLines = [], { width = 51
   ctx.lineWidth = 1.5;
   ctx.strokeRect(14, 14, width - 28, height - 28);
 
+  const fontStack = '"Times New Roman", "Segoe UI", Arial, serif';
+  const maxW = width - 48;
+  const fitFont = (text, baseSize, minSize, stylePrefix = '') => {
+    let sz = baseSize;
+    while (sz > minSize) {
+      ctx.font = `${stylePrefix}${sz}px ${fontStack}`;
+      if (ctx.measureText(text).width <= maxW) break;
+      sz -= 0.5;
+    }
+    ctx.font = `${stylePrefix}${sz}px ${fontStack}`;
+    return sz;
+  };
+  const wrapText = (text, maxLineW) => {
+    const words = String(text || '').split(/\s+/).filter(Boolean);
+    if (words.length === 0) return [];
+    const lines = [];
+    let current = words[0];
+    for (let i = 1; i < words.length; i++) {
+      const next = `${current} ${words[i]}`;
+      if (ctx.measureText(next).width <= maxLineW) {
+        current = next;
+      } else {
+        lines.push(current);
+        current = words[i];
+      }
+    }
+    lines.push(current);
+    return lines;
+  };
+
   ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
   ctx.fillStyle = '#fde68a';
-  ctx.font = `bold ${bodyLines.length > 0 ? 22 : 24}px "Times New Roman", serif`;
-  ctx.fillText(title, width * 0.5, bodyLines.length > 0 ? 44 : height * 0.44);
+  fitFont(title, bodyLines.length > 0 ? 22 : 24, 14, 'bold ');
+  ctx.fillText(title, width * 0.5, bodyLines.length > 0 ? 38 : (subtitle ? height * 0.38 : height * 0.5), maxW);
 
   if (subtitle) {
     ctx.fillStyle = '#f5d08a';
-    ctx.font = `italic ${bodyLines.length > 0 ? 15 : 16}px Georgia, serif`;
-    ctx.fillText(subtitle, width * 0.5, bodyLines.length > 0 ? 72 : height * 0.72);
+    fitFont(subtitle, bodyLines.length > 0 ? 15 : 16, 11.5, 'italic ');
+    ctx.fillText(subtitle, width * 0.5, bodyLines.length > 0 ? 66 : height * 0.68, maxW);
   }
 
   if (bodyLines.length > 0) {
     ctx.fillStyle = '#fef3c7';
-    ctx.font = '15px Georgia, serif';
-    const startY = 108;
-    const step = Math.min(28, (height - 122) / Math.max(1, bodyLines.length));
-    bodyLines.forEach((line, idx) => {
-      ctx.fillText(line, width * 0.5, startY + idx * step);
+    const startY = 102;
+    const availH = Math.max(40, height - 22 - startY);
+    let bodyFontSize = 14.5;
+    let wrappedLines = [];
+    while (bodyFontSize >= 11.5) {
+      ctx.font = `${bodyFontSize}px ${fontStack}`;
+      wrappedLines = [];
+      bodyLines.forEach((line) => {
+        wrappedLines.push(...wrapText(line, maxW));
+      });
+      if (wrappedLines.length * (bodyFontSize + 5) <= availH) break;
+      bodyFontSize -= 0.5;
+    }
+    ctx.font = `${bodyFontSize}px ${fontStack}`;
+    const step = Math.min(26, availH / Math.max(1, wrappedLines.length));
+    wrappedLines.forEach((line, idx) => {
+      ctx.fillText(line, width * 0.5, startY + idx * step, maxW);
     });
   }
 
@@ -570,8 +618,11 @@ export function buildThanhGiongExhibition({
 
   const interiorGroup = new THREE.Group();
   interiorGroup.name = 'ThanhGiong_Interior_Group';
-  // Cánh Tây (+X hướng ra đại sảnh): xoay +PI/2 để local +Z hướng ra cửa vòm X = -34.0
-  interiorGroup.rotation.y = roomCenter.x < 0 ? Math.PI * 0.5 : -Math.PI * 0.5;
+  // Đồng bộ quy ước xoay 4 hướng bảo tàng: local +Z luôn hướng ra cửa vòm đại sảnh
+  interiorGroup.rotation.y =
+    Math.abs(roomCenter.x) >= Math.abs(roomCenter.z)
+      ? (roomCenter.x > 0 ? -Math.PI / 2 : Math.PI / 2)
+      : (roomCenter.z < 0 ? 0 : Math.PI);
   roomGroup.add(interiorGroup);
 
   // Vật liệu PBR Đông Sơn chuẩn hóa (FrontSide, không ShadowMap nặng)
@@ -1510,6 +1561,35 @@ export function buildThanhGiongExhibition({
   });
 
   // =========================================================================
+  // 7B. BẢNG THÔNG TIN DI SẢN 3D PHÒNG THÁNH GIÓNG (ĐÁ RÊU PHONG PHÙ ĐỔNG)
+  // Đặt tại góc tiền sảnh trái (-4.8, 0, 8.8), tách biệt với bệ làng Gióng và lò rèn
+  // =========================================================================
+  const thanhGiongInfoPlaque = createAutoSynthesizedRoomPlaque('thanh_giong', {
+    styleTheme: 'da_reu_phong',
+    mountMode: 'pedestal',
+    includeSpotLight: true,
+    position: new THREE.Vector3(-4.8, 0, 8.8),
+    rotationY: 0.32,
+    parent: interiorGroup
+  });
+  if (thanhGiongInfoPlaque) {
+    thanhGiongInfoPlaque.name = 'ThanhGiong_InfoPlaque_3D';
+    thanhGiongInfoPlaque.userData.roomId = 'thanh_giong';
+    syncPlaqueWorldMetadata(thanhGiongInfoPlaque);
+
+    const plaqueColliderProxy = new THREE.Mesh(
+      new THREE.BoxGeometry(1.48, 2.0, 0.70),
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    plaqueColliderProxy.name = 'ThanhGiong_InfoPlaque_Collider';
+    plaqueColliderProxy.position.set(-4.8, 1.0, 8.8);
+    plaqueColliderProxy.rotation.y = 0.32;
+    plaqueColliderProxy.userData.ignoreRaycaster = true;
+    interiorGroup.add(plaqueColliderProxy);
+    solidObstacleObjects.push(plaqueColliderProxy);
+  }
+
+  // =========================================================================
   // 8. ĐĂNG KÝ HITBOX, LORE GUIDE, AUDIO & CẬP NHẬT 60+ FPS
   // =========================================================================
   function registerHitboxes(hitboxManager) {
@@ -1534,6 +1614,28 @@ export function buildThanhGiongExhibition({
       const holder = loadedArtifacts.get(cfg.key);
       if (holder) bindExhibitInteractions(cfg, holder);
     });
+
+    if (thanhGiongInfoPlaque) {
+      registerPlaqueWithSystems(thanhGiongInfoPlaque, {
+        hitboxManager: hbm,
+        loreGuide: wiredManagers.loreGuide || (typeof window !== 'undefined' ? window.__loreGuide : null),
+        realm: 'museum',
+        onFocusCamera: () => {
+          const camMgr = wiredManagers.cameraManager || (typeof window !== 'undefined' ? window.__museumCameraManager : null);
+          if (!camMgr) return;
+          if (typeof camMgr.smoothZoomToFocus === 'function') {
+            camMgr.smoothZoomToFocus(thanhGiongInfoPlaque, { distance: 2.25 });
+          } else if (typeof camMgr.setView === 'function') {
+            const meta = syncPlaqueWorldMetadata(thanhGiongInfoPlaque);
+            if (!meta) return;
+            const target = meta.focusPoint.clone();
+            const position = target.clone().addScaledVector(meta.focusNormal, 2.25);
+            position.y = Math.max(target.y - 0.04, position.y);
+            camMgr.setView({ position, target }, true);
+          }
+        }
+      });
+    }
   }
 
   function wireInteractiveSystems({ hitboxManager, loreGuide, spatialAudio, cameraManager: camMgr } = {}) {
@@ -1547,13 +1649,17 @@ export function buildThanhGiongExhibition({
   const ROOM_PROXIMITY_SQ = 42 * 42;
   const isInsideThanhGiongRoom = (pos) => {
     if (!pos) return false;
+    const dx = pos.x - roomCenter.x;
+    const dz = pos.z - roomCenter.z;
+    const cosY = Math.cos(interiorGroup.rotation.y);
+    const sinY = Math.sin(interiorGroup.rotation.y);
+    const lx = dx * cosY - dz * sinY;
+    const lz = dx * sinY + dz * cosY;
     return (
-      pos.x >= -62.5 &&
-      pos.x <= -34.0 &&
-      pos.y >= -0.5 &&
-      pos.y <= 9.2 &&
-      pos.z >= 5.2 &&
-      pos.z <= 32.8
+      Math.abs(lx) <= ROOM_W * 0.5 + 1.1 &&
+      Math.abs(lz) <= ROOM_D * 0.5 + 0.6 &&
+      pos.y >= roomCenter.y - 0.5 &&
+      pos.y <= roomCenter.y + ROOM_H + 0.8
     );
   };
 
@@ -1657,6 +1763,15 @@ export function buildThanhGiongExhibition({
     const loreTarget = wiredManagers.loreGuide || (typeof window !== 'undefined' ? window.__loreGuide : null);
     const hbm = wiredManagers.hitboxManager || (typeof window !== 'undefined' ? window.__museumHitboxManager : null);
     if (hbm) {
+      const plaqueProxy = thanhGiongInfoPlaque?.userData?.plaqueProxy;
+      if (plaqueProxy) {
+        const pIdx = hbm.clickProxies?.indexOf(plaqueProxy) ?? -1;
+        if (pIdx !== -1) hbm.clickProxies.splice(pIdx, 1);
+        if (loreTarget?.interactiveArtifacts) {
+          const lIdx = loreTarget.interactiveArtifacts.indexOf(plaqueProxy);
+          if (lIdx !== -1) loreTarget.interactiveArtifacts.splice(lIdx, 1);
+        }
+      }
       registeredProxies.forEach((proxy) => {
         const idx = hbm.clickProxies?.indexOf(proxy) ?? -1;
         if (idx !== -1) hbm.clickProxies.splice(idx, 1);
@@ -1686,7 +1801,7 @@ export function buildThanhGiongExhibition({
 
     const matSet = new Set();
     roomGroup.traverse((obj) => {
-      if (obj.userData?.isSharedCachedAsset) return;
+      if (obj.userData?.isSharedCachedAsset || obj.userData?.isPlaqueProxy) return;
       if (obj.geometry) obj.geometry.dispose();
       if (obj.material) {
         const mats = Array.isArray(obj.material) ? obj.material : [obj.material];

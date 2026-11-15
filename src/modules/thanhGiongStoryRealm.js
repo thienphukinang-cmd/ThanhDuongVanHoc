@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { registerInteractiveBook } from './PortalInteraction.js';
 import { loadGlbCached, sanitizeGeometryBuffers } from '../utils/modelLoaderHelper.js';
 import { mergeGroupMeshesByMaterial } from '../utils/geometryMerger.js';
+import { getRoomWorldPose, localRoomToWorld } from '../config/literatureRegistry.js';
 
 /**
  * THANH GIONG STORY REALM ENGINE (CÕI SỬ THI PHÙ ĐỔNG & ĐỈNH NÚI SÓC SƠN)
@@ -20,8 +21,7 @@ import { mergeGroupMeshesByMaterial } from '../utils/geometryMerger.js';
  */
 
 const GLB_PORTAL_CANDIDATES = [
-  '/models/thanhgiong/portal_soc_son.glb',
-  '/model/thanhgiong/portal_soc_son.glb'
+  '/models/thanhgiong/portal_soc_son.glb'
 ];
 
 function clamp(v, min, max) {
@@ -613,9 +613,14 @@ export function createThanhGiongStoryRealm({
   const _tmpLookMat = new THREE.Matrix4();
   const _tmpLookQuat = new THREE.Quaternion();
   const _worldUp = new THREE.Vector3(0, 1, 0);
+  const _tgDefaultPose = getRoomWorldPose('thanh_giong');
   const _roomCenterVec = roomCenter instanceof THREE.Vector3
     ? roomCenter.clone()
-    : new THREE.Vector3(roomCenter?.x ?? -48.0, roomCenter?.y ?? 0.0, roomCenter?.z ?? 19.0);
+    : new THREE.Vector3(
+      roomCenter?.x ?? _tgDefaultPose.x,
+      roomCenter?.y ?? _tgDefaultPose.y,
+      roomCenter?.z ?? _tgDefaultPose.z
+    );
   const museumPortalTriggerWorldPos = new THREE.Vector3();
   const realmSpawnPos = new THREE.Vector3(-1.2, 2.35, 44.5);
   const realmSpawnLookAt = new THREE.Vector3(0.4, 4.4, -12.0);
@@ -1057,6 +1062,7 @@ export function createThanhGiongStoryRealm({
     ctx.stroke();
 
     const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
     tex.needsUpdate = true;
     if (disposables) disposables.push(tex);
     return tex;
@@ -1808,9 +1814,7 @@ export function createThanhGiongStoryRealm({
 
     // Tải mô hình giáp sắt chính thức `giap_sat_soc_son.glb`
     const GLB_ARMOR_CANDIDATES = [
-      '/models/thanhgiong/giap_sat_soc_son.glb',
-      'models/thanhgiong/giap_sat_soc_son.glb',
-      'public/models/thanhgiong/giap_sat_soc_son.glb'
+      '/models/thanhgiong/giap_sat_soc_son.glb'
     ];
     try {
       loadGlbCached(GLB_ARMOR_CANDIDATES, {
@@ -1850,8 +1854,7 @@ export function createThanhGiongStoryRealm({
     const flyingGiongCustomMats = [];
     const GLB_THANHGIONG_CANDIDATES = [
       '/models/thanhgiong.glb',
-      'models/thanhgiong.glb',
-      'public/models/thanhgiong.glb'
+      '/model/thanhgiong.glb'
     ];
     try {
       loadGlbCached(GLB_THANHGIONG_CANDIDATES, {
@@ -2436,9 +2439,11 @@ export function createThanhGiongStoryRealm({
         lookAt: interiorGroup.localToWorld(new THREE.Vector3(0, 2.2, -1.2))
       };
     }
+    const fallbackCam = localRoomToWorld('thanh_giong', portalGroup.position.x, 1.85, portalGroup.position.z + 3.6);
+    const fallbackLook = localRoomToWorld('thanh_giong', 0, 2.2, -1.2);
     return {
-      camPos: new THREE.Vector3(_roomCenterVec.x - 6.8, 1.85, _roomCenterVec.z),
-      lookAt: new THREE.Vector3(_roomCenterVec.x - 1.2, 2.2, _roomCenterVec.z)
+      camPos: new THREE.Vector3(fallbackCam.x, fallbackCam.y, fallbackCam.z),
+      lookAt: new THREE.Vector3(fallbackLook.x, fallbackLook.y, fallbackLook.z)
     };
   }
 

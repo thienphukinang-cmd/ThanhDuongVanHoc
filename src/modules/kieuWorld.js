@@ -52,6 +52,7 @@ function createRiverFlowTexture(size = 512) {
   }
 
   const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
   texture.repeat.set(4, 2);
@@ -81,6 +82,7 @@ function createPetalTexture(size = 64) {
   ctx.fill();
 
   const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
   texture.generateMipmaps = false;
   texture.minFilter = THREE.LinearFilter;
   return texture;
@@ -100,6 +102,7 @@ function createSmokePuffTexture(size = 64) {
   ctx.fillRect(0, 0, size, size);
 
   const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
   texture.generateMipmaps = false;
   texture.minFilter = THREE.LinearFilter;
   return texture;
@@ -140,6 +143,7 @@ function createSteleTexture(size = 256) {
   ctx.fillText('CHI MỘ', canvas.width / 2, canvas.height * 0.52);
 
   const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
   texture.generateMipmaps = false;
   texture.minFilter = THREE.LinearFilter;
   return texture;
@@ -1023,6 +1027,7 @@ export class KieuWorld {
       ctx.fillText('(Nhấn phím ESC)', 256, 126);
 
       const bannerTex = new THREE.CanvasTexture(cv);
+      bannerTex.colorSpace = THREE.SRGBColorSpace;
       const banner = new THREE.Mesh(
         new THREE.PlaneGeometry(3.6, 1.3),
         new THREE.MeshBasicMaterial({ map: bannerTex, transparent: true, side: THREE.DoubleSide })
@@ -1152,6 +1157,7 @@ export class KieuWorld {
 
       const tex = cv ? new THREE.CanvasTexture(cv) : null;
       if (tex) {
+        tex.colorSpace = THREE.SRGBColorSpace;
         tex.generateMipmaps = false;
         tex.minFilter = THREE.LinearFilter;
         tex.magFilter = THREE.LinearFilter;
@@ -1202,6 +1208,7 @@ export class KieuWorld {
         ctx.fillText(`"${poem2}"`, 256, 122);
 
         const plateTex = new THREE.CanvasTexture(cv);
+        plateTex.colorSpace = THREE.SRGBColorSpace;
         const plate = new THREE.Mesh(
           new THREE.PlaneGeometry(2.4, 0.8),
           new THREE.MeshBasicMaterial({ map: plateTex, transparent: true, side: THREE.DoubleSide })

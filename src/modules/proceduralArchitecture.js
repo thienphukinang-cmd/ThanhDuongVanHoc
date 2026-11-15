@@ -23,6 +23,9 @@ function getCachedCanvasTex(key, width, height, drawFn, repeatX = 1, repeatY = 1
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(repeatX, repeatY);
+  if ('colorSpace' in tex && THREE.SRGBColorSpace) {
+    tex.colorSpace = THREE.SRGBColorSpace;
+  }
   tex.generateMipmaps = false;
   tex.minFilter = THREE.LinearFilter;
   tex.magFilter = THREE.LinearFilter;
@@ -47,10 +50,17 @@ function getSafePlaqueMaterial(title = 'PHÒNG TRƯNG BÀY', id = 'default') {
     ctx.lineWidth = 6;
     ctx.strokeRect(8, 8, w - 16, h - 16);
     ctx.fillStyle = '#ffe07d';
-    ctx.font = 'bold 32px "Times New Roman", serif';
+    const label = String(title).normalize('NFC').trim().toUpperCase();
+    const maxWidth = w - 48;
+    let fontSize = 36;
+    ctx.font = `bold ${fontSize}px "Times New Roman", "Segoe UI", Arial, serif`;
+    while (fontSize > 16 && ctx.measureText(label).width > maxWidth) {
+      fontSize -= 2;
+      ctx.font = `bold ${fontSize}px "Times New Roman", "Segoe UI", Arial, serif`;
+    }
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(String(title).toUpperCase(), w / 2, h / 2);
+    ctx.fillText(label, w / 2, h / 2, maxWidth);
   });
 
   const mat = new THREE.MeshLambertMaterial({ map: tex, emissive: 0x261806, side: THREE.FrontSide });

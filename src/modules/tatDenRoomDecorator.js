@@ -2,6 +2,11 @@ import * as THREE from 'three';
 import { loadGlbCached, normalizeModelToHeight as sharedNormalizeModelToHeight } from '../utils/modelLoaderHelper.js';
 import { mergeGroupMeshesByMaterial } from '../utils/geometryMerger.js';
 import { createTatDenStoryRealm } from './tatDenStoryRealm.js';
+import {
+  createAutoSynthesizedRoomPlaque,
+  registerPlaqueWithSystems,
+  syncPlaqueWorldMetadata
+} from './roomInfoPlaque.js';
 
 const ROOM_W = 25.6;
 const ROOM_D = 27.6;
@@ -373,16 +378,28 @@ function createCalligraphySignTexture(title, subtitle, options = {}, disposables
   ctx.lineWidth = 2;
   ctx.strokeRect(24, 24, width - 48, height - 48);
 
+  const fontStack = '"Times New Roman", "Segoe UI", Arial, serif';
+  const maxW = Math.max(120, width - 64);
+  const fitTextFont = (text, baseSize, minSize, stylePrefix = '') => {
+    let sz = baseSize;
+    while (sz > minSize) {
+      ctx.font = `${stylePrefix}${sz}px ${fontStack}`;
+      if (ctx.measureText(text).width <= maxW) break;
+      sz -= 1;
+    }
+    ctx.font = `${stylePrefix}${sz}px ${fontStack}`;
+  };
+
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = titleColor;
-  ctx.font = 'bold 42px Georgia, "Times New Roman", serif';
-  ctx.fillText(title, width / 2, subtitle ? height * 0.42 : height * 0.5);
+  fitTextFont(title, 42, 20, 'bold ');
+  ctx.fillText(title, width / 2, subtitle ? height * 0.40 : height * 0.5, maxW);
 
   if (subtitle) {
     ctx.fillStyle = subColor;
-    ctx.font = 'italic 26px Georgia, "Times New Roman", serif';
-    ctx.fillText(subtitle, width / 2, height * 0.72);
+    fitTextFont(subtitle, 26, 14, 'italic ');
+    ctx.fillText(subtitle, width / 2, height * 0.72, maxW);
   }
 
   return makeCanvasTexture(canvas, { repeatX: 1, repeatY: 1, srgb: true, disposables });
@@ -536,31 +553,56 @@ export function buildTatDenExhibition({
 
   const interiorGroup = new THREE.Group();
   interiorGroup.name = 'TatDen_Interior_Group';
-  // Đồng bộ quy ước xoay của bảo tàng: cánh Tây (+X hướng về sảnh) dùng +PI/2 để local +Z hướng ra cửa vòm sảnh
-  interiorGroup.rotation.y = roomCenter.x < 0 ? Math.PI / 2 : -Math.PI / 2;
+  // Đồng bộ quy ước xoay 4 hướng bảo tàng: local +Z luôn hướng ra cửa vòm đại sảnh
+  interiorGroup.rotation.y =
+    Math.abs(roomCenter.x) >= Math.abs(roomCenter.z)
+      ? (roomCenter.x > 0 ? -Math.PI / 2 : Math.PI / 2)
+      : (roomCenter.z < 0 ? 0 : Math.PI);
   roomGroup.add(interiorGroup);
+
+  const isNorthHall = Math.abs(roomCenter.x) < 1 && roomCenter.z < -30;
+  const activeRoomW = isNorthHall ? 43.8 : ROOM_W;
+  const activeDoorW = isNorthHall ? 8.0 : 6.2;
+  const halfRoomW = activeRoomW * 0.5;
+  const halfDoorW = activeDoorW * 0.5;
+  const sideWallX = isNorthHall ? 21.35 : 12.1;
+  const sidePillarX = isNorthHall ? 17.8 : 9.8;
+  const gatePostX = isNorthHall ? 4.45 : 3.35;
+  const taxStationX = isNorthHall ? 8.2 : 4.5;
+  const hearthStationX = isNorthHall ? -8.4 : -4.8;
+  const lampStationX = isNorthHall ? 8.0 : 4.6;
+  const plaqueLocalX = isNorthHall ? -6.2 : -4.4;
+  const plaqueLocalZ = isNorthHall ? 9.2 : 8.8;
 
   // Vật liệu chia sẻ: giữ PBR cho kiến trúc chủ đạo, chuyển vật liệu phụ/xa sang MeshLambertMaterial nhẹ
   const mudWallMat = new THREE.MeshStandardMaterial({
     map: textures.mudDiffuse,
     normalMap: textures.mudNormal,
-    roughness: 0.94,
-    metalness: 0.02
+    roughness: 0.90,
+    metalness: 0.02,
+    emissive: new THREE.Color(0x18120e),
+    emissiveIntensity: 0.38
   });
   const limWoodMat = new THREE.MeshStandardMaterial({
     color: PALETTE.limWood,
     map: textures.woodDiffuse,
-    roughness: 0.76,
-    metalness: 0.06
+    roughness: 0.74,
+    metalness: 0.06,
+    emissive: new THREE.Color(0x160f0a),
+    emissiveIntensity: 0.35
   });
   const mossyStoneMat = new THREE.MeshStandardMaterial({
     map: textures.stoneDiffuse,
     normalMap: textures.stoneNormal,
-    roughness: 0.88,
-    metalness: 0.05
+    roughness: 0.85,
+    metalness: 0.05,
+    emissive: new THREE.Color(0x121318),
+    emissiveIntensity: 0.32
   });
   const thatchMat = new THREE.MeshLambertMaterial({
     map: textures.thatchDiffuse,
+    emissive: new THREE.Color(0x1c160e),
+    emissiveIntensity: 0.38,
     side: THREE.FrontSide
   });
   const darkPlasterMat = new THREE.MeshLambertMaterial({
@@ -572,17 +614,17 @@ export function buildTatDenExhibition({
     metalness: 0.72
   });
   const bambooMat = new THREE.MeshLambertMaterial({
-    color: 0x161b12
+    color: 0x25301d
   });
   const bambooLeafMat = new THREE.MeshLambertMaterial({
-    color: 0x0d140c,
+    color: 0x1b2917,
     side: THREE.FrontSide
   });
 
   // =========================================================================
   // 1. VỎ KIẾN TRÚC PHÒNG (TRẦN 8.4M, SÀN ĐÁ RÊU, VÁCH ĐẤT & VÙNG ĐÊM ĐEN)
   // =========================================================================
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_W, ROOM_D), mossyStoneMat);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(activeRoomW, ROOM_D), mossyStoneMat);
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = 0.026;
   floor.userData.isWalkableFloor = true;
@@ -593,31 +635,33 @@ export function buildTatDenExhibition({
     color: PALETTE.ashGrey,
     map: textures.stoneDiffuse
   });
-  const walkway = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.032, 23.8), walkwayMat);
+  const walkway = new THREE.Mesh(new THREE.BoxGeometry(isNorthHall ? 5.6 : 4.2, 0.032, 23.8), walkwayMat);
   walkway.position.set(0, 0.034, 1.9);
   walkway.userData.isWalkableFloor = true;
   interiorGroup.add(walkway);
 
   // Trần phòng cao chuẩn 8.4m với ô giếng trời tối (oculus) phía trên tượng đài tại Z = -3.2
   const ceilingGroup = new THREE.Group();
-  const frontCeil = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_W, 14.2), darkPlasterMat);
+  const frontCeil = new THREE.Mesh(new THREE.PlaneGeometry(activeRoomW, 14.2), darkPlasterMat);
   frontCeil.rotation.x = Math.PI / 2;
   frontCeil.position.set(0, ROOM_H, 6.7);
   ceilingGroup.add(frontCeil);
 
-  const rearCeil = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_W, 7.8), darkPlasterMat);
+  const rearCeil = new THREE.Mesh(new THREE.PlaneGeometry(activeRoomW, 7.8), darkPlasterMat);
   rearCeil.rotation.x = Math.PI / 2;
   rearCeil.position.set(0, ROOM_H, -9.9);
   ceilingGroup.add(rearCeil);
 
-  const leftCeil = new THREE.Mesh(new THREE.PlaneGeometry(9.6, 5.6), darkPlasterMat);
+  const sideCeilW = halfRoomW - 3.2;
+  const sideCeilX = 3.2 + sideCeilW * 0.5;
+  const leftCeil = new THREE.Mesh(new THREE.PlaneGeometry(sideCeilW, 5.6), darkPlasterMat);
   leftCeil.rotation.x = Math.PI / 2;
-  leftCeil.position.set(-8.0, ROOM_H, -3.2);
+  leftCeil.position.set(-sideCeilX, ROOM_H, -3.2);
   ceilingGroup.add(leftCeil);
 
-  const rightCeil = new THREE.Mesh(new THREE.PlaneGeometry(9.6, 5.6), darkPlasterMat);
+  const rightCeil = new THREE.Mesh(new THREE.PlaneGeometry(sideCeilW, 5.6), darkPlasterMat);
   rightCeil.rotation.x = Math.PI / 2;
-  rightCeil.position.set(8.0, ROOM_H, -3.2);
+  rightCeil.position.set(sideCeilX, ROOM_H, -3.2);
   ceilingGroup.add(rightCeil);
 
   // Khung giếng trời bát giác trên đỉnh tượng trung tâm
@@ -636,31 +680,33 @@ export function buildTatDenExhibition({
   mergeGroupMeshesByMaterial(ceilingGroup);
   interiorGroup.add(ceilingGroup);
 
-  // Tường trái: Vách đất pha rơm nứt nẻ, bịt kín mép trong 24.0m x 25.0m che toàn bộ cột/cửa sổ ngoài
+  // Tường trái: Vách đất pha rơm nứt nẻ, bịt kín mép trong che toàn bộ cột/cửa sổ ngoài
   const southWallMud = new THREE.Mesh(new THREE.BoxGeometry(0.5, ROOM_H + 1.4, 26.6), mudWallMat);
-  southWallMud.position.set(-12.1, (ROOM_H + 1.4) / 2, 0.6);
+  southWallMud.position.set(-sideWallX, (ROOM_H + 1.4) / 2, 0.6);
   interiorGroup.add(southWallMud);
 
   // Tường phải: Gỗ lim đình làng uy nghiêm che kín mép trong bên phải
   const northWallUpper = new THREE.Mesh(new THREE.BoxGeometry(0.5, ROOM_H + 1.4, 26.6), limWoodMat);
-  northWallUpper.position.set(12.1, (ROOM_H + 1.4) / 2, 0.6);
+  northWallUpper.position.set(sideWallX, (ROOM_H + 1.4) / 2, 0.6);
   interiorGroup.add(northWallUpper);
 
-  // Vách hậu phía Tây: Khoảng đêm đen đặc ("Trời tối như mực và như cái tiền đồ của chị"), đặt tại Z = -12.45m để che 100% khung cửa & cột sáng ngoài hành lang
-  const backWall = new THREE.Mesh(new THREE.BoxGeometry(25.4, ROOM_H + 1.6, 0.65), darkPlasterMat);
+  // Vách hậu: Khoảng đêm đen đặc ("Trời tối như mực và như cái tiền đồ của chị"), đặt tại Z = -12.45m để che 100% khung cửa & cột sáng ngoài hành lang
+  const backWall = new THREE.Mesh(new THREE.BoxGeometry(activeRoomW - 0.2, ROOM_H + 1.6, 0.65), darkPlasterMat);
   backWall.position.set(0, (ROOM_H + 1.6) / 2, -12.45);
   interiorGroup.add(backWall);
 
-  // Tường mặt tiền giáp sảnh Tầng 3: chừa đúng cửa vòm 6.2m x 4.6m và bịt kín dải trên tới trần 9.8m
-  const frontPierLeft = new THREE.Mesh(new THREE.BoxGeometry(9.6, ROOM_H + 1.4, 0.35), mudWallMat);
-  frontPierLeft.position.set(-8.0, (ROOM_H + 1.4) / 2, ROOM_D / 2 - 0.15);
+  // Tường mặt tiền giáp sảnh Tầng 3: chừa đúng cửa vòm (6.2m hoặc 8.0m Bắc Sảnh) và bịt kín dải trên tới trần 9.8m
+  const frontPierW = halfRoomW - halfDoorW;
+  const frontPierX = halfDoorW + frontPierW * 0.5;
+  const frontPierLeft = new THREE.Mesh(new THREE.BoxGeometry(frontPierW, ROOM_H + 1.4, 0.35), mudWallMat);
+  frontPierLeft.position.set(-frontPierX, (ROOM_H + 1.4) / 2, ROOM_D / 2 - 0.15);
   interiorGroup.add(frontPierLeft);
 
-  const frontPierRight = new THREE.Mesh(new THREE.BoxGeometry(9.6, ROOM_H + 1.4, 0.35), limWoodMat);
-  frontPierRight.position.set(8.0, (ROOM_H + 1.4) / 2, ROOM_D / 2 - 0.15);
+  const frontPierRight = new THREE.Mesh(new THREE.BoxGeometry(frontPierW, ROOM_H + 1.4, 0.35), limWoodMat);
+  frontPierRight.position.set(frontPierX, (ROOM_H + 1.4) / 2, ROOM_D / 2 - 0.15);
   interiorGroup.add(frontPierRight);
 
-  const frontLintelFascia = new THREE.Mesh(new THREE.BoxGeometry(6.4, ROOM_H + 1.4 - 4.6, 0.35), limWoodMat);
+  const frontLintelFascia = new THREE.Mesh(new THREE.BoxGeometry(activeDoorW + 0.2, ROOM_H + 1.4 - 4.6, 0.35), limWoodMat);
   frontLintelFascia.position.set(0, 4.6 + (ROOM_H + 1.4 - 4.6) / 2, ROOM_D / 2 - 0.15);
   interiorGroup.add(frontLintelFascia);
 
@@ -669,13 +715,13 @@ export function buildTatDenExhibition({
   // =========================================================================
   const solidObstacleObjects = [];
 
-  // Cổng đình uy nghiêm ôm sát cửa vào (Z = +13.1), khoảng mở 6.4m x 4.55m không cản lối đi
+  // Cổng đình uy nghiêm ôm sát cửa vào (Z = +13.15), khoảng mở 6.4m / 8.0m không cản lối đi
   const gateGroup = new THREE.Group();
   gateGroup.position.set(0, 0, ROOM_D / 2 - 0.65);
 
   const gatePostGeo = new THREE.CylinderGeometry(0.28, 0.32, 4.85, 16);
   const gateBaseGeo = new THREE.CylinderGeometry(0.42, 0.48, 0.24, 16);
-  [-3.35, 3.35].forEach((gx) => {
+  [-gatePostX, gatePostX].forEach((gx) => {
     const plinth = new THREE.Mesh(gateBaseGeo, mossyStoneMat);
     plinth.position.set(gx, 0.12, 0);
     gateGroup.add(plinth);
@@ -685,17 +731,17 @@ export function buildTatDenExhibition({
     solidObstacleObjects.push(post);
   });
 
-  const gateBeam = new THREE.Mesh(new THREE.BoxGeometry(7.6, 0.55, 0.6), limWoodMat);
+  const gateBeam = new THREE.Mesh(new THREE.BoxGeometry(isNorthHall ? 9.8 : 7.6, 0.55, 0.6), limWoodMat);
   gateBeam.position.set(0, 4.95, 0);
   gateGroup.add(gateBeam);
 
   // Mái cổng đình vươn cong hai tầng nhẹ phía trên
-  const gateRoof = new THREE.Mesh(new THREE.BoxGeometry(8.2, 0.16, 1.45), mossyStoneMat);
+  const gateRoof = new THREE.Mesh(new THREE.BoxGeometry(isNorthHall ? 10.4 : 8.2, 0.16, 1.45), mossyStoneMat);
   gateRoof.position.set(0, 5.36, 0);
   gateGroup.add(gateRoof);
 
   // Phù điêu Vân Mây & Hổ Phù hai mặt cổng đình
-  const gateFriezeFront = buildCloudScrollFrieze(5.8, agedBronzeMat);
+  const gateFriezeFront = buildCloudScrollFrieze(isNorthHall ? 8.0 : 5.8, agedBronzeMat);
   gateFriezeFront.position.set(0, 4.95, -0.32);
   gateFriezeFront.rotation.y = Math.PI;
   gateGroup.add(gateFriezeFront);
@@ -712,7 +758,7 @@ export function buildTatDenExhibition({
     disposables
   );
   const gateSign = new THREE.Mesh(
-    new THREE.PlaneGeometry(4.4, 0.92),
+    new THREE.PlaneGeometry(isNorthHall ? 5.6 : 4.4, 0.92),
     new THREE.MeshLambertMaterial({ map: gateSignTex })
   );
   gateSign.position.set(0, 6.08, -0.18);
@@ -722,9 +768,12 @@ export function buildTatDenExhibition({
 
   // Hàng cột gỗ lim đình làng (InstancedMesh tối ưu FPS) dọc hai cánh
   const pillarPositions = [
-    [9.8, 10.6], [9.8, 5.6], [9.8, 0.4], [9.8, -5.0],
-    [-9.8, 10.6], [-9.8, 5.6], [-9.8, 0.4], [-9.8, -5.0]
+    [sidePillarX, 10.6], [sidePillarX, 5.6], [sidePillarX, 0.4], [sidePillarX, -5.0],
+    [-sidePillarX, 10.6], [-sidePillarX, 5.6], [-sidePillarX, 0.4], [-sidePillarX, -5.0]
   ];
+  if (isNorthHall) {
+    pillarPositions.push([sidePillarX, -10.2], [-sidePillarX, -10.2]);
+  }
   const colShaftGeo = new THREE.CylinderGeometry(0.24, 0.28, ROOM_H - 0.35, 14);
   const colBaseGeo = new THREE.CylinderGeometry(0.38, 0.44, 0.28, 14);
   const instancedPillars = new THREE.InstancedMesh(colShaftGeo, limWoodMat, pillarPositions.length);
@@ -762,10 +811,20 @@ export function buildTatDenExhibition({
     solidObstacleObjects.push(colProxy);
   });
 
-  // Đòn xà ngang nối các cột đình cánh phải (cường hào)
-  const rightBeam = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.42, 22.0), limWoodMat);
-  rightBeam.position.set(9.8, 5.4, 2.2);
+  // Đòn xà ngang nối các cột đình cánh phải (cường hào) & diềm mái phụ Bắc Sảnh
+  const rightBeam = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.42, isNorthHall ? 24.0 : 22.0), limWoodMat);
+  rightBeam.position.set(sidePillarX, 5.4, isNorthHall ? 0.4 : 2.2);
   interiorGroup.add(rightBeam);
+
+  if (isNorthHall) {
+    const leftBeam = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.42, 24.0), limWoodMat);
+    leftBeam.position.set(-sidePillarX, 5.4, 0.4);
+    interiorGroup.add(leftBeam);
+
+    const rearCrownTrim = new THREE.Mesh(new THREE.BoxGeometry(activeRoomW - 1.2, 0.34, 0.36), limWoodMat);
+    rearCrownTrim.position.set(0, ROOM_H - 0.18, -12.1);
+    interiorGroup.add(rearCrownTrim);
+  }
 
   // Biển đối lập giai cấp trên dải đình (Khu 1)
   const taxDecreeTex = createCalligraphySignTexture(
@@ -778,14 +837,14 @@ export function buildTatDenExhibition({
     new THREE.PlaneGeometry(3.2, 0.9),
     new THREE.MeshLambertMaterial({ map: taxDecreeTex })
   );
-  taxBanner.position.set(11.75, 3.6, 7.2);
+  taxBanner.position.set(sideWallX - 0.35, 3.6, 7.2);
   taxBanner.rotation.y = -Math.PI / 2;
   interiorGroup.add(taxBanner);
 
-  // Bệ trưng bày 1: Hiện vật Sưu Thuế (tax_artifacts.glb) tại (4.5, 0, +7.2)
+  // Bệ trưng bày 1: Hiện vật Sưu Thuế (tax_artifacts.glb)
   const taxStation = new THREE.Group();
   taxStation.name = 'Station_TaxArtifacts';
-  taxStation.position.set(4.5, 0, 7.2);
+  taxStation.position.set(taxStationX, 0, 7.2);
   const taxPed = buildCuratedPedestal({
     width: 1.55,
     depth: 1.45,
@@ -806,24 +865,26 @@ export function buildTatDenExhibition({
   // =========================================================================
   // Mái tranh xơ xác nghiêng từ vách đất cánh trái xuống che góc bếp nghèo Chị Dậu
   const thatchShelter = new THREE.Group();
-  thatchShelter.position.set(-10.1, 0, 2.8);
+  thatchShelter.position.set(isNorthHall ? -18.2 : -10.1, 0, 2.8);
 
-  const thatchRoofPanel = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.22, 11.4), thatchMat);
+  const shelterSpan = isNorthHall ? 7.8 : 5.6;
+  const thatchRoofPanel = new THREE.Mesh(new THREE.BoxGeometry(shelterSpan, 0.22, 11.4), thatchMat);
   thatchRoofPanel.position.set(0.2, 4.35, 0);
   thatchRoofPanel.rotation.z = -0.32;
   thatchShelter.add(thatchRoofPanel);
 
   // Diềm tranh xơ rủ lởm chởm tạo cảm giác tiêu điều
   const fringeGeo = new THREE.BoxGeometry(0.45, 0.08, 0.72);
+  const fringeX = isNorthHall ? 3.85 : 2.8;
   for (let f = 0; f < 14; f++) {
     const fringe = new THREE.Mesh(fringeGeo, thatchMat);
-    fringe.position.set(2.8 + (f % 2) * 0.14, 3.45 - (f % 3) * 0.05, -5.1 + f * 0.78);
+    fringe.position.set(fringeX + (f % 2) * 0.14, 3.45 - (f % 3) * 0.05, -5.1 + f * 0.78);
     fringe.rotation.z = -0.48 - (f % 3) * 0.08;
     thatchShelter.add(fringe);
   }
 
   // Kèo tre chống mái
-  const rafterGeo = new THREE.CylinderGeometry(0.06, 0.075, 5.8, 8);
+  const rafterGeo = new THREE.CylinderGeometry(0.06, 0.075, shelterSpan + 0.2, 8);
   for (let r = 0; r < 5; r++) {
     const rafter = new THREE.Mesh(rafterGeo, bambooMat);
     rafter.position.set(0.15, 4.2, -4.6 + r * 2.3);
@@ -839,11 +900,13 @@ export function buildTatDenExhibition({
   const nodeTransforms = [];
   const leafTransforms = [];
 
+  const bambooOuterX = sideWallX - 1.6;
+  const bambooInnerX = sideWallX - 2.3;
   const bambooClusters = [
-    { cx: -10.5, cz: -6.2, count: 22, rx: 1.2, rz: 4.0 },
-    { cx: -9.8, cz: -10.6, count: 18, rx: 1.5, rz: 1.3 },
-    { cx: 10.5, cz: -7.5, count: 20, rx: 1.2, rz: 3.6 },
-    { cx: 9.8, cz: -10.6, count: 16, rx: 1.5, rz: 1.3 }
+    { cx: -bambooOuterX, cz: -6.2, count: 22, rx: 1.2, rz: 4.0 },
+    { cx: -bambooInnerX, cz: -10.6, count: 18, rx: 1.5, rz: 1.3 },
+    { cx: bambooOuterX, cz: -7.5, count: 20, rx: 1.2, rz: 3.6 },
+    { cx: bambooInnerX, cz: -10.6, count: 16, rx: 1.5, rz: 1.3 }
   ];
 
   bambooClusters.forEach((cl) => {
@@ -920,10 +983,10 @@ export function buildTatDenExhibition({
   instLeaves.instanceMatrix.needsUpdate = true;
   interiorGroup.add(instLeaves);
 
-  // Station 2A: Mâm cháo cám & nia rách (peasant_hearth.glb) tại (-4.8, 0, +2.6)
+  // Station 2A: Mâm cháo cám & nia rách (peasant_hearth.glb)
   const hearthStation = new THREE.Group();
   hearthStation.name = 'Station_PeasantHearth';
-  hearthStation.position.set(-4.8, 0, 2.6);
+  hearthStation.position.set(hearthStationX, 0, 2.6);
   const hearthPed = buildCuratedPedestal({
     width: 1.55,
     depth: 1.4,
@@ -939,10 +1002,10 @@ export function buildTatDenExhibition({
   interiorGroup.add(hearthStation);
   solidObstacleObjects.push(hearthPed);
 
-  // Station 2B: Ngọn đèn dầu (oil_lamp.glb) tại (+4.6, 0, +0.6)
+  // Station 2B: Ngọn đèn dầu (oil_lamp.glb)
   const lampStation = new THREE.Group();
   lampStation.name = 'Station_OilLamp';
-  lampStation.position.set(4.6, 0, 0.6);
+  lampStation.position.set(lampStationX, 0, 0.6);
   const lampPed = buildCuratedPedestal({
     width: 1.25,
     depth: 1.25,
@@ -1043,58 +1106,89 @@ export function buildTatDenExhibition({
   );
   quotePanel.position.set(0, 5.75, 0.08);
   backdropGroup.add(quotePanel);
+
+  if (isNorthHall) {
+    // Hai bức bích họa thư pháp đối xứng trên vách hậu rộng 43.6m của Bắc Sảnh 303
+    const leftMuralTex = createCalligraphySignTexture(
+      'ĐÊM ĐÔNG XÁ — SƯU CAO THUẾ NẶNG',
+      '"Tiếng trống đánh thúc, tiếng tù và thổi inh ỏi ngoài đình..."',
+      { width: 960, height: 280, bg: '#0b0807', border: '#6c4d27', titleColor: '#e2bd82', subColor: '#ab9473' },
+      disposables
+    );
+    const leftMural = new THREE.Mesh(
+      new THREE.PlaneGeometry(7.2, 2.1),
+      new THREE.MeshLambertMaterial({ map: leftMuralTex })
+    );
+    leftMural.position.set(-13.2, 3.8, -0.1);
+    backdropGroup.add(leftMural);
+
+    const rightMuralTex = createCalligraphySignTexture(
+      'CHỊ DẬU — PHẢN KHÁNG TRONG ĐÊM',
+      '"Mày trói ngay chồng bà đi, bà cho mày xem!" — Ngô Tất Tố',
+      { width: 960, height: 280, bg: '#0b0807', border: '#6c4d27', titleColor: '#e2bd82', subColor: '#ab9473' },
+      disposables
+    );
+    const rightMural = new THREE.Mesh(
+      new THREE.PlaneGeometry(7.2, 2.1),
+      new THREE.MeshLambertMaterial({ map: rightMuralTex })
+    );
+    rightMural.position.set(13.2, 3.8, -0.1);
+    backdropGroup.add(rightMural);
+  }
+
   mergeGroupMeshesByMaterial(backdropGroup);
   interiorGroup.add(backdropGroup);
 
   // =========================================================================
   // 5. ÁNH SÁNG CHIAROSCURO, ĐÈN DẦU LẬP LÒE & VOLUMETRIC GOD RAYS
+  // (main.js gom tối đa 3 đèn priority cao nhất vào pool phòng -> phân bổ 3 đèn phủ đủ trung tâm + 2 cánh)
   // =========================================================================
-  // Ánh sáng môi trường rất thấp tạo tương phản sáng-tối đậm nét nhưng vẫn đọc rõ chi tiết kiến trúc
-  const roomAmbient = new THREE.AmbientLight(0x2a2625, 0.38);
+  const roomAmbient = new THREE.AmbientLight(0x4e4640, 1.05);
   interiorGroup.add(roomAmbient);
 
-  // Ánh đèn trần soi thẳng vào tượng đài trung tâm (tắt shadow để giữ 60 FPS)
-  const centerSpot = new THREE.SpotLight(0xffdcb0, 6.4, 18.0, Math.PI / 4.2, 0.62, 1.3);
-  centerSpot.position.set(0, 8.2, -2.8);
+  // Top #1 (priority = 12.4): Ánh đèn trần soi tượng đài trung tâm, bệ đá & hậu cảnh
+  const centerSpot = new THREE.SpotLight(0xffe4c0, 6.2, 28.0, Math.PI / 3.0, 0.72, 1.15);
+  centerSpot.position.set(0, 8.0, -2.5);
   centerSpot.target.position.set(0, 1.8, -3.2);
   centerSpot.castShadow = false;
   interiorGroup.add(centerSpot);
   interiorGroup.add(centerSpot.target);
 
-  // Ánh sáng hắt lạnh sau lưng tượng để tách bóng tối khỏi nền đen #050508
-  const centerRimLight = new THREE.PointLight(0x637696, 2.2, 13.0, 1.5);
+  // Ánh sáng hắt lạnh sau lưng tượng (đèn phụ ngoài top-3)
+  const centerRimLight = new THREE.PointLight(0x637696, 2.2, 14.0, 1.4);
   centerRimLight.position.set(0, 3.6, -6.2);
   interiorGroup.add(centerRimLight);
 
   // Ánh sáng lướt lên bia trích dẫn & phù điêu hậu cảnh
-  const backdropGrazingLight = new THREE.PointLight(0xd4944e, 2.6, 12.0, 1.55);
+  const backdropGrazingLight = new THREE.PointLight(0xd4944e, 2.6, isNorthHall ? 22.0 : 14.0, 1.4);
   backdropGrazingLight.position.set(0, 5.2, -9.6);
   interiorGroup.add(backdropGrazingLight);
 
-  // Đèn hắt dịu tại Cổng Đình Làng Đông Xá (soi biển hiệu & phù điêu Hổ phù / Vân mây)
-  const gateLanternLight = new THREE.PointLight(0xe59d52, 2.8, 11.5, 1.6);
+  // Đèn hắt dịu tại Cổng Đình Làng Đông Xá
+  const gateLanternLight = new THREE.PointLight(0xe59d52, 2.8, isNorthHall ? 18.0 : 13.0, 1.4);
   gateLanternLight.position.set(0, 5.1, 10.6);
   interiorGroup.add(gateLanternLight);
 
   // Đèn dầu lập lòe (#ff9436) phía trên bệ oil_lamp.glb
-  const oilLampLight = new THREE.PointLight(PALETTE.oilFlame, 3.8, 14.0, 1.65);
-  oilLampLight.position.set(4.6, 1.72, 0.6);
+  const oilLampLight = new THREE.PointLight(PALETTE.oilFlame, 3.2, 14.0, 1.5);
+  oilLampLight.position.set(lampStationX, 1.72, 0.6);
   interiorGroup.add(oilLampLight);
 
   const flameMesh = new THREE.Mesh(
     new THREE.ConeGeometry(0.045, 0.14, 8),
     new THREE.MeshBasicMaterial({ color: 0xffb35c, transparent: true, opacity: 0.92 })
   );
-  flameMesh.position.set(4.6, 1.48, 0.6);
+  flameMesh.position.set(lampStationX, 1.48, 0.6);
   interiorGroup.add(flameMesh);
 
-  // Ánh sáng ấm mờ cho khu vực tráp sưu thuế (Khu 1) & mái bếp (Khu 2)
-  const taxLanternLight = new THREE.PointLight(0xe59d4c, 3.6, 12.0, 1.55);
-  taxLanternLight.position.set(4.5, 3.0, 7.2);
+  // Top #3 (priority = 5.6): Phủ sáng cánh phải & tiền sảnh (Tráp Sưu Thuế, Sổ Đinh, Đèn dầu & Cổng Đình)
+  const taxLanternLight = new THREE.PointLight(0xffc985, 5.6, isNorthHall ? 34.0 : 26.0, 1.15);
+  taxLanternLight.position.set(isNorthHall ? 8.0 : 4.2, 4.0, 5.5);
   interiorGroup.add(taxLanternLight);
 
-  const hearthGlowLight = new THREE.PointLight(0xd96b2c, 3.2, 11.5, 1.6);
-  hearthGlowLight.position.set(-4.8, 2.55, 2.6);
+  // Top #2 (priority = 5.8): Phủ sáng cánh trái (Mái tranh nghèo, Bếp Chị Dậu, Lũy tre & Tường trái)
+  const hearthGlowLight = new THREE.PointLight(0xffb470, 5.8, isNorthHall ? 34.0 : 26.0, 1.15);
+  hearthGlowLight.position.set(hearthStationX, 3.8, 2.2);
   interiorGroup.add(hearthGlowLight);
 
   // Volumetric God Rays từ trần giếng trời xuống thẳng tượng tatden.glb
@@ -1169,7 +1263,9 @@ export function buildTatDenExhibition({
   const ffPhases = new Float32Array(fireflyCount);
   for (let i = 0; i < fireflyCount; i++) {
     const leftSide = i < 65;
-    const bx = (leftSide ? -10.2 : 9.8) + (ptRng() - 0.5) * 4.0;
+    const baseSideX = leftSide ? -(sidePillarX + 0.4) : sidePillarX;
+    const spreadX = isNorthHall ? 7.0 : 4.0;
+    const bx = baseSideX + (ptRng() - 0.5) * spreadX;
     const by = 0.7 + ptRng() * 4.4;
     const bz = -3.0 - ptRng() * 9.5;
     ffPositions[i * 3] = bx;
@@ -1203,7 +1299,7 @@ export function buildTatDenExhibition({
   const exhibitConfigs = [
     {
       key: 'tatDen_centerStatue',
-      urls: ['/models/tatden.glb', '/model/tatden.glb'],
+      urls: ['/models/tatden.glb'],
       parentStation: monumentStation,
       mountY: 1.25,
       targetHeight: 3.0,
@@ -1221,8 +1317,8 @@ export function buildTatDenExhibition({
       mountY: 1.1,
       targetHeight: 0.78,
       rotY: -0.35,
-      focusLocalPos: [1.55, 2.15, 8.95],
-      focusLocalTarget: [4.5, 1.38, 7.2],
+      focusLocalPos: [taxStationX - 2.95, 2.15, 8.95],
+      focusLocalTarget: [taxStationX, 1.38, 7.2],
       soundTheme: 'tatden_tax',
       soundOptions: { refDistance: 4.5, maxDistance: 15, volume: 0.45 },
       hitboxPadding: 0.16
@@ -1234,8 +1330,8 @@ export function buildTatDenExhibition({
       mountY: 0.9,
       targetHeight: 0.85,
       rotY: 0.45,
-      focusLocalPos: [-1.85, 2.1, 4.35],
-      focusLocalTarget: [-4.8, 1.22, 2.6],
+      focusLocalPos: [hearthStationX + 2.95, 2.1, 4.35],
+      focusLocalTarget: [hearthStationX, 1.22, 2.6],
       soundTheme: 'tatden_wind',
       soundOptions: { refDistance: 4.8, maxDistance: 16, volume: 0.42 },
       hitboxPadding: 0.16
@@ -1247,8 +1343,8 @@ export function buildTatDenExhibition({
       mountY: 1.06,
       targetHeight: 0.82,
       rotY: -0.25,
-      focusLocalPos: [1.85, 2.18, 2.15],
-      focusLocalTarget: [4.6, 1.44, 0.6],
+      focusLocalPos: [lampStationX - 2.75, 2.18, 2.15],
+      focusLocalTarget: [lampStationX, 1.44, 0.6],
       soundTheme: null,
       hitboxPadding: 0.18
     }
@@ -1351,6 +1447,35 @@ export function buildTatDenExhibition({
   });
 
   // =========================================================================
+  // 7B. BẢNG THÔNG TIN DI SẢN 3D PHÒNG TẮT ĐÈN (GIẤY DÓ CỔ TRUYỀN)
+  // Đặt tại góc tiền sảnh trái (-4.4, 0, 8.8) hướng về khách bước qua cổng làng
+  // =========================================================================
+  const tatDenInfoPlaque = createAutoSynthesizedRoomPlaque('tat_den', {
+    styleTheme: 'giay_do',
+    mountMode: 'pedestal',
+    includeSpotLight: true,
+    position: new THREE.Vector3(plaqueLocalX, 0, plaqueLocalZ),
+    rotationY: 0.32,
+    parent: interiorGroup
+  });
+  if (tatDenInfoPlaque) {
+    tatDenInfoPlaque.name = 'TatDen_InfoPlaque_3D';
+    tatDenInfoPlaque.userData.roomId = 'tat_den';
+    syncPlaqueWorldMetadata(tatDenInfoPlaque);
+
+    const plaqueColliderProxy = new THREE.Mesh(
+      new THREE.BoxGeometry(1.48, 2.0, 0.70),
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    plaqueColliderProxy.name = 'TatDen_InfoPlaque_Collider';
+    plaqueColliderProxy.position.set(plaqueLocalX, 1.0, plaqueLocalZ);
+    plaqueColliderProxy.rotation.y = 0.32;
+    plaqueColliderProxy.userData.ignoreRaycaster = true;
+    interiorGroup.add(plaqueColliderProxy);
+    solidObstacleObjects.push(plaqueColliderProxy);
+  }
+
+  // =========================================================================
   // 8. ĐĂNG KÝ HITBOX VẬT LÝ, HỆ THỐNG LORE, AUDIO & SƯƠNG MÙ CỤC BỘ
   // =========================================================================
   function registerHitboxes(hitboxManager) {
@@ -1373,6 +1498,28 @@ export function buildTatDenExhibition({
       const holder = loadedArtifacts.get(cfg.key) || cfg.parentStation.getObjectByName(`TatDen_Artifact_${cfg.key}`);
       if (holder) bindExhibitInteractions(cfg, holder);
     });
+
+    if (tatDenInfoPlaque) {
+      registerPlaqueWithSystems(tatDenInfoPlaque, {
+        hitboxManager: hbm,
+        loreGuide: wiredManagers.loreGuide || (typeof window !== 'undefined' ? window.__loreGuide : null),
+        realm: 'museum',
+        onFocusCamera: () => {
+          const camMgr = wiredManagers.cameraManager || (typeof window !== 'undefined' ? window.__museumCameraManager : null);
+          if (!camMgr) return;
+          if (typeof camMgr.smoothZoomToFocus === 'function') {
+            camMgr.smoothZoomToFocus(tatDenInfoPlaque, { distance: 2.25 });
+          } else if (typeof camMgr.setView === 'function') {
+            const meta = syncPlaqueWorldMetadata(tatDenInfoPlaque);
+            if (!meta) return;
+            const target = meta.focusPoint.clone();
+            const position = target.clone().addScaledVector(meta.focusNormal, 2.25);
+            position.y = Math.max(target.y - 0.04, position.y);
+            camMgr.setView({ position, target }, true);
+          }
+        }
+      });
+    }
   }
 
   function wireInteractiveSystems({ hitboxManager, loreGuide, spatialAudio, cameraManager: camMgr } = {}) {
@@ -1389,7 +1536,7 @@ export function buildTatDenExhibition({
   let savedFogColor = new THREE.Color(0xdca878);
   let savedFogDensity = 0.00075;
   const savedAtriumLights = [];
-  const darkFogColor = new THREE.Color(PALETTE.pitchBlack);
+  const darkFogColor = new THREE.Color(0x14131a);
 
   function captureAtriumState() {
     if (capturedOriginals || !mainScene) return;
@@ -1400,6 +1547,13 @@ export function buildTatDenExhibition({
     }
     mainScene.traverse((obj) => {
       if (!obj.isLight) return;
+      if (
+        obj.userData?.isPlaqueSpotLight ||
+        obj.userData?.isPooledLight ||
+        obj.name?.startsWith('Pooled_')
+      ) {
+        return;
+      }
       // Chỉ lấy các nguồn sáng bên ngoài phòng Tắt Đèn
       let cur = obj;
       while (cur) {
@@ -1412,13 +1566,17 @@ export function buildTatDenExhibition({
 
   function isInsideTatDenRoom(camPos) {
     if (!camPos) return false;
+    const dx = camPos.x - roomCenter.x;
+    const dz = camPos.z - roomCenter.z;
+    const cosY = Math.cos(interiorGroup.rotation.y);
+    const sinY = Math.sin(interiorGroup.rotation.y);
+    const lx = dx * cosY - dz * sinY;
+    const lz = dx * sinY + dz * cosY;
     return (
-      camPos.x >= -62.5 &&
-      camPos.x <= -34.15 &&
-      camPos.y >= 19.2 &&
-      camPos.y <= 31.2 &&
-      camPos.z >= -32.4 &&
-      camPos.z <= -5.6
+      Math.abs(lx) <= activeRoomW * 0.5 + 0.8 &&
+      Math.abs(lz) <= ROOM_D * 0.5 + 0.6 &&
+      camPos.y >= roomCenter.y - 0.8 &&
+      camPos.y <= roomCenter.y + ROOM_H + 2.8
     );
   }
 
@@ -1438,9 +1596,9 @@ export function buildTatDenExhibition({
         mainScene.fog = new THREE.FogExp2(savedFogColor.getHex(), savedFogDensity);
       }
       mainScene.fog.color.copy(savedFogColor).lerp(darkFogColor, fogBlend);
-      mainScene.fog.density = savedFogDensity + (0.0175 - savedFogDensity) * fogBlend;
+      mainScene.fog.density = savedFogDensity + (0.0045 - savedFogDensity) * fogBlend;
 
-      const lightScale = 1 - fogBlend * 0.84;
+      const lightScale = 1 - fogBlend * 0.25;
       for (let i = 0; i < savedAtriumLights.length; i++) {
         const entry = savedAtriumLights[i];
         entry.light.intensity = entry.baseIntensity * lightScale;
@@ -1545,7 +1703,7 @@ export function buildTatDenExhibition({
     realmController.dispose?.();
     const matSet = new Set();
     roomGroup.traverse((obj) => {
-      if (obj.userData?.isSharedCachedAsset) return;
+      if (obj.userData?.isSharedCachedAsset || obj.userData?.isPlaqueProxy) return;
       if (obj.geometry) obj.geometry.dispose();
       if (obj.material) {
         const mats = Array.isArray(obj.material) ? obj.material : [obj.material];

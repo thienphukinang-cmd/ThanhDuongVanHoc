@@ -738,7 +738,6 @@ export async function applyAll16SkillsToMuseum({
   // 3. ĐIÊU KHẮC TƯỜNG CHO CÁC PHÒNG TRƯNG BÀY (tránh gắn trùng cổng vòm đã có trong TotalOverhaulEngine)
   const roomUpgradeConfigs = [
     { key: 'truyenKieu' },
-    { key: 'anDuongVuong' },
     { key: 'voNhat' }
   ];
 

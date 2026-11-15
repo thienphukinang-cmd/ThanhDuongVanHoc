@@ -1,5 +1,16 @@
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
+import {
+  PLAQUE_LORE_DATABASE,
+  SYNTHESIZED_ROOM_LORE,
+  getSynthesizedPlaqueLore,
+  normalizePlaqueStyleTheme,
+  generateHeritageIllustrationDataUri
+} from '../config/plaqueLoreSynthesis.js';
+import {
+  isObjectIgnoredByRaycaster,
+  isObjectHierarchyVisible
+} from './museumHitboxSystem.js';
 
 /**
  * ============================================================================
@@ -539,16 +550,48 @@ export class MuseumSpatialAudioDirector {
     this._setupAutoUnlock();
   }
 
+  _buildProceduralAudioBuffer(recOrTheme) {
+    const rec = typeof recOrTheme === 'string'
+      ? { fallbackTheme: recOrTheme, key: recOrTheme }
+      : (recOrTheme || {});
+    const theme = rec.fallbackTheme || rec.key || '';
+    const keyLower = String(rec.key || '').toLowerCase();
+    const themeLower = String(theme || '').toLowerCase();
+
+    if (rec.isThanhGiongProcedural || themeLower.startsWith('thanhgiong_')) {
+      return this._createThanhGiongPositionalBuffer(theme);
+    }
+    if (rec.isNqshProcedural || themeLower.startsWith('nqsh_')) {
+      return this._createNqshPositionalBuffer(theme);
+    }
+    if (
+      rec.isNamXuongProcedural ||
+      themeLower.startsWith('namxuong_') ||
+      themeLower.startsWith('nam_xuong_') ||
+      themeLower.includes('namxuong') ||
+      keyLower.startsWith('namxuong_') ||
+      keyLower.startsWith('nam_xuong_') ||
+      keyLower.includes('namxuong')
+    ) {
+      const nxTheme = (theme && theme !== 'truyenKieu') ? theme : (rec.key || 'namxuong_realm_cottage_lullaby');
+      return this._createNamXuongPositionalBuffer(nxTheme);
+    }
+    if (
+      rec.isViDaProcedural ||
+      themeLower.startsWith('vida_') ||
+      themeLower.startsWith('daythonvida') ||
+      themeLower === 'day_thon_vi_da' ||
+      keyLower.startsWith('vida_')
+    ) {
+      const viDaTheme = (theme && theme !== 'truyenKieu') ? theme : (rec.key || 'vida_realm_garden_wind');
+      return this._createDayThonViDaPositionalBuffer(viDaTheme);
+    }
+    return this._createTatDenPositionalBuffer(theme);
+  }
+
   _ensureProceduralBufferReady(rec) {
     if (!rec || rec.isLoadedFile || !rec.isProcedural) return;
-    let buf = null;
-    if (rec.isThanhGiongProcedural) {
-      buf = this._createThanhGiongPositionalBuffer(rec.fallbackTheme);
-    } else if (rec.isNqshProcedural) {
-      buf = this._createNqshPositionalBuffer(rec.fallbackTheme);
-    } else {
-      buf = this._createTatDenPositionalBuffer(rec.fallbackTheme);
-    }
+    const buf = this._buildProceduralAudioBuffer(rec);
     if (buf) {
       rec.posAudio.setBuffer(buf);
       rec.posAudio.setLoop(true);
@@ -851,6 +894,336 @@ export class MuseumSpatialAudioDirector {
   }
 
   /**
+   * Tổng hợp AudioBuffer vòng lặp cho nguồn THREE.PositionalAudio Phòng 204 & Cõi Thế Giới Mở Chuyện Người Con Gái Nam Xương
+   */
+  _createNamXuongPositionalBuffer(theme) {
+    const cacheKey = `namxuong_${theme}`;
+    if (this.cachedProceduralBuffers.has(cacheKey)) {
+      return this.cachedProceduralBuffers.get(cacheKey);
+    }
+    const ctx = this.listener?.context;
+    if (!ctx) return null;
+    const sampleRate = ctx.sampleRate || 44100;
+    const lower = String(theme || '').toLowerCase();
+    const isRealmKey = lower.includes('namxuong_realm_') || lower.includes('nam_xuong_realm_');
+    const duration = isRealmKey ? 6.0 : 4.0;
+    const length = Math.floor(sampleRate * duration);
+    const buffer = ctx.createBuffer(1, length, sampleRate);
+    const data = buffer.getChannelData(0);
+
+    if (
+      lower === 'namxuong_realm_cottage_lullaby' ||
+      lower.includes('cottage_lullaby') ||
+      lower.includes('lullaby') ||
+      lower.includes('ru_con')
+    ) {
+      // 1. 'namxuong_realm_cottage_lullaby': Tiếng đêm côn trùng rả rích, gió luồn qua vách nứa, hòa tiếng ru con nghẹn ngào đơn côi của người mẹ trẻ
+      let lpWind = 0;
+      let lpBreath = 0;
+      // Giai điệu ru con ngũ cung Bắc Bộ nghẹn ngào (A3, C4, D4, E4, D4, C4, A3, G3)
+      const lullabyNotes = [220.0, 261.63, 293.66, 329.63, 293.66, 261.63, 220.0, 196.0];
+
+      for (let i = 0; i < length; i++) {
+        const t = i / sampleRate;
+
+        // Gió luồn qua vách nứa (dải trầm-trung với tiếng rít gió nhẹ)
+        const nWind = Math.random() * 2 - 1;
+        lpWind += 0.024 * (nWind - lpWind);
+        const windSwell = 0.35 + 0.65 * Math.sin(2 * Math.PI * (1 / duration) * t) ** 2;
+        const whistle = Math.sin(2 * Math.PI * (310 + 40 * Math.sin(2 * Math.PI * 0.4 * t)) * t) * 0.024 * windSwell;
+        const cottageWind = (lpWind * 0.24 + whistle) * windSwell;
+
+        // Tiếng đêm côn trùng rả rích (tiếng dế/côn trùng đêm kêu ngắt quãng theo nhịp)
+        const cricketBurst = Math.max(0, Math.sin(2 * Math.PI * 1.6 * t)) ** 5;
+        const cricketPulse = 0.5 + 0.5 * Math.sin(2 * Math.PI * 32.0 * t);
+        const cricket = Math.sin(2 * Math.PI * 4250.0 * t) * cricketBurst * cricketPulse * 0.038;
+        const subCricket = Math.sin(2 * Math.PI * 4980.0 * t) * (Math.max(0, Math.sin(2 * Math.PI * 2.2 * t + 0.7)) ** 6) * 0.022;
+
+        // Tiếng ru con nghẹn ngào đơn côi của người mẹ trẻ (ấm áp, hơi nghẹn ở cuối câu)
+        const seg = (t / duration) * lullabyNotes.length;
+        const slot = Math.min(lullabyNotes.length - 1, Math.floor(seg));
+        const phase = seg % 1.0;
+        const noteEnv = phase < 0.84 ? Math.sin(Math.PI * (phase / 0.84)) ** 1.35 : 0;
+        const vib = 1.0 + Math.sin(2 * Math.PI * 4.6 * t) * 0.012 * Math.min(1.0, phase * 2.5);
+        const f0 = lullabyNotes[slot] * vib;
+
+        // Mô phỏng thanh âm giọng hát ru ấm áp (họa âm cơ bản, âm bội 2 & 3)
+        const voiceTone = (
+          Math.sin(2 * Math.PI * f0 * t) * 0.24 +
+          Math.sin(4 * Math.PI * f0 * t) * 0.09 +
+          Math.sin(6 * Math.PI * f0 * t) * 0.03
+        ) * noteEnv;
+
+        // Hơi thở nhẹ ngắt quãng như tiếng nấc nghẹn ngào
+        const nBreath = Math.random() * 2 - 1;
+        lpBreath += 0.06 * (nBreath - lpBreath);
+        const sighEnv = (phase > 0.65 && phase < 0.85) ? Math.sin(Math.PI * ((phase - 0.65) / 0.20)) ** 2 : 0;
+        const sigh = (nBreath - lpBreath) * 0.028 * sighEnv;
+
+        data[i] = (cottageWind * 0.65 + (cricket + subCricket) * 0.55 + (voiceTone + sigh) * 0.75) * 0.62;
+      }
+    } else if (
+      lower === 'namxuong_realm_river_waves' ||
+      lower.includes('river_waves') ||
+      lower.includes('song_hoang_giang') ||
+      lower.includes('waves')
+    ) {
+      // 2. 'namxuong_realm_river_waves': Tiếng sóng nước sông Hoàng Giang vỗ triền đê mênh mang, lạnh lẽo giữa đêm đông
+      let lpWave = 0;
+      let lpHiss = 0;
+
+      for (let i = 0; i < length; i++) {
+        const t = i / sampleRate;
+
+        // Tiếng sóng nước vỗ triền đê: hai tầng sóng lớn cuộn dồn nhịp nhàng
+        const nWave = Math.random() * 2 - 1;
+        lpWave += 0.026 * (nWave - lpWave);
+        const swell1 = 0.40 + 0.60 * Math.sin(2 * Math.PI * (1 / duration) * t) ** 2;
+        const swell2 = 0.35 + 0.65 * Math.sin(2 * Math.PI * (2 / duration) * t + 1.2) ** 2;
+        const riverLap = lpWave * (swell1 * 0.62 + swell2 * 0.38) * 0.42;
+
+        // Bọt sóng xô bờ và hạt nước lăn tăn
+        const nHiss = Math.random() * 2 - 1;
+        lpHiss += 0.12 * (nHiss - lpHiss);
+        const waveCrest = Math.max(0, Math.sin(2 * Math.PI * (1 / duration) * t - 0.25)) ** 3;
+        const spray = (nHiss - lpHiss) * waveCrest * 0.055;
+
+        // Gió đêm đông buốt giá mênh mang trên mặt sông
+        const coldDrone = (Math.sin(2 * Math.PI * 52.0 * t) * 0.05 + Math.sin(2 * Math.PI * 78.0 * t) * 0.03) * (0.6 + 0.4 * Math.sin(2 * Math.PI * 0.25 * t));
+        const winterWind = Math.sin(2 * Math.PI * (460 + 35 * Math.sin(2 * Math.PI * 0.2 * t)) * t) * 0.016 * swell1;
+
+        data[i] = (riverLap + spray + coldDrone + winterWind) * 0.64;
+      }
+    } else if (
+      lower === 'namxuong_realm_ritual_music' ||
+      lower.includes('ritual_music') ||
+      lower.includes('dan_giai_oan') ||
+      lower.includes('ritual') ||
+      lower.includes('nhac_le')
+    ) {
+      // 3. 'namxuong_realm_ritual_music': Tiếng nhạc lễ giải oan trầm hùng, chuông đồng & khói hương bảng lảng trên bến sông
+      const ritualNotes = [174.61, 196.0, 220.0, 261.63, 220.0, 196.0];
+      let lpIncense = 0;
+
+      for (let i = 0; i < length; i++) {
+        const t = i / sampleRate;
+
+        // Tiếng chuông đồng cổ đại ngân vang trầm hùng (họa âm không điều hòa chuông đồng Việt)
+        const bellCycle = (t / (duration * 0.5)) % 1.0;
+        const bellEnv = Math.exp(-bellCycle * 2.8);
+        const bell = (
+          Math.sin(2 * Math.PI * 174.61 * t) * 0.32 +
+          Math.sin(2 * Math.PI * 349.23 * t) * 0.18 +
+          Math.sin(2 * Math.PI * 523.25 * t) * 0.08 +
+          Math.sin(2 * Math.PI * 873.08 * t) * 0.04
+        ) * bellEnv;
+
+        // Tiếng nhạc lễ giải oan trầm mặc (nhịp gõ đồng & đàn tang lễ cổ truyền)
+        const seg = (t / duration) * ritualNotes.length;
+        const slot = Math.min(ritualNotes.length - 1, Math.floor(seg));
+        const phase = seg % 1.0;
+        const chantEnv = Math.exp(-phase * 2.5) * Math.sin(Math.PI * Math.min(1.0, phase * 6.0));
+        const fChant = ritualNotes[slot];
+        const ritualMelody = (
+          Math.sin(2 * Math.PI * fChant * t) * 0.22 +
+          Math.sin(4 * Math.PI * fChant * t) * 0.07
+        ) * chantEnv;
+
+        // Khói hương bảng lảng mờ ảo (tiếng gió thiêng & shimmer dải cao êm đềm)
+        const nIncense = Math.random() * 2 - 1;
+        lpIncense += 0.02 * (nIncense - lpIncense);
+        const incenseAir = lpIncense * (0.45 + 0.55 * Math.sin(2 * Math.PI * (1 / duration) * t) ** 2) * 0.22;
+        const shimmer = Math.sin(2 * Math.PI * 698.46 * t) * 0.035 * (0.5 + 0.5 * Math.sin(2 * Math.PI * 0.5 * t));
+
+        data[i] = (bell * 0.55 + ritualMelody * 0.58 + incenseAir + shimmer) * 0.62;
+      }
+    } else if (lower === 'namxuong_river') {
+      // Sóng nước sông Hoàng Giang vỗ nhẹ trong đêm + âm vang thủy cung huyền ảo
+      let lp = 0;
+      for (let i = 0; i < length; i++) {
+        const t = i / sampleRate;
+        const noise = Math.random() * 2 - 1;
+        lp += 0.024 * (noise - lp);
+        const wave1 = 0.42 + 0.58 * Math.sin(2 * Math.PI * 0.25 * t) ** 2;
+        const wave2 = 0.35 + 0.65 * Math.sin(2 * Math.PI * 0.5 * t + 0.9) ** 2;
+        const chimeEnv = Math.exp(-((t * 0.5) % 1.0) * 3.2);
+        const chime = (
+          Math.sin(2 * Math.PI * 523.25 * t) * 0.07 +
+          Math.sin(2 * Math.PI * 659.25 * t) * 0.05
+        ) * chimeEnv;
+        data[i] = lp * (wave1 * 0.6 + wave2 * 0.4) * 0.42 + chime;
+      }
+    } else {
+      // namxuong_cottage: Gió đêm qua vách nứa + giai điệu đàn bầu/lời ru u buồn ngũ cung
+      const notes = [220.0, 261.63, 293.66, 329.63, 293.66, 261.63, 220.0, 196.0];
+      let lp = 0;
+      for (let i = 0; i < length; i++) {
+        const t = i / sampleRate;
+        const noise = Math.random() * 2 - 1;
+        lp += 0.028 * (noise - lp);
+        const windEnv = 0.38 + 0.62 * Math.sin(2 * Math.PI * 0.25 * t) ** 2;
+        const slot = Math.min(notes.length - 1, Math.floor((t / duration) * notes.length));
+        const notePhase = ((t / duration) * notes.length) % 1.0;
+        const noteEnv = Math.sin(Math.PI * notePhase) ** 1.1;
+        const vib = 1.0 + Math.sin(2 * Math.PI * 4.5 * t) * 0.012;
+        const f = notes[slot] * vib;
+        const danBau = (Math.sin(2 * Math.PI * f * t) * 0.22 + Math.sin(4 * Math.PI * f * t) * 0.06) * noteEnv;
+        data[i] = lp * windEnv * 0.28 + danBau * 0.65;
+      }
+    }
+
+    // Crossfade nhẹ 40ms ở biên vòng lặp để tránh tiếng tách (click)
+    const fadeSamples = Math.min(Math.floor(sampleRate * 0.04), Math.floor(length * 0.08));
+    for (let i = 0; i < fadeSamples; i++) {
+      const w = i / fadeSamples;
+      data[i] *= w;
+      data[length - 1 - i] *= w;
+    }
+
+    this.cachedProceduralBuffers.set(cacheKey, buffer);
+    return buffer;
+  }
+
+  /**
+   * Tổng hợp AudioBuffer vòng lặp cho nguồn THREE.PositionalAudio Phòng 302 & Cõi Thế Giới Mở Đây Thôn Vĩ Dạ
+   */
+  _createDayThonViDaPositionalBuffer(theme) {
+    const cacheKey = `vida_${theme}`;
+    if (this.cachedProceduralBuffers.has(cacheKey)) {
+      return this.cachedProceduralBuffers.get(cacheKey);
+    }
+    const ctx = this.listener?.context;
+    if (!ctx) return null;
+    const sampleRate = ctx.sampleRate || 44100;
+    const lower = String(theme || '').toLowerCase();
+    const isRealmKey = lower.includes('vida_realm_');
+    const duration = isRealmKey ? 6.0 : 4.0;
+    const length = Math.floor(sampleRate * duration);
+    const buffer = ctx.createBuffer(1, length, sampleRate);
+    const data = buffer.getChannelData(0);
+
+    if (lower === 'vida_realm_mist_recital' || lower.includes('mist') || lower.includes('recital') || lower.includes('suong')) {
+      // Cõi mộng sương khói: tiếng sáo trúc vang vọng mờ ảo hòa tiếng gió đêm trên bến sương khói
+      const fluteNotes = [440.0, 392.0, 349.23, 293.66, 349.23, 293.66];
+      const echoSamples = Math.floor(sampleRate * 0.36);
+      const dryFlute = new Float32Array(length);
+      let lpWind = 0;
+      let lpBreath = 0;
+
+      for (let i = 0; i < length; i++) {
+        const t = i / sampleRate;
+        const nWind = Math.random() * 2 - 1;
+        lpWind += 0.016 * (nWind - lpWind);
+        const nightSwell = 0.40 + 0.60 * Math.sin(2 * Math.PI * (1 / duration) * t) ** 2;
+        const nightWind = lpWind * nightSwell * 0.28;
+
+        const seg = (t / duration) * fluteNotes.length;
+        const slot = Math.min(fluteNotes.length - 1, Math.floor(seg));
+        const phase = seg % 1.0;
+        // Sáo trúc ngân êm, có khoảng lặng mờ ảo cuối mỗi câu
+        const activeEnv = phase < 0.82 ? Math.sin(Math.PI * (phase / 0.82)) ** 1.25 : 0;
+        const vib = 1.0 + Math.sin(2 * Math.PI * 4.6 * t) * 0.010 * Math.min(1, phase * 3.0);
+        const f = fluteNotes[slot] * vib;
+
+        const nBreath = Math.random() * 2 - 1;
+        lpBreath += 0.085 * (nBreath - lpBreath);
+        const breathNoise = (nBreath - lpBreath) * 0.035 * activeEnv;
+
+        const fluteTone = (
+          Math.sin(2 * Math.PI * f * t) * 0.20 +
+          Math.sin(4 * Math.PI * f * t) * 0.045 +
+          Math.sin(6 * Math.PI * f * t) * 0.015
+        ) * activeEnv + breathNoise;
+
+        dryFlute[i] = fluteTone;
+        const echoIdx = (i - echoSamples + length) % length;
+        const echoFlute = dryFlute[echoIdx] * 0.34;
+
+        data[i] = (nightWind + fluteTone * 0.72 + echoFlute) * 0.60;
+      }
+    } else if (lower === 'vida_realm_garden_wind' || lower.includes('garden') || lower.includes('vuon') || lower.includes('bamboo')) {
+      // Vườn Vĩ Dạ ban mai: tiếng gió nhẹ lùa qua tàu cau, lá trúc xào xạc kết hợp tiếng chim hót ban mai thưa thoáng
+      let lpWind = 0;
+      let lpRustle = 0;
+      const morningNotes = [587.33, 659.25, 783.99, 659.25, 587.33, 523.25];
+      for (let i = 0; i < length; i++) {
+        const t = i / sampleRate;
+        const n1 = Math.random() * 2 - 1;
+        lpWind += 0.024 * (n1 - lpWind);
+        const breeze = 0.38 + 0.62 * Math.sin(2 * Math.PI * (1 / duration) * t) ** 2;
+        const gust = 0.55 + 0.45 * Math.sin(2 * Math.PI * (2 / duration) * t + 0.8);
+        const palmWind = lpWind * breeze * 0.24;
+
+        // Tiếng lá trúc & tàu cau xào xạc nhẹ ở dải trung-cao
+        const n2 = Math.random() * 2 - 1;
+        lpRustle += 0.18 * (n2 - lpRustle);
+        const leafRustle = (n2 - lpRustle) * (0.025 + 0.035 * breeze * gust);
+
+        // Tiếng chim hót ban mai thưa thoáng (2 nhịp luyến tự nhiên trong vòng lặp)
+        let bird = 0;
+        const c1 = (t - 0.85) / 0.32;
+        if (c1 >= 0 && c1 <= 1) {
+          const env1 = Math.sin(Math.PI * c1) ** 1.4;
+          const f1 = 1980 + 480 * Math.sin(Math.PI * c1) + 180 * Math.sin(2 * Math.PI * 16.0 * t);
+          bird += Math.sin(2 * Math.PI * f1 * t) * env1 * 0.055;
+        }
+        const c2 = (t - 3.70) / 0.36;
+        if (c2 >= 0 && c2 <= 1) {
+          const env2 = Math.sin(Math.PI * c2) ** 1.5;
+          const f2 = 2240 - 320 * c2 + 210 * Math.sin(2 * Math.PI * 14.0 * t);
+          bird += Math.sin(2 * Math.PI * f2 * t) * env2 * 0.05;
+        }
+
+        const slot = Math.min(morningNotes.length - 1, Math.floor((t / duration) * morningNotes.length));
+        const notePhase = ((t / duration) * morningNotes.length) % 1.0;
+        const chimeEnv = Math.exp(-notePhase * 4.2) * Math.sin(Math.PI * Math.min(1, notePhase * 8));
+        const chime = Math.sin(2 * Math.PI * morningNotes[slot] * t) * chimeEnv * (isRealmKey ? 0.055 : 0.11);
+
+        data[i] = (palmWind + leafRustle + bird + chime) * 0.64;
+      }
+    } else {
+      // vida_realm_river_zither / Bến sông trăng: tiếng sóng nước sông Hương vỗ mạn thuyền êm ái hòa quyện tiếng đàn tranh Huế ngũ cung sâu lắng
+      let lp = 0;
+      const hueNotes = isRealmKey
+        ? [293.66, 349.23, 392.0, 440.0, 523.25, 440.0, 392.0, 329.63]
+        : [293.66, 329.63, 392.0, 440.0, 392.0, 329.63, 293.66, 261.63];
+      for (let i = 0; i < length; i++) {
+        const t = i / sampleRate;
+        const noise = Math.random() * 2 - 1;
+        lp += 0.020 * (noise - lp);
+        const wave1 = 0.42 + 0.58 * Math.sin(2 * Math.PI * (1 / duration) * t) ** 2;
+        const wave2 = 0.36 + 0.64 * Math.sin(2 * Math.PI * (2 / duration) * t + 0.7) ** 2;
+        const riverLap = lp * (wave1 * 0.62 + wave2 * 0.38) * 0.34;
+        const hullSoft = Math.sin(2 * Math.PI * 98.0 * t) * 0.018 * (wave1 * wave2);
+
+        const slot = Math.min(hueNotes.length - 1, Math.floor((t / duration) * hueNotes.length));
+        const notePhase = ((t / duration) * hueNotes.length) % 1.0;
+        const pluckEnv = Math.exp(-notePhase * 3.1) * Math.sin(Math.PI * Math.min(1, notePhase * 7));
+        const vib = 1.0 + Math.sin(2 * Math.PI * 4.2 * t) * 0.0085;
+        const f = hueNotes[slot] * vib;
+        const zither = (
+          Math.sin(2 * Math.PI * f * t) * 0.21 +
+          Math.sin(4 * Math.PI * f * t) * 0.075 +
+          Math.sin(6 * Math.PI * f * t) * 0.025
+        ) * pluckEnv;
+
+        data[i] = (riverLap + hullSoft + zither) * 0.62;
+      }
+    }
+
+    // Crossfade nhẹ 40ms ở biên vòng lặp để tránh tiếng tách (click)
+    const fadeSamples = Math.min(Math.floor(sampleRate * 0.04), Math.floor(length * 0.08));
+    for (let i = 0; i < fadeSamples; i++) {
+      const w = i / fadeSamples;
+      data[i] *= w;
+      data[length - 1 - i] *= w;
+    }
+
+    this.cachedProceduralBuffers.set(cacheKey, buffer);
+    return buffer;
+  }
+
+  /**
    * Gắn nguồn âm thanh 3D (THREE.PositionalAudio) vào một vật thể trung tâm
    */
   attachPositionalSound(key, targetObject3D, {
@@ -870,19 +1243,38 @@ export class MuseumSpatialAudioDirector {
 
     targetObject3D.add(posAudio);
 
-    const isTatDenProcedural = !audioUrl && typeof fallbackTheme === 'string' && fallbackTheme.startsWith('tatden_');
-    const isNqshProcedural = !audioUrl && typeof fallbackTheme === 'string' && fallbackTheme.startsWith('nqsh_');
-    const isThanhGiongProcedural = !audioUrl && typeof fallbackTheme === 'string' && fallbackTheme.startsWith('thanhgiong_');
-    const isProcedural = isTatDenProcedural || isNqshProcedural || isThanhGiongProcedural;
+    const keyStr = String(key || '');
+    const resolvedFallbackTheme = (fallbackTheme && fallbackTheme !== 'truyenKieu')
+      ? fallbackTheme
+      : (keyStr.startsWith('vida_')
+        ? keyStr
+        : (keyStr.startsWith('namxuong_') || keyStr.startsWith('nam_xuong_') ? keyStr : fallbackTheme));
+
+    const isTatDenProcedural = !audioUrl && typeof resolvedFallbackTheme === 'string' && resolvedFallbackTheme.startsWith('tatden_');
+    const isNqshProcedural = !audioUrl && typeof resolvedFallbackTheme === 'string' && resolvedFallbackTheme.startsWith('nqsh_');
+    const isThanhGiongProcedural = !audioUrl && typeof resolvedFallbackTheme === 'string' && resolvedFallbackTheme.startsWith('thanhgiong_');
+    const isNamXuongProcedural = !audioUrl && typeof resolvedFallbackTheme === 'string' && (
+      resolvedFallbackTheme.startsWith('namxuong_') ||
+      resolvedFallbackTheme.startsWith('nam_xuong_') ||
+      resolvedFallbackTheme === 'nguoi_con_gai_nam_xuong'
+    );
+    const isViDaProcedural = !audioUrl && typeof resolvedFallbackTheme === 'string' && (
+      resolvedFallbackTheme.startsWith('vida_') ||
+      resolvedFallbackTheme.startsWith('dayThonViDa') ||
+      resolvedFallbackTheme === 'day_thon_vi_da'
+    );
+    const isProcedural = isTatDenProcedural || isNqshProcedural || isThanhGiongProcedural || isNamXuongProcedural || isViDaProcedural;
     const record = {
       key,
       posAudio,
-      fallbackTheme,
+      fallbackTheme: resolvedFallbackTheme,
       isLoadedFile: false,
       autoPlayLoop: isProcedural,
       isProcedural,
       isNqshProcedural,
-      isThanhGiongProcedural
+      isThanhGiongProcedural,
+      isNamXuongProcedural,
+      isViDaProcedural
     };
 
     if (audioUrl) {
@@ -988,6 +1380,18 @@ export class MuseumSpatialAudioDirector {
       notes = [329.63, 392.0, 440.0, 523.25, 659.25];
       oscType = 'sine';
       tempoMs = 2000;
+      baseGain = 0.045;
+    } else if (theme.includes('namXuong') || theme.includes('nam_xuong') || theme.includes('namxuong') || theme.includes('hoangGiang')) {
+      // Nam Xương: Âm hưởng đàn bầu / sáo trầm ai oán bên bến Hoàng Giang
+      notes = [220.0, 261.63, 293.66, 329.63, 392.0, 440.0];
+      oscType = 'sine';
+      tempoMs = 2100;
+      baseGain = 0.048;
+    } else if (theme.includes('dayThonViDa') || theme.includes('day_thon_vi_da') || theme.includes('vi_da') || theme.includes('vida')) {
+      // Đây Thôn Vĩ Dạ: Âm hưởng đàn tranh / sáo trúc xứ Huế bàng bạc mộng ảo
+      notes = [293.66, 329.63, 392.0, 440.0, 523.25, 587.33];
+      oscType = 'sine';
+      tempoMs = 1950;
       baseGain = 0.045;
     }
 
@@ -1160,6 +1564,15 @@ export class MuseumSpatialAudioDirector {
  * PHẦN 2: INTERACTIVE LORE GUIDE (GIAO DIỆN THẺ THƠ SƠN MÀI HOÀNG GIA)
  * ============================================================================
  */
+function getObjectRootScene(obj) {
+  let cur = obj;
+  while (cur) {
+    if (cur.isScene) return cur;
+    cur = cur.parent;
+  }
+  return null;
+}
+
 export class MuseumInteractiveLoreGuide {
   constructor(camera, domElement = document.body) {
     this.camera = camera;
@@ -1168,6 +1581,12 @@ export class MuseumInteractiveLoreGuide {
     this.mouse = new THREE.Vector2();
     this.interactiveArtifacts = [];
     this.isOpen = false;
+    this._hoveredTarget = null;
+    this._isHoveringPlaque = false;
+    this._lastHoverRaycastMs = 0;
+    this._openedInScene = null;
+    this._openedInRealm = false;
+    this._pendingRestoreCamera = null;
 
     this._injectLoreOverlayDOM();
     this._bindEvents();
@@ -1178,6 +1597,7 @@ export class MuseumInteractiveLoreGuide {
     let existing = document.getElementById('museum-lore-overlay');
     if (existing) {
       this.overlayEl = existing;
+      this.hoverPromptEl = document.getElementById('lore-hover-prompt');
       return;
     }
 
@@ -1190,6 +1610,7 @@ export class MuseumInteractiveLoreGuide {
         display: flex;
         align-items: center;
         justify-content: center;
+        padding: 18px;
         background: rgba(10, 4, 18, 0.78);
         backdrop-filter: blur(8px);
         z-index: 99999;
@@ -1203,79 +1624,157 @@ export class MuseumInteractiveLoreGuide {
         pointer-events: auto;
       }
       .lore-card {
-        max-width: 640px;
-        width: 90%;
+        max-width: 740px;
+        width: 92%;
+        max-height: 88vh;
+        overflow-y: auto;
         background: linear-gradient(145deg, #1f0707 0%, #2e0d16 55%, #12030a 100%);
         border: 3px solid #fde047;
         box-shadow: 0 0 45px rgba(234, 179, 8, 0.45), inset 0 0 24px rgba(253, 224, 71, 0.2);
         border-radius: 14px;
-        padding: 30px 36px;
+        padding: 28px 34px;
         color: #fdf2f8;
         transform: translateY(18px) scale(0.96);
         transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
         position: relative;
+        box-sizing: border-box;
+      }
+      .lore-card::-webkit-scrollbar {
+        width: 7px;
+      }
+      .lore-card::-webkit-scrollbar-thumb {
+        background: rgba(212, 175, 55, 0.45);
+        border-radius: 4px;
       }
       #museum-lore-overlay.active .lore-card {
         transform: translateY(0) scale(1);
       }
       .lore-room-tag {
         color: #f472b6;
-        font-size: 13px;
-        letter-spacing: 2.5px;
+        font-size: 12.5px;
+        letter-spacing: 2px;
         text-transform: uppercase;
         font-family: "Segoe UI", sans-serif;
         font-weight: 700;
         margin-bottom: 6px;
+        padding-right: 165px;
       }
       .lore-title {
         color: #fde047;
-        font-size: 28px;
+        font-size: 27px;
         font-weight: bold;
         margin: 0 0 6px 0;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.4px;
         text-shadow: 0 0 16px rgba(253, 224, 71, 0.35);
       }
       .lore-subtitle {
         color: #fbcfe8;
-        font-size: 16px;
+        font-size: 15.5px;
         font-style: italic;
-        margin-bottom: 18px;
+        margin-bottom: 12px;
+      }
+      .lore-meta-pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 14px;
+      }
+      .lore-meta-pill {
+        font-family: "Segoe UI", sans-serif;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: rgba(253, 224, 71, 0.14);
+        border: 1px solid rgba(253, 224, 71, 0.4);
+        color: #fef08a;
+      }
+      .lore-illustration-wrap {
+        margin: 12px 0 16px 0;
+        border-radius: 10px;
+        overflow: hidden;
+        border: 1px solid rgba(253, 224, 71, 0.35);
+        background: rgba(0, 0, 0, 0.32);
+        text-align: center;
+      }
+      .lore-illustration-img {
+        display: block;
+        width: 100%;
+        max-height: 220px;
+        object-fit: contain;
+        background: rgba(15, 10, 8, 0.25);
+      }
+      .lore-illustration-fallback {
+        padding: 24px 16px;
+        font-family: "Segoe UI", sans-serif;
+        font-size: 13.5px;
+        font-style: italic;
+        opacity: 0.85;
+      }
+      .lore-illustration-caption {
+        font-family: "Segoe UI", sans-serif;
+        font-size: 12px;
+        font-style: italic;
+        padding: 6px 12px;
+        border-top: 1px solid rgba(255, 255, 255, 0.12);
+        opacity: 0.88;
       }
       .lore-poem-box {
         background: rgba(0, 0, 0, 0.42);
         border-left: 4px solid #fde047;
-        padding: 16px 22px;
-        margin: 16px 0;
-        font-size: 20px;
-        line-height: 1.65;
+        padding: 14px 20px;
+        margin: 14px 0;
+        font-size: 18.5px;
+        line-height: 1.62;
         color: #fef08a;
         font-style: italic;
         border-radius: 0 8px 8px 0;
       }
       .lore-desc {
         font-family: "Segoe UI", sans-serif;
-        font-size: 15.5px;
-        line-height: 1.65;
+        font-size: 15px;
+        line-height: 1.68;
         color: #f8fafc;
-        margin-bottom: 24px;
+        margin-bottom: 20px;
+      }
+      .lore-desc p {
+        margin: 0 0 10px 0;
+      }
+      .lore-desc p:last-child {
+        margin-bottom: 0;
+      }
+      .lore-card-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-top: 8px;
+        padding-top: 12px;
+        border-top: 1px solid rgba(255, 255, 255, 0.15);
+      }
+      .lore-footer-hint {
+        font-family: "Segoe UI", sans-serif;
+        font-size: 12px;
+        opacity: 0.78;
       }
       .lore-close-btn {
         background: linear-gradient(90deg, #ca8a04, #eab308);
         color: #1a0505;
         border: none;
-        padding: 10px 24px;
-        font-size: 14.5px;
+        padding: 10px 22px;
+        font-size: 14px;
         font-weight: bold;
         border-radius: 6px;
         cursor: pointer;
-        float: right;
         box-shadow: 0 0 16px rgba(234, 179, 8, 0.4);
         transition: transform 0.15s ease;
+        flex-shrink: 0;
       }
       .lore-close-btn:hover {
         transform: scale(1.04);
       }
-      /* Phong cách Giấy Dó Cổ cho Phòng Trưng Bày Tắt Đèn (Ngô Tất Tố) */
+
+      /* 1. Phong cách Giấy Dó Cổ (giay_do) */
       .lore-card.giay-do-theme {
         background:
           radial-gradient(circle at 20% 15%, rgba(255, 248, 224, 0.45), transparent 55%),
@@ -1285,17 +1784,18 @@ export class MuseumInteractiveLoreGuide {
         color: #26180d;
       }
       .lore-card.giay-do-theme::before {
-        content: "TẮT ĐÈN • 1939";
+        content: attr(data-badge);
         position: absolute;
         top: 16px;
         right: 22px;
         border: 2px solid #8c221b;
         color: #8c221b;
-        padding: 3px 8px;
+        background: rgba(140, 34, 27, 0.08);
+        padding: 3px 9px;
         font-size: 11px;
         font-weight: 700;
         letter-spacing: 1.4px;
-        opacity: 0.78;
+        opacity: 0.85;
         transform: rotate(-3deg);
       }
       .lore-card.giay-do-theme .lore-room-tag {
@@ -1308,6 +1808,19 @@ export class MuseumInteractiveLoreGuide {
       .lore-card.giay-do-theme .lore-subtitle {
         color: #5c3d22;
       }
+      .lore-card.giay-do-theme .lore-meta-pill {
+        background: rgba(90, 57, 27, 0.12);
+        border-color: rgba(90, 57, 27, 0.35);
+        color: #4a2c12;
+      }
+      .lore-card.giay-do-theme .lore-illustration-wrap {
+        border-color: rgba(90, 57, 27, 0.45);
+        background: rgba(124, 77, 38, 0.08);
+      }
+      .lore-card.giay-do-theme .lore-illustration-caption {
+        border-top-color: rgba(90, 57, 27, 0.22);
+        color: #4a2c12;
+      }
       .lore-card.giay-do-theme .lore-poem-box {
         background: rgba(94, 62, 29, 0.09);
         border-left: 4px solid #7c2d12;
@@ -1316,16 +1829,18 @@ export class MuseumInteractiveLoreGuide {
       .lore-card.giay-do-theme .lore-desc {
         color: #2f1f13;
       }
+      .lore-card.giay-do-theme .lore-card-footer {
+        border-top-color: rgba(90, 57, 27, 0.24);
+      }
       .lore-card.giay-do-theme .lore-close-btn {
         background: linear-gradient(90deg, #5a381b, #7c4d26);
         color: #f6e7c8;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
       }
-      /* Phong cách Chiếu Lụa Cổ Hoàng Kim cho Nam Quốc Sơn Hà – Lý Thường Kiệt */
-      .lore-card.chieu-lua-theme {
-        max-width: 720px;
-        max-height: 86vh;
-        overflow-y: auto;
+
+      /* 2. Phong cách Chiếu Lụa Hoàng Kim (lua_hoang_kim / chieu_lua) */
+      .lore-card.chieu-lua-theme,
+      .lore-card.lua-hoang-kim-theme {
         background:
           radial-gradient(circle at 18% 12%, rgba(255, 251, 232, 0.55), transparent 58%),
           linear-gradient(160deg, #f8e9be 0%, #ebd08c 48%, #d7b25c 100%);
@@ -1333,8 +1848,9 @@ export class MuseumInteractiveLoreGuide {
         box-shadow: 0 22px 54px rgba(0, 0, 0, 0.8), inset 0 0 42px rgba(139, 30, 30, 0.22);
         color: #2b1408;
       }
-      .lore-card.chieu-lua-theme::before {
-        content: "THIÊN THƯ • 1077";
+      .lore-card.chieu-lua-theme::before,
+      .lore-card.lua-hoang-kim-theme::before {
+        content: attr(data-badge);
         position: absolute;
         top: 16px;
         right: 22px;
@@ -1347,17 +1863,37 @@ export class MuseumInteractiveLoreGuide {
         letter-spacing: 1.5px;
         transform: rotate(-3deg);
       }
-      .lore-card.chieu-lua-theme .lore-room-tag {
+      .lore-card.chieu-lua-theme .lore-room-tag,
+      .lore-card.lua-hoang-kim-theme .lore-room-tag {
         color: #8b1e1e;
       }
-      .lore-card.chieu-lua-theme .lore-title {
+      .lore-card.chieu-lua-theme .lore-title,
+      .lore-card.lua-hoang-kim-theme .lore-title {
         color: #4f0e0e;
         text-shadow: 0 1px 0 rgba(255, 245, 210, 0.7);
       }
-      .lore-card.chieu-lua-theme .lore-subtitle {
+      .lore-card.chieu-lua-theme .lore-subtitle,
+      .lore-card.lua-hoang-kim-theme .lore-subtitle {
         color: #5c3114;
       }
-      .lore-card.chieu-lua-theme .lore-poem-box {
+      .lore-card.chieu-lua-theme .lore-meta-pill,
+      .lore-card.lua-hoang-kim-theme .lore-meta-pill {
+        background: rgba(139, 30, 30, 0.10);
+        border-color: rgba(139, 30, 30, 0.35);
+        color: #6b1515;
+      }
+      .lore-card.chieu-lua-theme .lore-illustration-wrap,
+      .lore-card.lua-hoang-kim-theme .lore-illustration-wrap {
+        border-color: rgba(139, 30, 30, 0.40);
+        background: rgba(139, 30, 30, 0.06);
+      }
+      .lore-card.chieu-lua-theme .lore-illustration-caption,
+      .lore-card.lua-hoang-kim-theme .lore-illustration-caption {
+        border-top-color: rgba(139, 30, 30, 0.22);
+        color: #5c3114;
+      }
+      .lore-card.chieu-lua-theme .lore-poem-box,
+      .lore-card.lua-hoang-kim-theme .lore-poem-box {
         background: rgba(139, 30, 30, 0.08);
         border-left: 4px solid #8b1e1e;
         color: #3a1808;
@@ -1397,16 +1933,87 @@ export class MuseumInteractiveLoreGuide {
         font-style: normal;
         color: #3a1f0e;
       }
-      .lore-card.chieu-lua-theme .lore-desc {
+      .lore-card.chieu-lua-theme .lore-desc,
+      .lore-card.lua-hoang-kim-theme .lore-desc {
         color: #2f180b;
         font-size: 14.5px;
       }
-      .lore-card.chieu-lua-theme .lore-close-btn {
+      .lore-card.chieu-lua-theme .lore-card-footer,
+      .lore-card.lua-hoang-kim-theme .lore-card-footer {
+        border-top-color: rgba(139, 30, 30, 0.25);
+      }
+      .lore-card.chieu-lua-theme .lore-close-btn,
+      .lore-card.lua-hoang-kim-theme .lore-close-btn {
         background: linear-gradient(90deg, #8b1e1e, #b83324);
         color: #fef3c7;
         box-shadow: 0 4px 14px rgba(139, 30, 30, 0.45);
       }
-      /* Phong cách Bản Khắc Đồng Cổ Đông Sơn / Giấy Dó cho Phòng 101 & Cõi Thánh Gióng */
+
+      /* 3. Phong cách Bia Đá Rêu Phong (da_reu_phong) */
+      .lore-card.da-reu-phong-theme {
+        background:
+          radial-gradient(circle at 18% 15%, rgba(92, 114, 88, 0.26), transparent 56%),
+          radial-gradient(circle at 86% 85%, rgba(217, 164, 65, 0.14), transparent 55%),
+          linear-gradient(155deg, #373e38 0%, #2a312b 54%, #1f2520 100%);
+        border: 3px double #5c7258;
+        box-shadow: 0 22px 54px rgba(0, 0, 0, 0.85), inset 0 0 38px rgba(74, 112, 68, 0.25), inset 0 0 0 1px rgba(217, 164, 65, 0.28);
+        color: #f3e7c8;
+      }
+      .lore-card.da-reu-phong-theme::before {
+        content: attr(data-badge);
+        position: absolute;
+        top: 16px;
+        right: 22px;
+        border: 2px solid #d9a441;
+        background: rgba(217, 164, 65, 0.14);
+        color: #f3c86a;
+        padding: 3px 9px;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 1.4px;
+        transform: rotate(-3deg);
+      }
+      .lore-card.da-reu-phong-theme .lore-room-tag {
+        color: #a9c7a1;
+      }
+      .lore-card.da-reu-phong-theme .lore-title {
+        color: #f8e5b2;
+        text-shadow: 0 2px 6px rgba(0, 0, 0, 0.65);
+      }
+      .lore-card.da-reu-phong-theme .lore-subtitle {
+        color: #d1c29a;
+      }
+      .lore-card.da-reu-phong-theme .lore-meta-pill {
+        background: rgba(92, 114, 88, 0.25);
+        border-color: rgba(217, 164, 65, 0.45);
+        color: #f3e7c8;
+      }
+      .lore-card.da-reu-phong-theme .lore-illustration-wrap {
+        border-color: rgba(92, 114, 88, 0.75);
+        background: rgba(22, 27, 23, 0.65);
+      }
+      .lore-card.da-reu-phong-theme .lore-illustration-caption {
+        border-top-color: rgba(92, 114, 88, 0.45);
+        color: #d1c29a;
+      }
+      .lore-card.da-reu-phong-theme .lore-poem-box {
+        background: rgba(20, 26, 21, 0.55);
+        border-left: 4px solid #d9a441;
+        color: #f6e4b5;
+      }
+      .lore-card.da-reu-phong-theme .lore-desc {
+        color: #ede3ca;
+      }
+      .lore-card.da-reu-phong-theme .lore-card-footer {
+        border-top-color: rgba(92, 114, 88, 0.42);
+      }
+      .lore-card.da-reu-phong-theme .lore-close-btn {
+        background: linear-gradient(90deg, #b88224, #d9a441);
+        color: #1c201c;
+        box-shadow: 0 4px 14px rgba(217, 164, 65, 0.35);
+      }
+
+      /* 4. Phong cách Bản Khắc Đồng Cổ Đông Sơn / Giấy Dó cho hiện vật Phòng 101 */
       .lore-card.dong-son-giay-do-theme {
         background:
           radial-gradient(circle at 15% 15%, rgba(255, 244, 212, 0.55), transparent 55%),
@@ -1417,7 +2024,7 @@ export class MuseumInteractiveLoreGuide {
         color: #261609;
       }
       .lore-card.dong-son-giay-do-theme::before {
-        content: "ĐÔNG SƠN • PHÙ ĐỔNG";
+        content: attr(data-badge);
         position: absolute;
         top: 16px;
         right: 22px;
@@ -1432,7 +2039,6 @@ export class MuseumInteractiveLoreGuide {
       }
       .lore-card.dong-son-giay-do-theme .lore-room-tag {
         color: #1f4e43;
-        padding-right: 150px;
       }
       .lore-card.dong-son-giay-do-theme .lore-title {
         color: #5c1d0c;
@@ -1440,6 +2046,19 @@ export class MuseumInteractiveLoreGuide {
       }
       .lore-card.dong-son-giay-do-theme .lore-subtitle {
         color: #6b3f16;
+      }
+      .lore-card.dong-son-giay-do-theme .lore-meta-pill {
+        background: rgba(154, 52, 18, 0.10);
+        border-color: rgba(154, 52, 18, 0.35);
+        color: #7c2d12;
+      }
+      .lore-card.dong-son-giay-do-theme .lore-illustration-wrap {
+        border-color: rgba(124, 77, 24, 0.45);
+        background: rgba(124, 77, 24, 0.08);
+      }
+      .lore-card.dong-son-giay-do-theme .lore-illustration-caption {
+        border-top-color: rgba(124, 77, 24, 0.24);
+        color: #5c3114;
       }
       .lore-card.dong-son-giay-do-theme .lore-poem-box {
         background: rgba(124, 77, 24, 0.10);
@@ -1449,10 +2068,258 @@ export class MuseumInteractiveLoreGuide {
       .lore-card.dong-son-giay-do-theme .lore-desc {
         color: #2b180a;
       }
+      .lore-card.dong-son-giay-do-theme .lore-card-footer {
+        border-top-color: rgba(124, 77, 24, 0.25);
+      }
       .lore-card.dong-son-giay-do-theme .lore-close-btn {
         background: linear-gradient(90deg, #9a3412, #c2410c);
         color: #fef3c7;
         box-shadow: 0 4px 14px rgba(154, 52, 18, 0.45);
+      }
+
+      /* 5. Phong cách Dải Lụa Trắng / Giấy Dó Huyền Ảo (lua_trang) */
+      .lore-card.lua-trang-theme {
+        background:
+          radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.92), transparent 56%),
+          radial-gradient(circle at 88% 85%, rgba(0, 255, 204, 0.10), transparent 52%),
+          linear-gradient(155deg, #fcfaf4 0%, #f1ece0 52%, #e4dcc8 100%);
+        border: 3px double #8a7f6b;
+        box-shadow:
+          0 24px 58px rgba(6, 12, 24, 0.82),
+          0 0 34px rgba(147, 197, 253, 0.24),
+          inset 0 0 36px rgba(255, 255, 255, 0.72),
+          inset 0 0 0 1px rgba(29, 77, 89, 0.22);
+        color: #1a2033;
+      }
+      .lore-card.lua-trang-theme::before {
+        content: attr(data-badge);
+        position: absolute;
+        top: 16px;
+        right: 22px;
+        border: 2px solid #1d4d59;
+        background: rgba(29, 77, 89, 0.08);
+        color: #1d4d59;
+        padding: 3px 9px;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 1.4px;
+        transform: rotate(-3deg);
+      }
+      .lore-card.lua-trang-theme .lore-room-tag {
+        color: #1d4d59;
+      }
+      .lore-card.lua-trang-theme .lore-title {
+        color: #13192b;
+        text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
+      }
+      .lore-card.lua-trang-theme .lore-subtitle {
+        color: #434b63;
+      }
+      .lore-card.lua-trang-theme .lore-meta-pill {
+        background: rgba(29, 77, 89, 0.09);
+        border-color: rgba(29, 77, 89, 0.28);
+        color: #173e48;
+      }
+      .lore-card.lua-trang-theme .lore-illustration-wrap {
+        border-color: rgba(29, 77, 89, 0.35);
+        background: rgba(19, 25, 43, 0.06);
+      }
+      .lore-card.lua-trang-theme .lore-illustration-caption {
+        border-top-color: rgba(29, 77, 89, 0.18);
+        color: #364158;
+      }
+      .lore-card.lua-trang-theme .lore-poem-box {
+        background: linear-gradient(90deg, rgba(29, 77, 89, 0.09), rgba(255, 255, 255, 0.45));
+        border-left: 4px solid #1d4d59;
+        color: #192438;
+        font-size: 17px;
+      }
+      .lore-card.lua-trang-theme .lore-desc {
+        color: #1f273c;
+      }
+      .lore-card.lua-trang-theme .lore-card-footer {
+        border-top-color: rgba(29, 77, 89, 0.22);
+      }
+      .lore-card.lua-trang-theme .lore-close-btn {
+        background: linear-gradient(90deg, #1d4d59, #296a7a);
+        color: #fcfaf4;
+        box-shadow: 0 4px 14px rgba(29, 77, 89, 0.35);
+      }
+
+      /* 6. Phong cách Ngọc Bích Vĩ Dạ & Lụa Trắng Huế (ngoc_vi_da) */
+      .lore-card.ngoc-vi-da-theme {
+        background:
+          radial-gradient(circle at 16% 12%, rgba(255, 255, 255, 0.94), transparent 56%),
+          radial-gradient(circle at 86% 86%, rgba(16, 185, 129, 0.14), transparent 54%),
+          linear-gradient(155deg, #f5fbf7 0%, #e4f3eb 52%, #cfe8dc 100%);
+        border: 3px double #0f766e;
+        box-shadow:
+          0 24px 58px rgba(4, 24, 20, 0.80),
+          0 0 36px rgba(52, 211, 153, 0.24),
+          inset 0 0 38px rgba(255, 255, 255, 0.78),
+          inset 0 0 0 1px rgba(15, 118, 110, 0.24);
+        color: #112a22;
+      }
+      .lore-card.ngoc-vi-da-theme::before {
+        content: attr(data-badge);
+        position: absolute;
+        top: 16px;
+        right: 22px;
+        border: 2px solid #0f766e;
+        background: rgba(15, 118, 110, 0.09);
+        color: #0f766e;
+        padding: 3px 9px;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 1.4px;
+        transform: rotate(-3deg);
+      }
+      .lore-card.ngoc-vi-da-theme .lore-room-tag {
+        color: #0f766e;
+      }
+      .lore-card.ngoc-vi-da-theme .lore-title {
+        color: #0b3b30;
+        text-shadow: 0 1px 0 rgba(255, 255, 255, 0.85);
+      }
+      .lore-card.ngoc-vi-da-theme .lore-subtitle {
+        color: #2d5a4c;
+      }
+      .lore-card.ngoc-vi-da-theme .lore-meta-pill {
+        background: rgba(15, 118, 110, 0.10);
+        border-color: rgba(15, 118, 110, 0.30);
+        color: #0d5c55;
+      }
+      .lore-card.ngoc-vi-da-theme .lore-illustration-wrap {
+        border-color: rgba(15, 118, 110, 0.38);
+        background: rgba(15, 42, 34, 0.06);
+      }
+      .lore-card.ngoc-vi-da-theme .lore-illustration-caption {
+        border-top-color: rgba(15, 118, 110, 0.20);
+        color: #264d41;
+      }
+      .lore-card.ngoc-vi-da-theme .lore-poem-box {
+        background: linear-gradient(120deg, rgba(15, 118, 110, 0.10), rgba(255, 255, 255, 0.62));
+        border-left: 4px solid #0f766e;
+        color: #103329;
+        font-family: "Palatino Linotype", "Book Antiqua", "Times New Roman", Georgia, serif;
+        font-size: 17.5px;
+        line-height: 1.66;
+        letter-spacing: 0.2px;
+      }
+      .lore-card.ngoc-vi-da-theme .lore-desc {
+        color: #16332b;
+      }
+      .lore-card.ngoc-vi-da-theme .lore-card-footer {
+        border-top-color: rgba(15, 118, 110, 0.22);
+      }
+      .lore-card.ngoc-vi-da-theme .lore-close-btn {
+        background: linear-gradient(90deg, #0f766e, #059669);
+        color: #f4fbf7;
+        box-shadow: 0 4px 14px rgba(15, 118, 110, 0.35);
+      }
+      .lore-poem-stanza {
+        margin-bottom: 12px;
+      }
+      .lore-poem-stanza:last-child {
+        margin-bottom: 0;
+      }
+      .lore-poem-stanza-label {
+        font-family: "Segoe UI", sans-serif;
+        font-size: 11px;
+        font-weight: 700;
+        font-style: normal;
+        letter-spacing: 1.1px;
+        text-transform: uppercase;
+        opacity: 0.72;
+        margin-bottom: 3px;
+      }
+      .lore-poem-quote {
+        margin-top: 12px;
+        padding-top: 9px;
+        border-top: 1px dashed rgba(15, 118, 110, 0.32);
+        font-family: "Segoe UI", sans-serif;
+        font-size: 13px;
+        font-style: italic;
+        opacity: 0.88;
+      }
+
+      /* Khối 4 mục học thuật có cấu trúc cho Lore Card */
+      .lore-sections-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 10px;
+        margin-top: 6px;
+      }
+      .lore-section-card {
+        padding: 11px 14px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(253, 224, 71, 0.24);
+      }
+      .lore-card.lua-trang-theme .lore-section-card,
+      .lore-card.ngoc-vi-da-theme .lore-section-card,
+      .lore-card.giay-do-theme .lore-section-card {
+        background: rgba(255, 255, 255, 0.62);
+        border: 1px solid rgba(29, 77, 89, 0.22);
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+      }
+      .lore-card.ngoc-vi-da-theme .lore-section-card {
+        background: rgba(255, 255, 255, 0.72);
+        border-color: rgba(15, 118, 110, 0.25);
+      }
+      .lore-card.giay-do-theme .lore-section-card {
+        border-color: rgba(90, 57, 27, 0.25);
+        background: rgba(255, 248, 229, 0.56);
+      }
+      .lore-section-heading {
+        font-family: "Segoe UI", sans-serif;
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.4px;
+        margin-bottom: 5px;
+        color: #fde047;
+      }
+      .lore-card.lua-trang-theme .lore-section-heading {
+        color: #164450;
+      }
+      .lore-card.ngoc-vi-da-theme .lore-section-heading {
+        color: #0f766e;
+      }
+      .lore-card.giay-do-theme .lore-section-heading {
+        color: #7c2d12;
+      }
+      .lore-section-body {
+        font-family: "Segoe UI", sans-serif;
+        font-size: 14.2px;
+        line-height: 1.62;
+        margin: 0;
+      }
+
+      /* Hover prompt tinh tế khi đưa chuột / tâm ngắm vào Bảng Thông Tin 3D */
+      #lore-hover-prompt {
+        position: fixed;
+        bottom: 66px;
+        left: 50%;
+        transform: translateX(-50%) translateY(8px);
+        background: rgba(16, 12, 10, 0.90);
+        color: #fef3c7;
+        border: 1px solid rgba(253, 224, 71, 0.65);
+        border-radius: 999px;
+        padding: 7px 16px;
+        font-family: "Segoe UI", system-ui, sans-serif;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+        pointer-events: none;
+        z-index: 9995;
+        opacity: 0;
+        transition: opacity 0.18s ease, transform 0.18s ease;
+        white-space: nowrap;
+      }
+      #lore-hover-prompt.visible {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
       }
     `;
     document.head.appendChild(style);
@@ -1460,16 +2327,34 @@ export class MuseumInteractiveLoreGuide {
     this.overlayEl = document.createElement('div');
     this.overlayEl.id = 'museum-lore-overlay';
     this.overlayEl.innerHTML = `
-      <div class="lore-card" id="museum-lore-card">
+      <div class="lore-card" id="museum-lore-card" data-badge="BẢO TÀNG VĂN HỌC">
         <div class="lore-room-tag" id="lore-room"></div>
         <h2 class="lore-title" id="lore-title"></h2>
         <div class="lore-subtitle" id="lore-subtitle"></div>
+        <div class="lore-meta-pills" id="lore-meta"></div>
+        <div class="lore-illustration-wrap" id="lore-illustration-wrap">
+          <img class="lore-illustration-img" id="lore-illustration-img" alt="Minh họa tác phẩm văn học" />
+          <div class="lore-illustration-fallback" id="lore-illustration-fallback" style="display:none;"></div>
+          <div class="lore-illustration-caption" id="lore-illustration-caption"></div>
+        </div>
         <div class="lore-poem-box" id="lore-poem"></div>
         <div class="lore-desc" id="lore-desc"></div>
-        <button class="lore-close-btn" id="lore-close-btn">Đóng thẻ [ESC]</button>
+        <div class="lore-card-footer">
+          <span class="lore-footer-hint">Nhấn ESC hoặc nút đóng để quay lại không gian trưng bày</span>
+          <button class="lore-close-btn" id="lore-close-btn">Đóng thẻ [ESC]</button>
+        </div>
       </div>
     `;
     document.body.appendChild(this.overlayEl);
+
+    if (!document.getElementById('lore-hover-prompt')) {
+      const promptEl = document.createElement('div');
+      promptEl.id = 'lore-hover-prompt';
+      document.body.appendChild(promptEl);
+      this.hoverPromptEl = promptEl;
+    } else {
+      this.hoverPromptEl = document.getElementById('lore-hover-prompt');
+    }
 
     this.overlayEl.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
@@ -1480,17 +2365,69 @@ export class MuseumInteractiveLoreGuide {
   }
 
   /**
-   * Đăng ký một hiện vật 3D tương tác với Lore Key tương ứng
+   * Tra cứu dữ liệu tư liệu từ cả ARTIFACT_LORE_DATABASE và plaqueLoreSynthesis.js
+   */
+  _resolveLoreEntry(loreKey, extraMeta = {}) {
+    if (!loreKey && !extraMeta?.roomId) return null;
+    const key = loreKey ? String(loreKey).trim() : '';
+
+    if (key && ARTIFACT_LORE_DATABASE[key]) {
+      return ARTIFACT_LORE_DATABASE[key];
+    }
+    const synthDirect = key ? getSynthesizedPlaqueLore(key) : null;
+    if (synthDirect) return synthDirect;
+
+    if (key && PLAQUE_LORE_DATABASE[key]) return PLAQUE_LORE_DATABASE[key];
+    if (key && SYNTHESIZED_ROOM_LORE[key]) return SYNTHESIZED_ROOM_LORE[key];
+
+    if (extraMeta?.roomId) {
+      return getSynthesizedPlaqueLore(extraMeta.roomId);
+    }
+    return null;
+  }
+
+  /**
+   * Đăng ký một hiện vật hoặc Bảng Thông Tin 3D tương tác với Lore Key tương ứng
    */
   registerArtifact(object3D, loreKey) {
     if (!object3D) return;
-    object3D.userData.loreKey = loreKey;
+    if (object3D.isLight || object3D.userData?.isPlaqueSpotLight === true || object3D.userData?.isLightTarget === true) {
+      object3D.userData.ignoreRaycaster = true;
+      return;
+    }
+
+    // Nếu truyền root của Information Plaque, tự động chuyển hướng sang plaqueProxy để không bật raycaster cho vỏ/đèn
+    if (object3D.userData?.isInfoPlaqueRoot && object3D.userData?.plaqueProxy) {
+      const proxy = object3D.userData.plaqueProxy;
+      proxy.userData.loreKey = loreKey || proxy.userData.loreKey || object3D.userData.loreKey;
+      proxy.userData.isPlaqueProxy = true;
+      proxy.userData.isLoreArtifact = true;
+      proxy.userData.ignoreRaycaster = false;
+      if (!this.interactiveArtifacts.includes(proxy)) {
+        this.interactiveArtifacts.push(proxy);
+      }
+      return;
+    }
+
+    object3D.userData.loreKey = loreKey || object3D.userData.loreKey;
     object3D.userData.isLoreArtifact = true;
-    object3D.userData.ignoreRaycaster = false;
+    if (object3D.userData.ignoreRaycaster !== true) {
+      object3D.userData.ignoreRaycaster = false;
+    }
 
     object3D.traverse((child) => {
+      if (child === object3D) return;
+      if (
+        child.isLight ||
+        child.userData?.isPlaqueSpotLight === true ||
+        child.userData?.isLightTarget === true ||
+        child.userData?.ignoreRaycaster === true
+      ) {
+        child.userData.ignoreRaycaster = true;
+        return;
+      }
       if (child.isMesh) {
-        child.userData.loreKey = loreKey;
+        child.userData.loreKey = loreKey || child.userData.loreKey;
         child.userData.isLoreArtifact = true;
         child.userData.ignoreRaycaster = false;
       }
@@ -1501,53 +2438,218 @@ export class MuseumInteractiveLoreGuide {
     }
   }
 
-  showLoreCard(loreKey) {
-    const data = ARTIFACT_LORE_DATABASE[loreKey];
+  unregisterArtifact(object3D) {
+    if (!object3D || !Array.isArray(this.interactiveArtifacts)) return;
+    const idx = this.interactiveArtifacts.indexOf(object3D);
+    if (idx !== -1) {
+      this.interactiveArtifacts.splice(idx, 1);
+    }
+  }
+
+  showLoreCard(loreKey, extraMeta = {}) {
+    const data = this._resolveLoreEntry(loreKey, extraMeta);
     if (!data || !this.overlayEl) return;
+
+    const currentScene = typeof window !== 'undefined'
+      ? (window.__app?.activeScene || window.__activeScene || null)
+      : null;
+    this._openedInScene = currentScene;
+
+    const keyStr = String(loreKey || '');
+    const inRealm = this._isInStoryRealm(extraMeta) || Boolean(
+      extraMeta?.isRealmArtifact ||
+      (extraMeta?.realm && extraMeta.realm !== 'museum') ||
+      keyStr.includes('_realm') ||
+      keyStr.startsWith('namxuong_realm_') ||
+      keyStr.startsWith('nam_xuong_realm_') ||
+      keyStr.startsWith('vida_realm_') ||
+      (currentScene && typeof window !== 'undefined' && window.__app?.scene && currentScene !== window.__app.scene)
+    );
+    this._openedInRealm = inRealm;
+
+    const camMgr = typeof window !== 'undefined' ? window.__museumCameraManager : null;
+    const cam = this.camera || camMgr?.camera || (typeof window !== 'undefined' ? window.__camera : null);
+    if (inRealm && cam) {
+      const fwd = new THREE.Vector3();
+      cam.getWorldDirection(fwd);
+      this._realmSavedCameraPose = {
+        position: cam.position.clone(),
+        target: cam.position.clone().addScaledVector(fwd, 4.5)
+      };
+    } else {
+      this._realmSavedCameraPose = null;
+    }
+
+    if (typeof extraMeta?.onRestoreCamera === 'function') {
+      this._pendingRestoreCamera = extraMeta.onRestoreCamera;
+    }
+
+    this._clearHoverFeedback();
+
+    const rawTheme = extraMeta.styleTheme || data.styleTheme || 'default';
+    const normTheme = rawTheme === 'dong_son_giay_do'
+      ? 'dong_son_giay_do'
+      : normalizePlaqueStyleTheme(rawTheme);
 
     const cardEl = document.getElementById('museum-lore-card');
     if (cardEl) {
-      cardEl.classList.toggle('giay-do-theme', data.styleTheme === 'giay_do');
-      cardEl.classList.toggle('chieu-lua-theme', data.styleTheme === 'chieu_lua');
-      cardEl.classList.toggle('dong-son-giay-do-theme', data.styleTheme === 'dong_son_giay_do');
+      cardEl.classList.toggle('giay-do-theme', rawTheme === 'giay_do' || (data.styleTheme && normTheme === 'giay_do'));
+      cardEl.classList.toggle('lua-trang-theme', rawTheme === 'lua_trang' || normTheme === 'lua_trang');
+      cardEl.classList.toggle('ngoc-vi-da-theme', rawTheme === 'ngoc_vi_da' || normTheme === 'ngoc_vi_da');
+      cardEl.classList.toggle('chieu-lua-theme', rawTheme === 'chieu_lua' || normTheme === 'lua_hoang_kim');
+      cardEl.classList.toggle('lua-hoang-kim-theme', normTheme === 'lua_hoang_kim');
+      cardEl.classList.toggle('da-reu-phong-theme', rawTheme === 'da_reu_phong' || normTheme === 'da_reu_phong');
+      cardEl.classList.toggle('dong-son-giay-do-theme', rawTheme === 'dong_son_giay_do');
+
+      const defaultBadge = rawTheme === 'giay_do'
+        ? 'BẢN IN GIẤY DÓ'
+        : (normTheme === 'ngoc_vi_da'
+          ? 'NGỌC BÍCH • THƠ MỚI 1938'
+          : (normTheme === 'lua_trang'
+            ? 'DẢI LỤA TRẮNG • THẾ KỶ XVI'
+            : (rawTheme === 'chieu_lua'
+              ? 'THIÊN THƯ • 1077'
+              : (rawTheme === 'dong_son_giay_do' ? 'ĐÔNG SƠN • PHÙ ĐỔNG' : 'BẢO TÀNG VĂN HỌC'))));
+      cardEl.dataset.badge = String(data.badgeLabel || defaultBadge).normalize('NFC');
     }
 
-    document.getElementById('lore-room').textContent = `◈ ${data.room} ◈`;
-    document.getElementById('lore-title').textContent = data.title;
-    document.getElementById('lore-subtitle').textContent = data.subtitle;
+    document.getElementById('lore-room').textContent = `◈ ${data.room || 'BẢO TÀNG VĂN HỌC VIỆT NAM'} ◈`;
+    document.getElementById('lore-title').textContent = data.title || 'Tác phẩm Văn học';
+    document.getElementById('lore-subtitle').textContent = data.subtitle || '';
 
+    // Metadata pills (tác giả, niên đại, mã khu vực)
+    const metaEl = document.getElementById('lore-meta');
+    if (metaEl) {
+      const pills = [];
+      if (data.author) {
+        pills.push(`✍️ ${data.author}${data.years ? ` (${data.years})` : ''}`);
+      }
+      if (data.publicationYear) {
+        pills.push(`📅 ${data.publicationYear}`);
+      }
+      if (data.sectorCode) {
+        pills.push(`🏛️ ${data.sectorCode}`);
+      }
+      metaEl.innerHTML = pills.map((p) => `<span class="lore-meta-pill">${p}</span>`).join('');
+      metaEl.style.display = pills.length > 0 ? 'flex' : 'none';
+    }
+
+    // Khối ảnh minh họa di sản (Data URI SVG hoặc ảnh minh họa + fallback an toàn)
+    const illWrap = document.getElementById('lore-illustration-wrap');
+    const illImg = document.getElementById('lore-illustration-img');
+    const illFallback = document.getElementById('lore-illustration-fallback');
+    const illCaption = document.getElementById('lore-illustration-caption');
+    if (illWrap && illImg && illFallback) {
+      const fallbackSvg = generateHeritageIllustrationDataUri({
+        id: data.roomId || data.id || loreKey || 'default',
+        title: data.title || 'Di Sản Văn Học',
+        styleTheme: rawTheme === 'dong_son_giay_do' ? 'da_reu_phong' : normTheme,
+        badgeLabel: data.badgeLabel || 'BẢO TÀNG VĂN HỌC'
+      });
+      const primarySrc = data.illustrationUrl || fallbackSvg;
+      illImg.style.display = 'block';
+      illFallback.style.display = 'none';
+      illImg.alt = data.illustrationCaption || `Minh họa ${data.title || 'tác phẩm'}`;
+
+      illImg.onerror = () => {
+        if (illImg.src !== fallbackSvg) {
+          illImg.src = fallbackSvg;
+          return;
+        }
+        illImg.style.display = 'none';
+        illFallback.textContent = data.illustrationCaption || `◈ Tư liệu trưng bày: ${data.title || ''} ◈`;
+        illFallback.style.display = 'block';
+      };
+      illImg.src = primarySrc;
+
+      if (illCaption) {
+        const cap = data.illustrationCaption || `Minh họa trưng bày: ${data.title || ''}`;
+        illCaption.textContent = cap;
+        illCaption.style.display = cap ? 'block' : 'none';
+      }
+      illWrap.style.display = 'block';
+    }
+
+    // Nguyên tác / Phiên âm / Dịch thơ / Dịch nghĩa / Trích đoạn
     const poemEl = document.getElementById('lore-poem');
-    if (data.hanzi || data.phonetic || data.dichTho) {
-      const hanziHtml = (data.hanzi || []).join('<br/>');
-      const phoneticHtml = (data.phonetic || []).join('<br/>');
-      const dichThoHtml = (data.dichTho || []).join('<br/>');
-      poemEl.innerHTML = `
-        <div class="chieu-lua-grid">
-          <div>
-            <div class="chieu-lua-sec-label">Nguyên tác chữ Hán</div>
-            <div class="chieu-lua-hanzi">${hanziHtml}</div>
+    if (poemEl) {
+      if (data.hanzi || data.phonetic || data.dichTho || data.dichNghia) {
+        const hanziHtml = (data.hanzi || []).join('<br/>');
+        const phoneticHtml = (data.phonetic || []).join('<br/>');
+        const dichThoHtml = (data.dichTho || []).join('<br/>');
+        poemEl.innerHTML = `
+          <div class="chieu-lua-grid">
+            ${hanziHtml ? `<div><div class="chieu-lua-sec-label">Nguyên tác chữ Hán</div><div class="chieu-lua-hanzi">${hanziHtml}</div></div>` : ''}
+            ${phoneticHtml ? `<div><div class="chieu-lua-sec-label">Phiên âm Hán – Việt</div><div>${phoneticHtml}</div></div>` : ''}
           </div>
-          <div>
-            <div class="chieu-lua-sec-label">Phiên âm Hán – Việt</div>
-            <div>${phoneticHtml}</div>
-          </div>
-        </div>
-        <div style="margin-top: 10px;">
-          <div class="chieu-lua-sec-label">Dịch thơ</div>
-          <div>${dichThoHtml}</div>
-        </div>
-        ${data.dichNghia ? `<div class="chieu-lua-meaning"><strong>Dịch nghĩa:</strong> ${data.dichNghia}</div>` : ''}
-      `;
-    } else {
-      const poemLines = Array.isArray(data.poem) ? data.poem : [String(data.poem || '')];
-      poemEl.innerHTML = poemLines.join('<br/>');
+          ${dichThoHtml ? `<div style="margin-top: 10px;"><div class="chieu-lua-sec-label">Dịch thơ</div><div>${dichThoHtml}</div></div>` : ''}
+          ${data.dichNghia ? `<div class="chieu-lua-meaning"><strong>Dịch nghĩa:</strong> ${data.dichNghia}</div>` : ''}
+        `;
+        poemEl.style.display = 'block';
+      } else if (Array.isArray(data.poem) ? data.poem.length > 0 : Boolean(data.poem)) {
+        const poemLines = Array.isArray(data.poem) ? data.poem : [String(data.poem || '')];
+        const hasBlankSeparators = poemLines.some((line) => String(line || '').trim() === '');
+        if (hasBlankSeparators) {
+          const stanzas = [];
+          let current = [];
+          for (let i = 0; i < poemLines.length; i++) {
+            const line = String(poemLines[i] || '');
+            if (line.trim() === '') {
+              if (current.length > 0) {
+                stanzas.push(current);
+                current = [];
+              }
+            } else {
+              current.push(line);
+            }
+          }
+          if (current.length > 0) stanzas.push(current);
+          const stanzaHtml = stanzas.map((lines, idx) => `
+            <div class="lore-poem-stanza">
+              ${stanzas.length > 1 ? `<div class="lore-poem-stanza-label">Khổ ${idx + 1}</div>` : ''}
+              <div>${lines.join('<br/>')}</div>
+            </div>
+          `).join('');
+          poemEl.innerHTML = `${stanzaHtml}${data.quote ? `<div class="lore-poem-quote">${data.quote}</div>` : ''}`;
+        } else {
+          poemEl.innerHTML = `${poemLines.join('<br/>')}${data.quote ? `<div class="lore-poem-quote">${data.quote}</div>` : ''}`;
+        }
+        poemEl.style.display = 'block';
+      } else {
+        poemEl.innerHTML = '';
+        poemEl.style.display = 'none';
+      }
     }
 
+    // Tư liệu nghiên cứu đầy đủ (4 phần học thuật nếu có) & Tiểu sử bối cảnh
     const descEl = document.getElementById('lore-desc');
-    if (data.biography) {
-      descEl.innerHTML = `<p style="margin:0 0 8px 0;"><strong>Tiểu sử &amp; Bối cảnh:</strong> ${data.biography}</p><p style="margin:0;"><strong>Hiện vật:</strong> ${data.description}</p>`;
-    } else {
-      descEl.textContent = data.description;
+    if (descEl) {
+      if (Array.isArray(data.sections) && data.sections.length > 0) {
+        const cardsHtml = data.sections.map((sec) => {
+          const heading = sec.title || sec.heading || '';
+          const body = sec.content || sec.body || '';
+          return `
+            <div class="lore-section-card">
+              <div class="lore-section-heading">◈ ${heading}</div>
+              <p class="lore-section-body">${body}</p>
+            </div>
+          `;
+        }).join('');
+        descEl.innerHTML = `<div class="lore-sections-grid">${cardsHtml}</div>`;
+      } else {
+        const parts = [];
+        if (data.summary && data.researchText && data.summary !== data.researchText) {
+          parts.push(`<p><strong>Khái quát:</strong> ${data.summary}</p>`);
+        }
+        const mainResearch = data.researchText || data.description || data.summary;
+        if (mainResearch) {
+          parts.push(`<p><strong>Tư liệu nghiên cứu:</strong> ${mainResearch}</p>`);
+        }
+        if (data.biography) {
+          parts.push(`<p><strong>Tiểu sử &amp; Bối cảnh:</strong> ${data.biography}</p>`);
+        }
+        descEl.innerHTML = parts.join('');
+      }
     }
 
     this.overlayEl.classList.add('active');
@@ -1558,19 +2660,352 @@ export class MuseumInteractiveLoreGuide {
     }
   }
 
-  hideLoreCard() {
+  hideLoreCard({ restoreCamera = true } = {}) {
     if (!this.overlayEl) return;
+    const wasOpen = this.isOpen;
     this.overlayEl.classList.remove('active');
     this.isOpen = false;
+    this._clearHoverFeedback();
+
+    const currentScene = typeof window !== 'undefined'
+      ? (window.__app?.activeScene || window.__activeScene || null)
+      : null;
+    const sameScene = !this._openedInScene || !currentScene || this._openedInScene === currentScene;
+    const restoreCb = this._pendingRestoreCamera;
+    const wasInRealm = this._openedInRealm;
+    const realmPose = this._realmSavedCameraPose;
+
+    this._openedInScene = null;
+    this._openedInRealm = false;
+    this._realmSavedCameraPose = null;
+    this._pendingRestoreCamera = null;
+
+    const camMgr = typeof window !== 'undefined' ? window.__museumCameraManager : null;
+    if (restoreCamera && sameScene) {
+      if (typeof restoreCb === 'function') {
+        try {
+          restoreCb();
+        } catch (_) {}
+      }
+      if (wasOpen || camMgr?._isPlaqueFocusActive || camMgr?.cameraController?.isFocusZooming) {
+        // Trong cõi mở, kiểm tra _savedFocusState có hợp lệ không (tránh lệch tọa độ sang bảo tàng)
+        if (wasInRealm && camMgr?._savedFocusState && camMgr.camera && realmPose) {
+          const dist = camMgr._savedFocusState.position.distanceTo(camMgr.camera.position);
+          if (dist > 45.0) {
+            camMgr._savedFocusState.position.copy(realmPose.position);
+            camMgr._savedFocusState.target.copy(realmPose.target);
+          }
+        }
+        camMgr?.restoreFromFocus?.({ smooth: true, duration: 0.52 });
+      } else if (wasInRealm && realmPose && camMgr?.camera) {
+        if (typeof camMgr.setView === 'function') {
+          camMgr.setView({ position: realmPose.position, target: realmPose.target }, false);
+        }
+      }
+    } else {
+      camMgr?.cameraController?.cancelFocusZoom?.(false);
+      if (camMgr) {
+        camMgr._savedFocusState = null;
+        camMgr._isPlaqueFocusActive = false;
+        camMgr._isRestoringFocus = false;
+      }
+    }
+
+    // Đảm bảo không bị lệch floor height trong cõi mở sau khi đóng thẻ
+    if (wasInRealm && camMgr?.camera) {
+      const cam = camMgr.camera;
+      if (typeof camMgr.cameraController?.getFloorHeightAt === 'function') {
+        const fh = camMgr.cameraController.getFloorHeightAt(cam.position.x, cam.position.z);
+        if (typeof fh === 'number' && !Number.isNaN(fh)) {
+          const eyeH = camMgr.cameraController?.eyeHeight || 1.65;
+          if (cam.position.y < fh + eyeH * 0.75) {
+            cam.position.y = fh + eyeH;
+          }
+        }
+      }
+    }
+  }
+
+  _isInStoryRealm(meta = null) {
+    if (meta?.realm && meta.realm !== 'museum') return true;
+    if (meta?.isRealmArtifact) return true;
+    const key = String(meta?.loreKey || '');
+    if (
+      key.includes('_realm') ||
+      key.startsWith('namxuong_realm_') ||
+      key.startsWith('nam_xuong_realm_') ||
+      key.startsWith('vida_realm_')
+    ) return true;
+    if (typeof window === 'undefined') return false;
+    const activeScene = window.__app?.activeScene || window.__activeScene || null;
+    const mainScene = window.__app?.scene || window.__app?.mainScene || null;
+    if (activeScene && mainScene && activeScene !== mainScene) return true;
+    if (window.__namXuongScene && activeScene === window.__namXuongScene) return true;
+    if (window.__dayThonViDaScene && activeScene === window.__dayThonViDaScene) return true;
+    if (window.__storyRealmMode || window.__activeRealm || window.__currentStoryRealm) return true;
+    const camMgr = window.__museumCameraManager;
+    if (typeof camMgr?.cameraController?.floorHeightProvider === 'function') return true;
+    return false;
+  }
+
+  _syncCameraTargetBeforeRealmFocus(camMgr, meta = null) {
+    if (!camMgr?.camera) return;
+    const inRealm = this._isInStoryRealm(meta);
+    const cam = camMgr.camera;
+    const ctrlTarget = camMgr.controls?.target;
+    const isStaleTarget = Boolean(
+      ctrlTarget &&
+      (inRealm || camMgr.cameraController?.controls?.isLocked || ctrlTarget.distanceTo(cam.position) > 30.0)
+    );
+
+    if (!this.isOpen && (inRealm || isStaleTarget) && !camMgr._isPlaqueFocusActive) {
+      camMgr._savedFocusState = null;
+      camMgr._isRestoringFocus = false;
+    }
+
+    if (ctrlTarget && isStaleTarget) {
+      const dir = new THREE.Vector3();
+      cam.getWorldDirection(dir);
+      ctrlTarget.copy(cam.position).addScaledVector(dir, 4.5);
+    }
+  }
+
+  _extractLoreMetadataFromHit(hitObj) {
+    let curr = hitObj;
+    let loreKey = null;
+    let roomId = null;
+    let styleTheme = null;
+    let realm = null;
+    let onFocusCamera = null;
+    let onRestoreCamera = null;
+    let isPlaque = false;
+    let isArtifact3D = false;
+    let isBookPortal = false;
+    let isReturnPortal = false;
+    let isRealmArtifact = false;
+    let targetRoot = hitObj;
+
+    while (curr) {
+      if (curr.userData?.isPlaqueProxy) isPlaque = true;
+      if (curr.userData?.isArtifact3D) isArtifact3D = true;
+      if (curr.userData?.isBookPortal || curr.userData?.isTeleportBook) isBookPortal = true;
+      if (curr.userData?.isReturnPortal) isReturnPortal = true;
+      if (curr.userData?.isRealmArtifact || curr.userData?.realm) isRealmArtifact = true;
+      if (!realm && curr.userData?.realm) realm = curr.userData.realm;
+      if (!loreKey && curr.userData?.loreKey) {
+        loreKey = curr.userData.loreKey;
+        targetRoot = curr;
+      }
+      if (!roomId && curr.userData?.roomId) roomId = curr.userData.roomId;
+      if (!styleTheme && curr.userData?.styleTheme) styleTheme = curr.userData.styleTheme;
+      if (!onFocusCamera && typeof curr.userData?.onFocusCamera === 'function') {
+        onFocusCamera = curr.userData.onFocusCamera;
+      }
+      if (!onRestoreCamera && typeof curr.userData?.onRestoreCamera === 'function') {
+        onRestoreCamera = curr.userData.onRestoreCamera;
+      }
+      curr = curr.parent;
+    }
+
+    if (!isRealmArtifact && typeof loreKey === 'string' && loreKey.includes('_realm')) {
+      isRealmArtifact = true;
+    }
+
+    return {
+      loreKey,
+      roomId,
+      styleTheme,
+      realm,
+      onFocusCamera,
+      onRestoreCamera,
+      isPlaque,
+      isArtifact3D,
+      isBookPortal,
+      isReturnPortal,
+      isRealmArtifact,
+      targetRoot
+    };
+  }
+
+  _performLoreRaycast(maxDistance = 36) {
+    const cam = this.camera || (typeof window !== 'undefined' ? window.__camera : null);
+    if (!cam) return null;
+
+    const activeScene = typeof window !== 'undefined'
+      ? (window.__app?.activeScene || window.__activeScene || null)
+      : null;
+    const isSameActiveScene = (obj) => {
+      if (!activeScene || !obj) return true;
+      const objScene = getObjectRootScene(obj);
+      return !objScene || objScene === activeScene;
+    };
+
+    this.raycaster.setFromCamera(this.mouse, cam);
+
+    let proxyCandidate = null;
+    if (typeof window !== 'undefined' && window.__museumHitboxManager?.raycastInteractiveHitboxes) {
+      const hit = window.__museumHitboxManager.raycastInteractiveHitboxes(this.raycaster, maxDistance, {
+        prioritizePlaques: true
+      });
+      if (
+        hit &&
+        hit.object &&
+        !isObjectIgnoredByRaycaster(hit.object) &&
+        isSameActiveScene(hit.object) &&
+        (!hit.object.userData?.linkedVisualObject || isSameActiveScene(hit.object.userData.linkedVisualObject))
+      ) {
+        const meta = this._extractLoreMetadataFromHit(hit.object);
+        // Không giành quyền click sách dịch chuyển (PortalInteraction) hoặc cổng thoát cõi truyện
+        if ((meta.loreKey || meta.roomId) && !meta.isReturnPortal && !(meta.isBookPortal && !meta.isPlaque)) {
+          proxyCandidate = { hit, meta };
+        }
+      }
+    }
+
+    // Nếu proxyHit là Bảng Thông Tin 3D -> ưu tiên tuyệt đối
+    if (proxyCandidate?.meta?.isPlaque) {
+      return proxyCandidate;
+    }
+
+    let artifactCandidate = null;
+    if (this.interactiveArtifacts.length > 0) {
+      const hits = this.raycaster.intersectObjects(this.interactiveArtifacts, true);
+      let firstArtifact = null;
+      let firstPlaqueArtifact = null;
+
+      for (let i = 0; i < hits.length; i++) {
+        const h = hits[i];
+        if (!h || h.distance > maxDistance) continue;
+        if (!isObjectHierarchyVisible(h.object)) continue;
+        if (isObjectIgnoredByRaycaster(h.object)) continue;
+        if (!isSameActiveScene(h.object)) continue;
+
+        const meta = this._extractLoreMetadataFromHit(h.object);
+        if (!meta.loreKey && !meta.roomId) continue;
+        if (meta.isReturnPortal) continue;
+        if (meta.isBookPortal && !meta.isPlaque) continue;
+
+        if (!firstArtifact) firstArtifact = { hit: h, meta };
+        if (meta.isPlaque) {
+          firstPlaqueArtifact = { hit: h, meta };
+          break;
+        }
+      }
+
+      if (firstPlaqueArtifact && (!firstArtifact || firstPlaqueArtifact.hit.distance <= firstArtifact.hit.distance + 0.55)) {
+        artifactCandidate = firstPlaqueArtifact;
+      } else {
+        artifactCandidate = firstArtifact;
+      }
+    }
+
+    if (artifactCandidate?.meta?.isPlaque) {
+      if (!proxyCandidate || artifactCandidate.hit.distance <= proxyCandidate.hit.distance + 0.55) {
+        return artifactCandidate;
+      }
+    }
+    if (proxyCandidate && artifactCandidate) {
+      return proxyCandidate.hit.distance <= artifactCandidate.hit.distance ? proxyCandidate : artifactCandidate;
+    }
+    return proxyCandidate || artifactCandidate || null;
+  }
+
+  _clearHoverFeedback() {
+    if (this._isHoveringPlaque && typeof document !== 'undefined') {
+      const canvas = document.querySelector('canvas');
+      if (canvas && canvas.style.cursor === 'pointer') {
+        canvas.style.cursor = '';
+      }
+      if (document.body.style.cursor === 'pointer') {
+        document.body.style.cursor = '';
+      }
+    }
+    this._hoveredTarget = null;
+    this._isHoveringPlaque = false;
+    if (this.hoverPromptEl) {
+      this.hoverPromptEl.classList.remove('visible');
+    }
+  }
+
+  _updateHoverFeedback() {
+    if (typeof document === 'undefined' || this.isOpen) {
+      this._clearHoverFeedback();
+      return;
+    }
+
+    const candidate = this._performLoreRaycast(28);
+    if (!candidate) {
+      this._clearHoverFeedback();
+      return;
+    }
+
+    const { hit, meta } = candidate;
+    const keyStr = String(meta.loreKey || '');
+    const isPlaque =
+      meta.isPlaque ||
+      meta.isArtifact3D ||
+      meta.isRealmArtifact ||
+      Boolean(meta.realm) ||
+      keyStr.startsWith('plaque_') ||
+      keyStr.startsWith('nam_xuong_') ||
+      keyStr.startsWith('vida_') ||
+      keyStr.includes('_realm');
+    if (!isPlaque || meta.isReturnPortal) {
+      this._clearHoverFeedback();
+      return;
+    }
+
+    this._hoveredTarget = hit.object;
+    this._isHoveringPlaque = true;
+
+    if (!document.pointerLockElement) {
+      const canvas = document.querySelector('canvas');
+      if (canvas) canvas.style.cursor = 'pointer';
+    }
+
+    if (this.hoverPromptEl) {
+      const entry = this._resolveLoreEntry(meta.loreKey, { roomId: meta.roomId });
+      const titleText = entry?.title || 'Bảng Thông Tin Tác Phẩm';
+      this.hoverPromptEl.textContent = `📜 Click để đọc tư liệu: ${titleText}`;
+      this.hoverPromptEl.classList.add('visible');
+    }
+  }
+
+  updateHover() {
+    if (typeof document === 'undefined' || this.isOpen) return;
+    if (!document.pointerLockElement) return;
+    const now = performance.now();
+    if (now - this._lastHoverRaycastMs < 90) return;
+    this._lastHoverRaycastMs = now;
+    this.mouse.set(0, 0);
+    this._updateHoverFeedback();
   }
 
   _bindEvents() {
     if (typeof window === 'undefined') return;
 
+    window.addEventListener('pointermove', (e) => {
+      if (this.isOpen) return;
+      const now = performance.now();
+      if (now - this._lastHoverRaycastMs < 55) return;
+      this._lastHoverRaycastMs = now;
+
+      if (document.pointerLockElement) {
+        this.mouse.set(0, 0);
+      } else {
+        const canvas = document.querySelector('canvas');
+        const rect = canvas ? canvas.getBoundingClientRect() : { left: 0, top: 0, width: window.innerWidth || 1, height: window.innerHeight || 1 };
+        this.mouse.x = ((e.clientX - rect.left) / (rect.width || 1)) * 2 - 1;
+        this.mouse.y = -((e.clientY - rect.top) / (rect.height || 1)) * 2 + 1;
+      }
+      this._updateHoverFeedback();
+    }, { passive: true });
+
     window.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
       const hasProxies = Boolean(window.__museumHitboxManager?.clickProxies?.length);
       if (this.isOpen || (this.interactiveArtifacts.length === 0 && !hasProxies)) return;
-      if (e.target.closest('#museum-lore-overlay') || e.target.closest('#director-hud')) return;
+      if (e.target.closest('#museum-lore-overlay, #director-hud, [id*="realm-hud"], [id*="realm-top-hud"], [id*="tour-banner"]')) return;
 
       const cam = this.camera || window.__camera;
       if (!cam) return;
@@ -1584,59 +3019,78 @@ export class MuseumInteractiveLoreGuide {
         this.mouse.y = -((e.clientY - rect.top) / (rect.height || 1)) * 2 + 1;
       }
 
-      this.raycaster.setFromCamera(this.mouse, cam);
+      const candidate = this._performLoreRaycast(36);
+      if (!candidate) return;
 
-      // Ưu tiên quét qua các hộp Proxy Hitbox chuẩn của MuseumHitboxManager (Skill: hitbox-collision-architect)
-      if (typeof window !== 'undefined' && window.__museumHitboxManager) {
-        const proxyHit = window.__museumHitboxManager.raycastInteractiveHitboxes(this.raycaster, 36);
-        if (proxyHit && proxyHit.object?.userData?.loreKey) {
-          e.stopPropagation();
-          if (typeof proxyHit.object.userData.onFocusCamera === 'function') {
-            proxyHit.object.userData.onFocusCamera();
+      const { hit, meta } = candidate;
+      const resolvedKey = meta.loreKey || (meta.roomId ? `plaque_${meta.roomId}` : null);
+      if (!resolvedKey) return;
+
+      e.stopPropagation();
+
+      const keyStr = String(resolvedKey || '');
+      const camMgr = window.__museumCameraManager;
+      const isRealmCtx = this._isInStoryRealm(meta) || keyStr.includes('_realm') || keyStr.startsWith('namxuong_realm_') || keyStr.startsWith('nam_xuong_realm_');
+      if (camMgr) {
+        this._syncCameraTargetBeforeRealmFocus(camMgr, meta);
+      }
+
+      let customRestore = meta.onRestoreCamera || null;
+      if (typeof meta.onFocusCamera === 'function') {
+        const ret = meta.onFocusCamera(hit.object, { camMgr, hit, meta });
+        if (!customRestore && typeof ret === 'function') {
+          customRestore = ret;
+        }
+      } else if (
+        meta.isPlaque ||
+        meta.isArtifact3D ||
+        isRealmCtx ||
+        hit.object?.userData?.focusPoint ||
+        hit.object?.userData?.linkedVisualObject?.userData?.isInfoPlaqueRoot ||
+        keyStr.startsWith('vida_') ||
+        keyStr.startsWith('nam_xuong_') ||
+        keyStr.startsWith('namxuong_')
+      ) {
+        if (camMgr) {
+          if (isRealmCtx && typeof camMgr.computeObjectFocusPose === 'function') {
+            const pose = camMgr.computeObjectFocusPose(hit.object, {
+              approachFromCamera: true,
+              distance: hit.object?.userData?.focusDistance ?? (meta.isPlaque ? 2.25 : 3.2)
+            });
+            if (pose) {
+              const floorY = camMgr.cameraController?.getFloorHeightAt?.(pose.position.x, pose.position.z);
+              if (typeof floorY === 'number' && !Number.isNaN(floorY)) {
+                pose.position.y = Math.max(pose.position.y, floorY + 1.15);
+              }
+              camMgr.smoothZoomToFocus?.(pose.position, pose.target, { duration: 0.72 });
+            } else {
+              camMgr.smoothZoomToFocus?.(hit.object, { duration: 0.72, approachFromCamera: true });
+            }
+          } else {
+            camMgr.smoothZoomToFocus?.(hit.object, { duration: 0.72 });
           }
-          this.showLoreCard(proxyHit.object.userData.loreKey);
-          return;
         }
       }
 
-      const hits = this.raycaster.intersectObjects(this.interactiveArtifacts, true)
-        .filter((h) => {
-          let cur = h.object;
-          while (cur) {
-            if (cur.visible === false) return false;
-            cur = cur.parent;
-          }
-          return true;
-        });
-
-      if (hits.length > 0 && hits[0].distance <= 36) {
-        let curr = hits[0].object;
-        let loreKey = null;
-        let onFocusCamera = null;
-        while (curr) {
-          if (curr.userData && curr.userData.loreKey) {
-            loreKey = curr.userData.loreKey;
-            onFocusCamera = curr.userData.onFocusCamera || null;
-            break;
-          }
-          curr = curr.parent;
-        }
-        if (loreKey) {
-          e.stopPropagation();
-          if (typeof onFocusCamera === 'function') {
-            onFocusCamera();
-          }
-          this.showLoreCard(loreKey);
-        }
-      }
+      this.showLoreCard(resolvedKey, {
+        roomId: meta.roomId,
+        styleTheme: meta.styleTheme,
+        realm: meta.realm,
+        isRealmArtifact: isRealmCtx,
+        onRestoreCamera: customRestore
+      });
     }, true); // Bắt ở capture phase để xử lý trước khi camera xoay
 
     window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && this.isOpen) {
+      if ((e.key === 'Escape' || e.code === 'Escape') && this.isOpen) {
+        e.preventDefault();
         e.stopPropagation();
+        if (typeof e.stopImmediatePropagation === 'function') {
+          e.stopImmediatePropagation();
+        }
         this.hideLoreCard();
       }
-    });
+    }, true);
   }
 }
 
@@ -1688,6 +3142,10 @@ export function setupMuseumWebXRTeleport(renderer, scene, cameraRig, walkableFlo
 
   markerGroup.add(ringMesh, coreGlow);
   markerGroup.visible = false;
+  markerGroup.userData.ignoreRaycaster = true;
+  markerGroup.traverse((c) => {
+    c.userData.ignoreRaycaster = true;
+  });
   if (scene) scene.add(markerGroup);
 
   // Tia chỉ tay cầm VR (Controller 0)
@@ -1700,6 +3158,7 @@ export function setupMuseumWebXRTeleport(renderer, scene, cameraRig, walkableFlo
     rayGeo,
     new THREE.LineBasicMaterial({ color: 0x38bdf8 })
   );
+  rayLine.userData.ignoreRaycaster = true;
   controller.add(rayLine);
 
   if (scene) {
@@ -1710,6 +3169,8 @@ export function setupMuseumWebXRTeleport(renderer, scene, cameraRig, walkableFlo
 
   const vrRaycaster = new THREE.Raycaster();
   const tempMatrix = new THREE.Matrix4();
+  const normalMatrix = new THREE.Matrix3();
+  const worldNormal = new THREE.Vector3();
   let validTargetPoint = null;
 
   controller.addEventListener('selectend', () => {
@@ -1723,9 +3184,63 @@ export function setupMuseumWebXRTeleport(renderer, scene, cameraRig, walkableFlo
 
   let currentScene = scene;
   let currentWalkableFloors = Array.isArray(walkableFloors) ? [...walkableFloors] : [];
+  const extraWalkableFloors = new Set();
+
+  const isHitWalkableSurface = (hit) => {
+    if (!hit || !hit.object || hit.distance > 25) return false;
+    if (!isObjectHierarchyVisible(hit.object)) return false;
+    if (isObjectIgnoredByRaycaster(hit.object)) return false;
+
+    if (hit.face?.normal) {
+      normalMatrix.getNormalMatrix(hit.object.matrixWorld);
+      worldNormal.copy(hit.face.normal).applyMatrix3(normalMatrix).normalize();
+      if (worldNormal.y < 0.55) return false;
+    }
+
+    let curr = hit.object;
+    let isExplicitWalkable = false;
+    let isInsideNamXuong = false;
+    let isInsideViDa = false;
+    while (curr) {
+      const ud = curr.userData || {};
+      if (ud.isTeleportBlocked === true || ud.isWater === true || ud.isParticle === true) {
+        return false;
+      }
+      if (
+        ud.isNamXuongWalkable === true ||
+        ud.isViDaWalkable === true ||
+        ud.isTeleportFloor === true ||
+        ud.isWalkableFloor === true
+      ) {
+        isExplicitWalkable = true;
+      }
+      if (
+        ud.isNamXuongRoom === true ||
+        ud.roomId === 'nguoi_con_gai_nam_xuong' ||
+        /namxuong/i.test(curr.name || '')
+      ) {
+        isInsideNamXuong = true;
+      }
+      if (
+        ud.isViDaRoom === true ||
+        ud.isDayThonViDaRoom === true ||
+        ud.roomId === 'day_thon_vi_da' ||
+        /daythonvida|vi_da|vida/i.test(curr.name || '')
+      ) {
+        isInsideViDa = true;
+      }
+      curr = curr.parent;
+    }
+
+    if ((isInsideNamXuong || isInsideViDa) && !isExplicitWalkable) return false;
+    return true;
+  };
 
   const updateVRTeleport = () => {
-    if (!renderer.xr.isPresenting || currentWalkableFloors.length === 0) {
+    const targets = extraWalkableFloors.size > 0
+      ? [...currentWalkableFloors, ...extraWalkableFloors]
+      : currentWalkableFloors;
+    if (!renderer.xr.isPresenting || targets.length === 0) {
       markerGroup.visible = false;
       return;
     }
@@ -1734,15 +3249,35 @@ export function setupMuseumWebXRTeleport(renderer, scene, cameraRig, walkableFlo
     vrRaycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
     vrRaycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
 
-    const hits = vrRaycaster.intersectObjects(currentWalkableFloors, true);
-    if (hits.length > 0 && hits[0].distance <= 25) {
-      validTargetPoint = hits[0].point;
+    const hits = vrRaycaster.intersectObjects(targets, true);
+    let bestHit = null;
+    for (let i = 0; i < hits.length; i++) {
+      if (isHitWalkableSurface(hits[i])) {
+        bestHit = hits[i];
+        break;
+      }
+    }
+
+    if (bestHit) {
+      validTargetPoint = bestHit.point;
       markerGroup.position.copy(validTargetPoint);
       markerGroup.visible = true;
     } else {
       validTargetPoint = null;
       markerGroup.visible = false;
     }
+  };
+
+  const addWalkableFloor = (obj) => {
+    if (!obj) return;
+    if (!currentWalkableFloors.includes(obj)) {
+      extraWalkableFloors.add(obj);
+    }
+  };
+
+  const removeWalkableFloor = (obj) => {
+    if (!obj) return;
+    extraWalkableFloors.delete(obj);
   };
 
   const setTargetContext = (nextScene, nextFloors = []) => {
@@ -1756,7 +3291,14 @@ export function setupMuseumWebXRTeleport(renderer, scene, cameraRig, walkableFlo
     }
   };
 
-  return { controller, markerGroup, updateVRTeleport, setTargetContext };
+  return {
+    controller,
+    markerGroup,
+    updateVRTeleport,
+    setTargetContext,
+    addWalkableFloor,
+    removeWalkableFloor
+  };
 }
 
 /**
@@ -1781,6 +3323,7 @@ export function createMuseumImmersionSystem({
     xrTeleport,
     update: () => {
       xrTeleport?.updateVRTeleport?.();
+      loreGuide?.updateHover?.();
     }
   };
 

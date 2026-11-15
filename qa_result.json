@@ -1,0 +1,169 @@
+{
+  "success": true,
+  "consoleErrors": [],
+  "pageErrors": [],
+  "httpFailures": [],
+  "verificationResult": {
+    "items": {
+      "rootFound": true,
+      "rootName": "Museum_Space_Enrichment_Root",
+      "foldingScreens": {
+        "count": 2,
+        "screens": [
+          {
+            "name": "Carved_Lim_Folding_Screen",
+            "pos": {
+              "x": -26,
+              "y": 0,
+              "z": -8
+            },
+            "leavesCount": 4
+          },
+          {
+            "name": "Carved_Lim_Folding_Screen",
+            "pos": {
+              "x": 26,
+              "y": 0,
+              "z": -8
+            },
+            "leavesCount": 4
+          }
+        ]
+      },
+      "bookcases": {
+        "count": 2,
+        "bookcases": [
+          {
+            "name": "Heritage_Antique_Bookcase",
+            "pos": {
+              "x": -33.2,
+              "y": 0,
+              "z": -10
+            },
+            "childrenCount": 40
+          },
+          {
+            "name": "Heritage_Antique_Bookcase",
+            "pos": {
+              "x": 33.2,
+              "y": 0,
+              "z": -10
+            },
+            "childrenCount": 40
+          }
+        ]
+      },
+      "burnerSets": {
+        "count": 2,
+        "burnerSets": [
+          {
+            "name": "Bronze_Incense_Burner_And_Cranes_Set",
+            "pos": {
+              "x": -3.8,
+              "y": 0,
+              "z": 28.5
+            },
+            "hasTripod": true,
+            "hasCraneLeft": true,
+            "hasCraneRight": true
+          },
+          {
+            "name": "Bronze_Incense_Burner_And_Cranes_Set",
+            "pos": {
+              "x": 3.8,
+              "y": 0,
+              "z": 28.5
+            },
+            "hasTripod": true,
+            "hasCraneLeft": true,
+            "hasCraneRight": true
+          }
+        ]
+      },
+      "silkDecor": {
+        "found": true,
+        "childrenCount": 5
+      },
+      "scholarsNook": {
+        "found": true,
+        "pos": {
+          "x": -18.5,
+          "y": 0,
+          "z": 10
+        },
+        "hasMat": false,
+        "hasDesk": false,
+        "hasInkstone": false,
+        "hasRedPapers": false,
+        "hasLoreProxy": false
+      },
+      "musicNook": {
+        "found": true,
+        "pos": {
+          "x": 18.5,
+          "y": 0,
+          "z": 10
+        },
+        "hasInstrumentsDais": false,
+        "hasDanBau": false,
+        "hasDanTranh": false,
+        "hasDanNguyet": false,
+        "hasSaoTruc": false,
+        "hasTeaSet": false,
+        "hasAudio": false,
+        "hasLoreProxy": false
+      },
+      "folkNook": {
+        "found": true,
+        "pos": {
+          "x": -8,
+          "y": 0,
+          "z": 18
+        },
+        "hasCeramics": false,
+        "hasMasks": false,
+        "hasHat": false,
+        "hasBaskets": false,
+        "hasLoreProxy": false
+      },
+      "natureAndPond": {
+        "natureFound": true,
+        "pondFound": true,
+        "hasBonsaiTung": false,
+        "hasBonsaiCuc": false,
+        "hasBonsaiTruc": false,
+        "hasBonsaiMai": false,
+        "hasMist": false,
+        "hasLotusLeaves": false,
+        "hasLotusBlooms": false
+      },
+      "ceilingLanterns": {
+        "found": true,
+        "childrenCount": 16
+      },
+      "floorMandala": {
+        "found": true,
+        "childrenCount": 2
+      },
+      "livingVFX": {
+        "found": true,
+        "hasSmokeWest": false,
+        "hasSmokeEast": false,
+        "hasFallingPetals": false,
+        "hasFireflies": false
+      }
+    },
+    "corridorClearance": {
+      "totalSolidCollidersChecked": 0,
+      "obstructingCollidersInCentralLane": []
+    },
+    "fpsCheck": null,
+    "issues": []
+  },
+  "fpsMeasurement": {
+    "avgFPS": 26.5,
+    "minFPS": 27.6,
+    "totalFrames": 119,
+    "totalDurationMs": 4497.7
+  }
+}

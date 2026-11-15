@@ -116,17 +116,17 @@ export class WorldManager {
         <style>
           #return-waypoint-prompt {
             position: fixed;
-            bottom: 80px;
+            bottom: 145px;
             left: 50%;
             transform: translateX(-50%) translateY(20px);
             background: rgba(12, 28, 22, 0.96);
             border: 1.5px solid #39e58c;
             box-shadow: 0 0 25px rgba(57, 229, 140, 0.4), 0 10px 30px rgba(0, 0, 0, 0.8);
             color: #eafff4;
-            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+            font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
             font-size: 13px;
             font-weight: 700;
-            letter-spacing: 1.2px;
+            letter-spacing: 0.4px;
             padding: 12px 24px;
             border-radius: 30px;
             display: flex;

@@ -156,6 +156,19 @@ export class CameraController {
     this.travelEndLook = new THREE.Vector3();
     this.travelCurrentLook = new THREE.Vector3();
     this.onFastTravelComplete = null;
+
+    // Smooth camera focus glide/zoom (ví dụ khi click vào Bảng Thông Tin 3D)
+    this.isFocusZooming = false;
+    this.focusZoomTime = 0.0;
+    this.focusZoomDuration = 0.72;
+    this.focusStartPos = new THREE.Vector3();
+    this.focusEndPos = new THREE.Vector3();
+    this.focusStartLook = new THREE.Vector3();
+    this.focusEndLook = new THREE.Vector3();
+    this.focusCurrentLook = new THREE.Vector3();
+    this.onFocusZoomComplete = null;
+    this.onFocusZoomCancel = null;
+
     this.audioManager = options?.audioManager ?? null;
     this.stepDistanceAccumulator = 0.6;
     this._stairPolylines = this._buildStaircasePolylines();
@@ -292,12 +305,12 @@ export class CameraController {
       hint.innerHTML = `
         <style>
           #camera-mode-hint {
-            position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+            position: fixed; bottom: 12px; right: 16px; left: auto; transform: none;
             z-index: 1000; background: rgba(12, 16, 24, 0.94);
             border: 1px solid rgba(212, 175, 55, 0.45);
-            color: #f0f3f6; font-family: 'Segoe UI', sans-serif; font-size: 12px;
-            padding: 8px 18px; border-radius: 24px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
-            display: flex; align-items: center; gap: 12px; user-select: none;
+            color: #f0f3f6; font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif; font-size: 11px;
+            padding: 6px 12px; border-radius: 20px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+            display: flex; align-items: center; gap: 10px; user-select: none;
           }
           .mode-badge-indicator { background: rgba(57, 229, 140, 0.2); border: 1px solid #39e58c; color: #4ef09e; padding: 3px 8px; border-radius: 12px; font-weight: 700; font-size: 10.5px; }
           .key-badge { background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; padding: 1px 5px; border-radius: 4px; font-family: monospace; }
@@ -342,6 +355,17 @@ export class CameraController {
   initEventListeners() {
     this.onKeyDown = (e) => {
       if (this.isFastTraveling) return;
+      if (this.isFocusZooming) {
+        if (
+          e.code === 'KeyW' || e.code === 'ArrowUp' ||
+          e.code === 'KeyS' || e.code === 'ArrowDown' ||
+          e.code === 'KeyA' || e.code === 'ArrowLeft' ||
+          e.code === 'KeyD' || e.code === 'ArrowRight' ||
+          e.code === 'Space'
+        ) {
+          this.cancelFocusZoom(true);
+        }
+      }
       switch (e.code) {
         case 'KeyW': case 'ArrowUp': this.keys.forward = true; break;
         case 'KeyS': case 'ArrowDown': this.keys.backward = true; break;
@@ -374,8 +398,10 @@ export class CameraController {
     };
 
     this.onCanvasClick = (e) => {
-      if (this.isFastTraveling) return;
-      if (e.target?.closest?.('#director-hud, #portal-modal-overlay, #directory-hud-modal, #directory-hud-toggle-btn, #literature-summary-panel, #audio-mute-toggle-btn, #perf-fps-badge, #return-waypoint-prompt')) return;
+      if (this.isFastTraveling || this.isFocusZooming) return;
+      if (typeof window !== 'undefined' && window.__loreGuide?.isOpen) return;
+      if (typeof document !== 'undefined' && document.getElementById('museum-lore-overlay')?.classList?.contains('active')) return;
+      if (e.target?.closest?.('#museum-lore-overlay, #director-hud, #portal-modal-overlay, #directory-hud-modal, #directory-hud-toggle-btn, #literature-summary-panel, #audio-mute-toggle-btn, #perf-fps-badge, #return-waypoint-prompt')) return;
       if (this.isEnabled && this.controls && !this.controls.isLocked) {
         this.controls.lock();
       }
@@ -636,6 +662,7 @@ export class CameraController {
 
   fastTravelTo(targetPos, lookAtTarget, onComplete = null) {
     if (!this.camera || !targetPos || !lookAtTarget) return;
+    this.cancelFocusZoom(false);
     this.audioManager?.playWhoosh?.();
     this.isFastTraveling = true;
     this.fastTravelTime = 0.0;
@@ -650,6 +677,56 @@ export class CameraController {
     this.travelStartLook.z += this._moveDir.z * 10.0;
     this.travelEndLook.copy(lookAtTarget);
     this.onFastTravelComplete = onComplete;
+  }
+
+  /**
+   * Lướt camera mượt mà để căn khung hình Bảng Thông Tin / Hiện vật (không xung đột PointerLock/OrbitControls)
+   */
+  smoothZoomToFocus(targetPos, lookAtTarget, options = {}) {
+    if (!this.camera || !targetPos || !lookAtTarget) return false;
+    this.isFastTraveling = false;
+    this.isFocusZooming = true;
+    this.focusZoomTime = 0.0;
+    this.focusZoomDuration = Math.max(0.25, Number(options.duration) || 0.72);
+
+    if (this.controls?.isLocked) {
+      try { this.controls.unlock(); } catch (_) {}
+    }
+    if (typeof document !== 'undefined' && document.pointerLockElement && document.exitPointerLock) {
+      try { document.exitPointerLock(); } catch (_) {}
+    }
+
+    // Xóa trạng thái phím giữ để tránh giật khi trả điều khiển
+    this.keys.forward = false;
+    this.keys.backward = false;
+    this.keys.left = false;
+    this.keys.right = false;
+    this.keys.up = false;
+    this.keys.down = false;
+    this.velocity.set(0, 0, 0);
+
+    this.focusStartPos.copy(this.camera.position);
+    this.focusEndPos.set(targetPos.x, targetPos.y, targetPos.z);
+
+    this.camera.getWorldDirection(this._moveDir);
+    const lookDist = Math.max(1.5, Math.min(12.0, this.focusStartPos.distanceTo(this.focusEndPos) + 2.5));
+    this.focusStartLook.copy(this.camera.position).addScaledVector(this._moveDir, lookDist);
+    this.focusEndLook.set(lookAtTarget.x, lookAtTarget.y, lookAtTarget.z);
+
+    this.onFocusZoomComplete = typeof options.onComplete === 'function' ? options.onComplete : null;
+    this.onFocusZoomCancel = typeof options.onCancel === 'function' ? options.onCancel : null;
+    return true;
+  }
+
+  cancelFocusZoom(notify = false) {
+    if (!this.isFocusZooming) return;
+    this.isFocusZooming = false;
+    const cancelCb = this.onFocusZoomCancel;
+    this.onFocusZoomComplete = null;
+    this.onFocusZoomCancel = null;
+    if (notify) {
+      cancelCb?.();
+    }
   }
 
   update(delta = 0.016) {
@@ -669,6 +746,30 @@ export class CameraController {
         this.camera.lookAt(this.travelEndLook);
         const cb = this.onFastTravelComplete;
         this.onFastTravelComplete = null;
+        cb?.();
+      }
+      return;
+    }
+
+    if (this.isFocusZooming) {
+      const dt = Math.min(Math.max(delta, 0.001), 0.05);
+      this.focusZoomTime += dt;
+      const progress = Math.min(1.0, this.focusZoomTime / this.focusZoomDuration);
+      const ease = progress < 0.5
+        ? 4.0 * progress * progress * progress
+        : 1.0 - Math.pow(-2.0 * progress + 2.0, 3) / 2.0;
+
+      this.camera.position.lerpVectors(this.focusStartPos, this.focusEndPos, ease);
+      this.focusCurrentLook.lerpVectors(this.focusStartLook, this.focusEndLook, ease);
+      this.camera.lookAt(this.focusCurrentLook);
+
+      if (progress >= 1.0) {
+        this.isFocusZooming = false;
+        this.camera.position.copy(this.focusEndPos);
+        this.camera.lookAt(this.focusEndLook);
+        const cb = this.onFocusZoomComplete;
+        this.onFocusZoomComplete = null;
+        this.onFocusZoomCancel = null;
         cb?.();
       }
       return;

@@ -7,15 +7,17 @@ import { RoomGenerator } from './modules/RoomGenerator.js';
 import { PortalInteraction } from './modules/PortalInteraction.js';
 import { ExteriorVista } from './modules/exteriorVista.js';
 import { ProceduralVFX } from './modules/proceduralVfx.js';
-import { PostProcessingManager } from './modules/postprocessingManager.js';
 import { CameraManager } from './controls/cameraManager.js';
 import { DirectorPanel } from './ui/directorPanel.js';
 import { DirectoryHUD } from './ui/DirectoryHUD.js';
 import { KieuWorld } from './modules/kieuWorld.js';
 import { WorldManager, WORLD_STATES } from './modules/worldManager.js';
 import { AudioManager, SURFACE_TYPES } from './modules/AudioManager.js';
-import { RoomDecorator, updateTruyenKieuVFX, updateTruyenKieuCinematic, fixFloorAndLightingRoom01, redesignTruyenKieuWithHeroModel } from './modules/RoomDecorator.js';
-import { KieuRoomDecor } from './modules/KieuRoomDecor.js';
+import {
+  LITERATURE_REGISTRY,
+  CUSTOM_ROOM_IDS,
+  getRoomWorldPose
+} from './config/literatureRegistry.js';
 import { buildTruyenKieuExhibition } from './modules/truyenKieuRoomDecorator.js';
 import { buildThanhGiongExhibition } from './modules/thanhGiongRoomDecorator.js';
 import { buildSonTinhThuyTinhExhibition, setupSonTinhThuyTinhRoom } from './modules/sonTinhThuyTinhRoomDecorator.js';
@@ -23,6 +25,8 @@ import { buildNamQuocSonHaExhibition } from './modules/namQuocSonHaRoomDecorator
 import { buildAnDuongVuongExhibition } from './modules/anDuongVuongRoomDecorator.js';
 import { buildVoNhatExhibition } from './modules/voNhatRoomDecorator.js';
 import { buildTatDenExhibition } from './modules/tatDenRoomDecorator.js';
+import { buildNamXuongExhibition } from './modules/namXuongRoomDecorator.js';
+import { buildDayThonViDaExhibition } from './modules/dayThonViDaRoomDecorator.js';
 import { decorateMuseumGrandLobbyAndCorridors } from './modules/museumLobbyCorridorDecorator.js';
 import { replaceAllMuseumCarpetsWithTimelinePattern } from './modules/museumCarpetReplacer.js';
 import { createMuseumImmersionSystem } from './modules/museumImmersionSystem.js';
@@ -45,10 +49,43 @@ import { applyAll16SkillsToMuseum } from './modules/museumUltimate16SkillsUpgrad
  * Áp dụng quy tắc: AUTO-VALIDATION, DEFENSIVE PROGRAMMING & SELF-HEALING
  */
 
+function fixFloorAndLightingRoom01(_roomGroup, _scene, renderer, _postProcessing = null) {
+  if (renderer) {
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
+  }
+}
+
+function getRoomCenterVector(roomId) {
+  const pose = getRoomWorldPose(roomId);
+  return new THREE.Vector3(pose.x, pose.y, pose.z);
+}
+
 class LiteratureCathedralApp {
   constructor() {
     this.container = document.getElementById('app') ?? document.body;
     this.clock = new THREE.Clock();
+
+    // Thiết lập Loading Manager nền giấy dó cổ cập nhật tiến độ thực tế 0% -> 100%
+    const fillEl = document.getElementById('boot-progress-fill');
+    const percentEl = document.getElementById('boot-progress-percent');
+    const statusEl = document.getElementById('boot-progress-status');
+
+    THREE.DefaultLoadingManager.onProgress = (itemUrl, itemsLoaded, itemsTotal) => {
+      const pct = Math.min(100, Math.round((itemsLoaded / (itemsTotal || 1)) * 100));
+      if (fillEl) fillEl.style.width = `${pct}%`;
+      if (percentEl) percentEl.textContent = `${pct}%`;
+      if (statusEl) {
+        const shortName = (itemUrl || '').split('/').pop()?.split('?')[0] || 'di sản';
+        statusEl.textContent = `Nạp ${shortName} (${itemsLoaded}/${itemsTotal})`;
+      }
+    };
+
+    THREE.DefaultLoadingManager.onLoad = () => {
+      if (fillEl) fillEl.style.width = '100%';
+      if (percentEl) percentEl.textContent = '100%';
+      if (statusEl) statusEl.textContent = 'Khởi tạo hoàn tất! Đang mở cửa Thánh Đường...';
+    };
 
     try {
       this.initRenderer();
@@ -76,7 +113,7 @@ class LiteratureCathedralApp {
       this.renderer.toneMappingExposure = 1.0;
       this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-      this.renderer.shadowMap.enabled = false; // TẮT SHADOWMAP TOÀN PHẦN: Giải phóng 100% băng thông shadow passes cho GTX 1050
+      this.renderer.shadowMap.enabled = true; // Bật ShadowMap có kiểm soát (chỉ SpotLight Phòng 204 đổ bóng khi đứng gần)
       this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
       // TỐI ƯU HÓA KẾT XUẤT WEBGLLRENDERER (Performance Optimization)
@@ -114,8 +151,8 @@ class LiteratureCathedralApp {
     // 4. Scene Thế Giới An Dương Vương Độc Lập Hoàn Toàn (Cõi Cổ Loa Thành & Biển Đông)
     this.anDuongVuongScene = new THREE.Scene();
     this.anDuongVuongScene.name = "AnDuongVuong_Universe";
-    this.anDuongVuongScene.background = new THREE.Color(0x031210);
-    this.anDuongVuongScene.fog = new THREE.FogExp2(0x072a24, 0.0012);
+    this.anDuongVuongScene.background = new THREE.Color(0x0e3b33);
+    this.anDuongVuongScene.fog = new THREE.FogExp2(0x0e3b33, 0.00045);
     window.__anDuongVuongScene = this.anDuongVuongScene;
 
     // 5. Scene Thế Giới Vợ Nhặt Độc Lập Hoàn Toàn (Cõi Văn Học & Xóm Ngụ Cư 1945)
@@ -146,6 +183,20 @@ class LiteratureCathedralApp {
     this.thanhGiongScene.fog = new THREE.FogExp2(0x28120a, 0.0085);
     window.__thanhGiongScene = this.thanhGiongScene;
 
+    // 9. Scene Thế Giới Đây Thôn Vĩ Dạ Độc Lập (Vườn Ban Mai & Sông Trăng Xứ Huế)
+    this.dayThonViDaScene = new THREE.Scene();
+    this.dayThonViDaScene.name = "DayThonViDa_Universe";
+    this.dayThonViDaScene.background = new THREE.Color(0xbfe0d4);
+    this.dayThonViDaScene.fog = new THREE.FogExp2(0xc8e4d8, 0.0022);
+    window.__dayThonViDaScene = this.dayThonViDaScene;
+
+    // 10. Scene Thế Giới Người Con Gái Nam Xương Độc Lập (Bến Sông Hoàng Giang & Thủy Cung)
+    this.namXuongScene = new THREE.Scene();
+    this.namXuongScene.name = "NamXuong_Universe";
+    this.namXuongScene.background = new THREE.Color(0x0d1117);
+    this.namXuongScene.fog = new THREE.FogExp2(0x0d1117, 0.0035);
+    window.__namXuongScene = this.namXuongScene;
+
     // 5. Biến quản lý Scene đang Active (Mặc định: Sảnh Bảo Tàng)
     this.activeScene = this.mainScene;
     window.__activeScene = this.activeScene;
@@ -155,7 +206,7 @@ class LiteratureCathedralApp {
     window.__museumCrowd = this.museumCrowd;
 
     const truyenKieuRoom = buildTruyenKieuExhibition({
-      roomCenter: new THREE.Vector3(-48.0, 10.0, 19.0), // Khớp chính xác với Tầng 2 (Y = 10.0m) Hiên Tây - Nam theo LITERATURE_REGISTRY
+      roomCenter: getRoomCenterVector('truyen_kieu'), // Khớp tuyệt đối với LITERATURE_REGISTRY + ALCOVE_CENTERS (Tầng 2, phòng 205)
       poeticScene: this.truyenKieuScene
     });
     this.scene.add(truyenKieuRoom);
@@ -163,7 +214,7 @@ class LiteratureCathedralApp {
     this.roomDecorator = truyenKieuRoom;
 
     const thanhGiongRoom = buildThanhGiongExhibition({
-      roomCenter: new THREE.Vector3(-48.0, 0.0, 19.0), // Khớp chính xác với Tầng 1 (Y = 0.0m) Hiên Tây - Nam theo LITERATURE_REGISTRY
+      roomCenter: getRoomCenterVector('thanh_giong'), // Khớp tuyệt đối với LITERATURE_REGISTRY + ALCOVE_CENTERS (Tầng 1, phòng 101)
       mainScene: this.scene,
       realmScene: this.thanhGiongScene
     });
@@ -172,7 +223,7 @@ class LiteratureCathedralApp {
     window.__thanhGiongRoom = thanhGiongRoom;
 
     const sonTinhThuyTinhRoom = setupSonTinhThuyTinhRoom(this.scene, {
-      roomCenter: new THREE.Vector3(-48.0, 0.0, -19.0), // Khớp chính xác với Tầng 1 (Y = 0.0m) Cánh Tây - Bắc theo LITERATURE_REGISTRY
+      roomCenter: getRoomCenterVector('son_tinh_thuy_tinh'), // Khớp tuyệt đối với LITERATURE_REGISTRY + ALCOVE_CENTERS (Tầng 1, phòng 102)
       battleScene: this.sonTinhThuyTinhScene
     });
     if (sonTinhThuyTinhRoom.parent !== this.scene) {
@@ -181,7 +232,7 @@ class LiteratureCathedralApp {
     this.sonTinhThuyTinhRoom = sonTinhThuyTinhRoom;
 
     const namQuocSonHaRoom = buildNamQuocSonHaExhibition({
-      roomCenter: new THREE.Vector3(-48.0, 10.0, -19.0), // Khớp chính xác với Tầng 2 (Y = 10.0m) Cánh Tây - Bắc theo LITERATURE_REGISTRY
+      roomCenter: getRoomCenterVector('nam_quoc_son_ha'), // Khớp tuyệt đối với LITERATURE_REGISTRY + ALCOVE_CENTERS (Tầng 2, phòng 201)
       mainScene: this.scene,
       realmScene: this.namQuocSonHaScene
     });
@@ -190,7 +241,7 @@ class LiteratureCathedralApp {
     window.__namQuocSonHaRoom = namQuocSonHaRoom;
 
     const anDuongVuongRoom = buildAnDuongVuongExhibition({
-      roomCenter: new THREE.Vector3(0.0, 0.0, -48.0), // Khớp chính xác với Tầng 1 (Y = 0.0m) Cánh Bắc - Đại Gian theo LITERATURE_REGISTRY
+      roomCenter: getRoomCenterVector('an_duong_vuong'), // Khớp tuyệt đối với LITERATURE_REGISTRY + ALCOVE_CENTERS (Tầng 1, phòng 103)
       realmScene: this.anDuongVuongScene
     });
     this.scene.add(anDuongVuongRoom);
@@ -198,7 +249,7 @@ class LiteratureCathedralApp {
     window.__anDuongVuongRoom = anDuongVuongRoom;
 
     const voNhatRoom = buildVoNhatExhibition({
-      roomCenter: new THREE.Vector3(48.0, 20.0, -19.0), // Khớp chính xác với Tầng 3 (Y = 20.0m) Cánh Đông - Bắc theo LITERATURE_REGISTRY
+      roomCenter: getRoomCenterVector('vo_nhat'), // Khớp tuyệt đối với LITERATURE_REGISTRY + ALCOVE_CENTERS (Tầng 3, phòng 305)
       realmScene: this.voNhatScene
     });
     this.scene.add(voNhatRoom);
@@ -206,13 +257,35 @@ class LiteratureCathedralApp {
     window.__voNhatRoom = voNhatRoom;
 
     const tatDenRoom = buildTatDenExhibition({
-      roomCenter: new THREE.Vector3(-48.0, 20.0, -19.0),
+      roomCenter: getRoomCenterVector('tat_den'), // Khớp tuyệt đối với LITERATURE_REGISTRY + ALCOVE_CENTERS (Tầng 3, phòng 303 - Đại Gian Bắc)
       mainScene: this.scene,
       realmScene: this.tatDenScene
     });
     this.scene.add(tatDenRoom);
     this.tatDenRoom = tatDenRoom;
     window.__tatDenRoom = tatDenRoom;
+
+    const namXuongRoom = buildNamXuongExhibition({
+      roomCenter: getRoomCenterVector('nguoi_con_gai_nam_xuong'), // Khớp tuyệt đối với LITERATURE_REGISTRY + ALCOVE_CENTERS (Tầng 2, phòng 204 - Cánh Đông-Bắc)
+      mainScene: this.scene,
+      realmScene: this.namXuongScene,
+      renderer: this.renderer,
+      cameraManager: this.cameraManager
+    });
+    this.scene.add(namXuongRoom);
+    this.namXuongRoom = namXuongRoom;
+    window.__namXuongRoom = namXuongRoom;
+
+    const dayThonViDaRoom = buildDayThonViDaExhibition({
+      roomCenter: getRoomCenterVector('day_thon_vi_da'), // Khớp tuyệt đối với LITERATURE_REGISTRY + ALCOVE_CENTERS (Tầng 3, phòng 302 - Cánh Tây-Bắc)
+      mainScene: this.scene,
+      realmScene: this.dayThonViDaScene,
+      renderer: this.renderer,
+      cameraManager: this.cameraManager
+    });
+    this.scene.add(dayThonViDaRoom);
+    this.dayThonViDaRoom = dayThonViDaRoom;
+    window.__dayThonViDaRoom = dayThonViDaRoom;
 
     const aspect = window.innerWidth / (window.innerHeight || 1);
     // Căn chỉnh Z-Buffer: near = 1.0, far = 5000
@@ -260,9 +333,15 @@ class LiteratureCathedralApp {
       const style = this._getCachedSceneStyle('main', 0xdca878, 0xdca878, 0.00075);
       this.mainScene.background = style.background;
       this.mainScene.fog = style.fog;
+      if (this.camera && Math.abs((this.camera.fov || 65) - 65) > 0.1) {
+        this.camera.fov = 65;
+        this.camera.updateProjectionMatrix();
+      }
       if (this.exteriorVista?.group) this.exteriorVista.group.visible = true;
       if (this.truyenKieuStoryWorld?.worldGroup) this.truyenKieuStoryWorld.worldGroup.visible = false;
-      if (this.kieuWorld?.group) this.kieuWorld.group.visible = false;
+      if (this.kieuWorld?.setVisible) this.kieuWorld.setVisible(false);
+      else if (this.kieuWorld?.group) this.kieuWorld.group.visible = false;
+      // Hiển thị đầy đủ các phòng triển lãm văn học trong không gian bảo tàng chính
       if (this.truyenKieuRoom) this.truyenKieuRoom.visible = true;
       if (this.thanhGiongRoom) this.thanhGiongRoom.visible = true;
       if (this.sonTinhThuyTinhRoom) this.sonTinhThuyTinhRoom.visible = true;
@@ -270,6 +349,8 @@ class LiteratureCathedralApp {
       if (this.anDuongVuongRoom) this.anDuongVuongRoom.visible = true;
       if (this.voNhatRoom) this.voNhatRoom.visible = true;
       if (this.tatDenRoom) this.tatDenRoom.visible = true;
+      if (this.namXuongRoom) this.namXuongRoom.visible = true;
+      if (this.dayThonViDaRoom) this.dayThonViDaRoom.visible = true;
       if (this.museumCrowd?.crowdGroup) this.museumCrowd.crowdGroup.visible = true;
       this._lastCullCamPos?.set(Infinity, Infinity, Infinity);
     } else if (scene === this.truyenKieuScene) {
@@ -286,6 +367,8 @@ class LiteratureCathedralApp {
       if (this.anDuongVuongRoom) this.anDuongVuongRoom.visible = false;
       if (this.voNhatRoom) this.voNhatRoom.visible = false;
       if (this.tatDenRoom) this.tatDenRoom.visible = false;
+      if (this.namXuongRoom) this.namXuongRoom.visible = false;
+      if (this.dayThonViDaRoom) this.dayThonViDaRoom.visible = false;
       if (this.museumCrowd?.crowdGroup) this.museumCrowd.crowdGroup.visible = false;
     } else if (scene === this.sonTinhThuyTinhScene) {
       const style = this._getCachedSceneStyle('sonTinh', 0x050b14, 0x0c1e33, 0.002);
@@ -304,8 +387,10 @@ class LiteratureCathedralApp {
       if (this.museumCrowd?.crowdGroup) this.museumCrowd.crowdGroup.visible = false;
       if (this.voNhatRoom) this.voNhatRoom.visible = false;
       if (this.tatDenRoom) this.tatDenRoom.visible = false;
+      if (this.namXuongRoom) this.namXuongRoom.visible = false;
+      if (this.dayThonViDaRoom) this.dayThonViDaRoom.visible = false;
     } else if (scene === this.anDuongVuongScene) {
-      const style = this._getCachedSceneStyle('anDuongVuong', 0x031210, 0x072a24, 0.0012);
+      const style = this._getCachedSceneStyle('anDuongVuong', 0x0e3b33, 0x0e3b33, 0.00045);
       this.anDuongVuongScene.background = style.background;
       this.anDuongVuongScene.fog = style.fog;
       if (this.exteriorVista?.group) this.exteriorVista.group.visible = false;
@@ -317,6 +402,8 @@ class LiteratureCathedralApp {
       if (this.museumCrowd?.crowdGroup) this.museumCrowd.crowdGroup.visible = false;
       if (this.voNhatRoom) this.voNhatRoom.visible = false;
       if (this.tatDenRoom) this.tatDenRoom.visible = false;
+      if (this.namXuongRoom) this.namXuongRoom.visible = false;
+      if (this.dayThonViDaRoom) this.dayThonViDaRoom.visible = false;
     } else if (scene === this.voNhatScene) {
       const style = this._getCachedSceneStyle('voNhat', 0x181008, 0x2a1a0d, 0.0018);
       this.voNhatScene.background = style.background;
@@ -329,6 +416,8 @@ class LiteratureCathedralApp {
       if (this.anDuongVuongRoom) this.anDuongVuongRoom.visible = false;
       if (this.voNhatRoom) this.voNhatRoom.visible = false;
       if (this.tatDenRoom) this.tatDenRoom.visible = false;
+      if (this.namXuongRoom) this.namXuongRoom.visible = false;
+      if (this.dayThonViDaRoom) this.dayThonViDaRoom.visible = false;
       if (this.museumCrowd?.crowdGroup) this.museumCrowd.crowdGroup.visible = false;
     } else if (scene === this.tatDenScene) {
       const style = this._getCachedSceneStyle('tatDen', 0x040407, 0x040407, 0.0135);
@@ -342,6 +431,8 @@ class LiteratureCathedralApp {
       if (this.anDuongVuongRoom) this.anDuongVuongRoom.visible = false;
       if (this.voNhatRoom) this.voNhatRoom.visible = false;
       if (this.tatDenRoom) this.tatDenRoom.visible = false;
+      if (this.namXuongRoom) this.namXuongRoom.visible = false;
+      if (this.dayThonViDaRoom) this.dayThonViDaRoom.visible = false;
       if (this.museumCrowd?.crowdGroup) this.museumCrowd.crowdGroup.visible = false;
     } else if (scene === this.namQuocSonHaScene) {
       const style = this._getCachedSceneStyle('namQuocSonHa', 0x060d1c, 0x0b1528, 0.0115);
@@ -355,6 +446,8 @@ class LiteratureCathedralApp {
       if (this.anDuongVuongRoom) this.anDuongVuongRoom.visible = false;
       if (this.voNhatRoom) this.voNhatRoom.visible = false;
       if (this.tatDenRoom) this.tatDenRoom.visible = false;
+      if (this.namXuongRoom) this.namXuongRoom.visible = false;
+      if (this.dayThonViDaRoom) this.dayThonViDaRoom.visible = false;
       if (this.museumCrowd?.crowdGroup) this.museumCrowd.crowdGroup.visible = false;
     } else if (scene === this.thanhGiongScene) {
       const style = this._getCachedSceneStyle('thanhGiong', 0x140b08, 0x28120a, 0.0085);
@@ -368,6 +461,38 @@ class LiteratureCathedralApp {
       if (this.anDuongVuongRoom) this.anDuongVuongRoom.visible = false;
       if (this.voNhatRoom) this.voNhatRoom.visible = false;
       if (this.tatDenRoom) this.tatDenRoom.visible = false;
+      if (this.namXuongRoom) this.namXuongRoom.visible = false;
+      if (this.dayThonViDaRoom) this.dayThonViDaRoom.visible = false;
+      if (this.museumCrowd?.crowdGroup) this.museumCrowd.crowdGroup.visible = false;
+    } else if (scene === this.dayThonViDaScene) {
+      const style = this._getCachedSceneStyle('dayThonViDa', 0xbfe0d4, 0xc8e4d8, 0.0022);
+      this.dayThonViDaScene.background = style.background;
+      this.dayThonViDaScene.fog = style.fog;
+      if (this.exteriorVista?.group) this.exteriorVista.group.visible = false;
+      if (this.truyenKieuRoom) this.truyenKieuRoom.visible = false;
+      if (this.thanhGiongRoom) this.thanhGiongRoom.visible = false;
+      if (this.sonTinhThuyTinhRoom) this.sonTinhThuyTinhRoom.visible = false;
+      if (this.namQuocSonHaRoom) this.namQuocSonHaRoom.visible = false;
+      if (this.anDuongVuongRoom) this.anDuongVuongRoom.visible = false;
+      if (this.voNhatRoom) this.voNhatRoom.visible = false;
+      if (this.tatDenRoom) this.tatDenRoom.visible = false;
+      if (this.namXuongRoom) this.namXuongRoom.visible = false;
+      if (this.dayThonViDaRoom) this.dayThonViDaRoom.visible = false;
+      if (this.museumCrowd?.crowdGroup) this.museumCrowd.crowdGroup.visible = false;
+    } else if (scene === this.namXuongScene) {
+      const style = this._getCachedSceneStyle('namXuong', 0x0d1117, 0x0d1117, 0.0035);
+      this.namXuongScene.background = style.background;
+      this.namXuongScene.fog = style.fog;
+      if (this.exteriorVista?.group) this.exteriorVista.group.visible = false;
+      if (this.truyenKieuRoom) this.truyenKieuRoom.visible = false;
+      if (this.thanhGiongRoom) this.thanhGiongRoom.visible = false;
+      if (this.sonTinhThuyTinhRoom) this.sonTinhThuyTinhRoom.visible = false;
+      if (this.namQuocSonHaRoom) this.namQuocSonHaRoom.visible = false;
+      if (this.anDuongVuongRoom) this.anDuongVuongRoom.visible = false;
+      if (this.voNhatRoom) this.voNhatRoom.visible = false;
+      if (this.tatDenRoom) this.tatDenRoom.visible = false;
+      if (this.namXuongRoom) this.namXuongRoom.visible = false;
+      if (this.dayThonViDaRoom) this.dayThonViDaRoom.visible = false;
       if (this.museumCrowd?.crowdGroup) this.museumCrowd.crowdGroup.visible = false;
     } else {
       if (this.exteriorVista?.group) this.exteriorVista.group.visible = false;
@@ -378,6 +503,8 @@ class LiteratureCathedralApp {
       if (this.anDuongVuongRoom) this.anDuongVuongRoom.visible = false;
       if (this.voNhatRoom) this.voNhatRoom.visible = false;
       if (this.tatDenRoom) this.tatDenRoom.visible = false;
+      if (this.namXuongRoom) this.namXuongRoom.visible = false;
+      if (this.dayThonViDaRoom) this.dayThonViDaRoom.visible = false;
       if (this.museumCrowd?.crowdGroup) this.museumCrowd.crowdGroup.visible = false;
     }
 
@@ -413,7 +540,17 @@ class LiteratureCathedralApp {
         scene: this.scene,
         camera: this.camera,
         cameraRig: this.camera,
-        walkableFloors: [this.atriumGroup, this.namQuocSonHaRoom, this.thanhGiongRoom].filter(Boolean)
+        walkableFloors: [
+          this.atriumGroup,
+          this.namQuocSonHaRoom,
+          this.thanhGiongRoom,
+          ...(this.namXuongRoom?.userData?.walkableFloors?.length
+            ? this.namXuongRoom.userData.walkableFloors
+            : [this.namXuongRoom]),
+          ...(this.dayThonViDaRoom?.userData?.walkableFloors?.length
+            ? this.dayThonViDaRoom.userData.walkableFloors
+            : [this.dayThonViDaRoom])
+        ].filter(Boolean)
       });
       window.__museumImmersion = this.immersionSystem;
       window.__spatialAudio = this.immersionSystem.spatialAudio;
@@ -465,6 +602,7 @@ class LiteratureCathedralApp {
     try {
       this.roomGenerator = new RoomGenerator(this.matLib);
       if (this.roomGenerator?.getGroup()) {
+        this.roomGenerator.getGroup().visible = true;
         this.atriumGroup.add(this.roomGenerator.getGroup());
       }
     } catch (err) {
@@ -477,7 +615,7 @@ class LiteratureCathedralApp {
       this.roomDecorator = this.truyenKieuRoom;
       if (!this.roomDecorator) {
         this.roomDecorator = buildTruyenKieuExhibition({
-          roomCenter: new THREE.Vector3(-48.0, 10.0, 19.0)
+          roomCenter: getRoomCenterVector('truyen_kieu')
         });
         this.scene.add(this.roomDecorator);
         this.truyenKieuRoom = this.roomDecorator;
@@ -515,7 +653,11 @@ class LiteratureCathedralApp {
         corridorLength: 32,
         corridorWidth: 8.4,
         wallHeight: 10.0,
-        skylightApex: 32.0
+        skylightApex: 32.0,
+        hitboxManager: this.hitboxManager,
+        audioManager: this.audioManager,
+        spatialAudio: this.immersionSystem?.spatialAudio,
+        loreGuide: this.immersionSystem?.loreGuide
       });
       window.__lobbyDecorator = this.lobbyDecorator;
     } catch (err) {
@@ -548,7 +690,6 @@ class LiteratureCathedralApp {
           this.renderer,
           null
         );
-        redesignTruyenKieuWithHeroModel(rdGroup);
       }
     } catch (err) {
       console.warn("[SELF-HEALING] Lỗi thiết lập phòng 01:", err);
@@ -563,6 +704,9 @@ class LiteratureCathedralApp {
       this.hitboxManager = getMuseumHitboxManager(this.scene);
       if (this.cameraManager && this.hitboxManager) {
         this.cameraManager.setHitboxManager(this.hitboxManager);
+      }
+      if (this.lobbyDecorator?.registerHitboxes) {
+        this.lobbyDecorator.registerHitboxes(this.hitboxManager);
       }
     } catch (err) {
       console.error("[SELF-HEALING] Lỗi khởi tạo CameraManager:", err);
@@ -640,6 +784,12 @@ class LiteratureCathedralApp {
       }
       if (this.directorPanel && this.thanhGiongRoom) {
         this.directorPanel.setThanhGiongRoom?.(this.thanhGiongRoom);
+      }
+      if (this.directorPanel && this.dayThonViDaRoom) {
+        this.directorPanel.setDayThonViDaRoom?.(this.dayThonViDaRoom);
+      }
+      if (this.directorPanel && this.namXuongRoom) {
+        this.directorPanel.setNamXuongRoom?.(this.namXuongRoom);
       }
     } catch (err) {
       console.error("[SELF-HEALING] Lỗi khởi tạo DirectorPanel:", err);
@@ -733,6 +883,18 @@ class LiteratureCathedralApp {
         if (worldId === 'thanh_giong' || worldId === 'thanhgiong' || meta?.targetRealm === 'THANH_GIONG_REALM') {
           if (this.thanhGiongRoom?.enterRealm) {
             this.thanhGiongRoom.enterRealm('thanhgiong');
+            return true;
+          }
+        }
+        if (worldId === 'day_thon_vi_da' || worldId === 'daythonvida' || meta?.targetRealm === 'DAY_THON_VI_DA_REALM') {
+          if (this.dayThonViDaRoom?.enterRealm) {
+            this.dayThonViDaRoom.enterRealm('day_thon_vi_da');
+            return true;
+          }
+        }
+        if (worldId === 'nguoi_con_gai_nam_xuong' || worldId === 'nam_xuong' || worldId === 'namxuong' || meta?.targetRealm === 'NAM_XUONG_REALM') {
+          if (this.namXuongRoom?.enterRealm) {
+            this.namXuongRoom.enterRealm('nguoi_con_gai_nam_xuong');
             return true;
           }
         }
@@ -851,6 +1013,50 @@ class LiteratureCathedralApp {
         }
       }
 
+      // Đăng ký Cổng Dịch Chuyển Phòng Đây Thôn Vĩ Dạ vào PortalInteraction
+      if (this.dayThonViDaRoom) {
+        const viDaPortal = this.dayThonViDaRoom.teleportBook || this.dayThonViDaRoom.userData?.teleportBook;
+        if (viDaPortal) {
+          this.portalInteraction.registerInteractiveBook(viDaPortal, new THREE.Vector3(0, 2.0, 14.0), {
+            id: 'day_thon_vi_da',
+            title: 'ĐÂY THÔN VĨ DẠ • CÕI VƯỜN VĨ DẠ & SÔNG TRĂNG',
+            author: 'Hàn Mặc Tử (1912 – 1940)',
+            genre: 'Thơ Mới (1932 – 1945) • Tầng 3 Phòng 302',
+            quote: '“Sao anh không về chơi thôn Vĩ? Nhìn nắng hàng cau nắng mới lên...”',
+            themeColor: 0x10b981,
+            targetRealm: 'DAY_THON_VI_DA_REALM',
+            portalReady: true,
+            floor: 3,
+            roomIndex: 11,
+            onActivate: () => {
+              this.dayThonViDaRoom?.enterRealm?.('day_thon_vi_da');
+            }
+          });
+        }
+      }
+
+      // Đăng ký Cổng Dịch Chuyển Phòng Người Con Gái Nam Xương vào PortalInteraction
+      if (this.namXuongRoom) {
+        const namXuongPortal = this.namXuongRoom.teleportBook || this.namXuongRoom.userData?.teleportBook;
+        if (namXuongPortal) {
+          this.portalInteraction.registerInteractiveBook(namXuongPortal, new THREE.Vector3(0, 1.8, 14.0), {
+            id: 'nguoi_con_gai_nam_xuong',
+            title: 'CHUYỆN NGƯỜI CON GÁI NAM XƯƠNG • NGUYỄN DỮ',
+            author: 'Nguyễn Dữ (Thế kỷ XVI)',
+            genre: 'Truyền Kỳ Mạn Lục • Tầng 2 Phòng 204',
+            quote: '“Bến Hoàng Giang sóng lạnh khói mờ, chiếc bóng trên vách hóa oan khiên muôn thuở.”',
+            themeColor: 0x88aaff,
+            targetRealm: 'NAM_XUONG_REALM',
+            portalReady: true,
+            floor: 2,
+            roomIndex: 8,
+            onActivate: () => {
+              this.namXuongRoom?.enterRealm?.('nguoi_con_gai_nam_xuong');
+            }
+          });
+        }
+      }
+
       // Kết nối Context toàn diện cho Phòng Truyện Kiều (Cõi Thơ Đoạn Trường Tân Thanh)
       if (this.truyenKieuRoom?.setupContext) {
         this.truyenKieuRoom.setupContext({
@@ -887,8 +1093,11 @@ class LiteratureCathedralApp {
           camera: this.camera,
           renderer: this.renderer,
           cameraManager: this.cameraManager,
+          hitboxManager: this.hitboxManager,
           portalInteraction: this.portalInteraction,
           audioManager: this.audioManager,
+          spatialAudio: this.immersionSystem?.spatialAudio || window.__spatialAudio,
+          loreGuide: this.immersionSystem?.loreGuide || window.__loreGuide,
           atriumGroup: this.atriumGroup
         });
       }
@@ -954,6 +1163,24 @@ class LiteratureCathedralApp {
           immersionSystem: this.immersionSystem
         });
       }
+      // Kết nối Context sớm cho Phòng Đây Thôn Vĩ Dạ (Portal & Cõi Vườn Vĩ Dạ - Sông Trăng)
+      if (this.dayThonViDaRoom?.setupContext) {
+        this.dayThonViDaRoom.setupContext({
+          scene: this.scene,
+          mainScene: this.mainScene,
+          realmScene: this.dayThonViDaScene,
+          camera: this.camera,
+          renderer: this.renderer,
+          cameraManager: this.cameraManager,
+          hitboxManager: this.hitboxManager,
+          loreGuide: this.immersionSystem?.loreGuide || window.__loreGuide,
+          spatialAudio: this.immersionSystem?.spatialAudio || window.__spatialAudio,
+          audioManager: this.audioManager,
+          xrTeleport: this.immersionSystem?.xrTeleport,
+          portalInteraction: this.portalInteraction,
+          immersionSystem: this.immersionSystem
+        });
+      }
       if (typeof window !== 'undefined') {
         window.enterRealm = (realmName) => {
           if (realmName === 'namquocsonha' || realmName === 'nam_quoc_son_ha') {
@@ -967,6 +1194,21 @@ class LiteratureCathedralApp {
           if (realmName === 'thanhgiong' || realmName === 'thanh_giong') {
             this.thanhGiongRoom?.enterRealm?.('thanhgiong');
             return true;
+          }
+          if (realmName === 'daythonvida' || realmName === 'day_thon_vi_da' || realmName === 'vida') {
+            this.dayThonViDaRoom?.enterRealm?.('day_thon_vi_da');
+            return true;
+          }
+          if (realmName === 'namxuong' || realmName === 'nam_xuong' || realmName === 'nguoi_con_gai_nam_xuong') {
+            this.namXuongRoom?.enterRealm?.('nguoi_con_gai_nam_xuong');
+            return true;
+          }
+          if (realmName === 'an_duong_vuong' || realmName === 'anduongvuong' || realmName === 'co_loa' || realmName === 'an_duong_vuong_realm' || realmName === 'an-duong-vuong') {
+            const adv = this.anDuongVuongRoom || (typeof window !== 'undefined' ? window.__anDuongVuongRoom : null);
+            if (adv?.enterRealm) {
+              adv.enterRealm('an_duong_vuong');
+              return true;
+            }
           }
           return false;
         };
@@ -991,7 +1233,13 @@ class LiteratureCathedralApp {
       this.tatDenRoom?.userData?.wireInteractiveSystems?.(interactiveRoomCtx);
       this.namQuocSonHaRoom?.userData?.wireInteractiveSystems?.(interactiveRoomCtx);
       this.thanhGiongRoom?.userData?.wireInteractiveSystems?.(interactiveRoomCtx);
-      this.thanhGiongRoom?.userData?.registerHitboxes?.(this.hitboxManager);
+      this.anDuongVuongRoom?.setupContext?.(interactiveRoomCtx);
+      this.anDuongVuongRoom?.userData?.wireInteractiveSystems?.(interactiveRoomCtx);
+      this.roomGenerator?.registerPlaqueHitboxes?.(
+        this.hitboxManager,
+        interactiveRoomCtx.loreGuide,
+        this.cameraManager
+      );
       if (this.hitboxManager) {
         this.collisionObjects = this.hitboxManager.solidBoxes.map(s => s.box);
         this.cameraManager?.setCollisionObjects(this.collisionObjects, this.stairObjects);
@@ -1013,7 +1261,8 @@ class LiteratureCathedralApp {
         this.voNhatScene,
         this.tatDenScene,
         this.namQuocSonHaScene,
-        this.thanhGiongScene
+        this.thanhGiongScene,
+        this.dayThonViDaScene
       ];
       scenesToCull.forEach((targetScene) => {
         if (!targetScene) return;
@@ -1048,6 +1297,64 @@ class LiteratureCathedralApp {
     } catch (err) {
       console.error("[SELF-HEALING] Lỗi khởi tạo MuseumAutoTourDirector:", err);
       this.autoTour = null;
+    }
+
+    // 13.0. Kết nối Context toàn diện cho Phòng 204 - Chuyện Người Con Gái Nam Xương
+    try {
+      const namXuongSetup = this.namXuongRoom?.setupContext || this.namXuongRoom?.userData?.setupContext || this.namXuongRoom?.userData?.wireInteractiveSystems;
+      if (typeof namXuongSetup === 'function') {
+        namXuongSetup({
+          scene: this.scene,
+          mainScene: this.mainScene,
+          realmScene: this.namXuongScene,
+          camera: this.camera,
+          renderer: this.renderer,
+          cameraManager: this.cameraManager,
+          hitboxManager: this.hitboxManager,
+          loreGuide: this.immersionSystem?.loreGuide || window.__loreGuide,
+          spatialAudio: this.immersionSystem?.spatialAudio || window.__spatialAudio,
+          audioManager: this.audioManager,
+          xrTeleport: this.immersionSystem?.xrTeleport,
+          autoTour: this.autoTour,
+          portalInteraction: this.portalInteraction,
+          immersionSystem: this.immersionSystem
+        });
+      }
+      if (this.hitboxManager) {
+        this.collisionObjects = this.hitboxManager.solidBoxes.map(s => s.box);
+        this.cameraManager?.setCollisionObjects(this.collisionObjects, this.stairObjects);
+      }
+    } catch (err) {
+      console.error("[SELF-HEALING] Lỗi kết nối Context Phòng Nam Xương:", err);
+    }
+
+    // 13.0b. Kết nối Context toàn diện cho Phòng 302 - Đây Thôn Vĩ Dạ
+    try {
+      const dayThonViDaSetup = this.dayThonViDaRoom?.setupContext || this.dayThonViDaRoom?.userData?.setupContext || this.dayThonViDaRoom?.userData?.wireInteractiveSystems;
+      if (typeof dayThonViDaSetup === 'function') {
+        dayThonViDaSetup({
+          scene: this.scene,
+          mainScene: this.mainScene,
+          realmScene: this.dayThonViDaScene,
+          camera: this.camera,
+          renderer: this.renderer,
+          cameraManager: this.cameraManager,
+          hitboxManager: this.hitboxManager,
+          loreGuide: this.immersionSystem?.loreGuide || window.__loreGuide,
+          spatialAudio: this.immersionSystem?.spatialAudio || window.__spatialAudio,
+          audioManager: this.audioManager,
+          xrTeleport: this.immersionSystem?.xrTeleport,
+          autoTour: this.autoTour,
+          portalInteraction: this.portalInteraction,
+          immersionSystem: this.immersionSystem
+        });
+      }
+      if (this.hitboxManager) {
+        this.collisionObjects = this.hitboxManager.solidBoxes.map(s => s.box);
+        this.cameraManager?.setCollisionObjects(this.collisionObjects, this.stairObjects);
+      }
+    } catch (err) {
+      console.error("[SELF-HEALING] Lỗi kết nối Context Phòng Đây Thôn Vĩ Dạ:", err);
     }
 
     // 13.1. KHỞI CHẠY ĐỘNG CƠ TÁI THIẾT KẾ TOÀN DIỆN BẢO TÀNG (BLENDER + WEB GLB + 12 SKILLS)
@@ -1176,9 +1483,10 @@ class LiteratureCathedralApp {
    */
   initThreePointLighting() {
     // 1. Quét và loại bỏ sạch sẽ mọi PointLight/SpotLight nhỏ lẻ trong atriumGroup
+    // (Giữ lại SpotLight của Bảng Thông Tin 3D để collectSceneLightsAndCullTargets thu thập vào pool)
     const lightsToRemove = [];
     this.atriumGroup.traverse((child) => {
-      if (child.isPointLight || child.isSpotLight) {
+      if ((child.isPointLight || child.isSpotLight) && !child.userData?.isPlaqueSpotLight) {
         lightsToRemove.push(child);
       }
     });
@@ -1212,7 +1520,7 @@ class LiteratureCathedralApp {
 
     this.atriumGroup.add(this.lightingGroup);
 
-    // 3. Pool cố định 3 PointLight luôn visible = true (chỉ đổi intensity/position/color -> NUM_POINT_LIGHTS luôn = 3)
+    // 3. Pool cố định 3 PointLight + 1 SpotLight cho Bảng Thông Tin luôn visible = true (ZERO RUNTIME RECOMPILE)
     if (!this._roomLightPool) {
       this._roomLightPool = [];
       for (let i = 0; i < 3; i++) {
@@ -1220,9 +1528,22 @@ class LiteratureCathedralApp {
         pLight.name = `Pooled_Room_PointLight_${i}`;
         pLight.castShadow = false;
         pLight.visible = true;
+        pLight.userData = { isPooledLight: true, ignoreRaycaster: true };
         this.mainScene.add(pLight);
         this._roomLightPool.push(pLight);
       }
+    }
+    if (!this._plaqueSpotLight) {
+      const plaqueSpot = new THREE.SpotLight(0xffdf73, 0.0, 6.5, Math.PI / 4, 0.65, 1.5);
+      plaqueSpot.name = 'Pooled_Plaque_SpotLight';
+      plaqueSpot.castShadow = false;
+      plaqueSpot.visible = true;
+      plaqueSpot.userData = { isPlaqueSpotLight: true, isPooledLight: true, ignoreRaycaster: true };
+      plaqueSpot.target.name = 'Pooled_Plaque_SpotLight_Target';
+      plaqueSpot.target.userData = { isPlaqueSpotLight: true, isPooledLight: true, ignoreRaycaster: true };
+      this.mainScene.add(plaqueSpot);
+      this.mainScene.add(plaqueSpot.target);
+      this._plaqueSpotLight = plaqueSpot;
     }
 
     // 4. THÊM CHIỀU SÂU KHÔNG KHÍ BẰNG FOG HOÀNG HÔN ẤM ÁP
@@ -1389,18 +1710,43 @@ class LiteratureCathedralApp {
 
   /**
    * KÍCH HOẠT FRUSTUM CULLING & TẮT SHADOW CHO MỌI MESH TRONG SUBTREE (GIỮ NGUYÊN FRONTSIDE)
+   * Bảo toàn castShadow/receiveShadow cho Phòng 204 (Chiaroscuro vách nứa) và Phòng 302 (Nắng ban mai Vĩ Dạ).
    */
   optimizeSubtree(root) {
     if (!root) return 0;
     let count = 0;
+    const shouldPreserveShadow = (node) => {
+      let cur = node;
+      while (cur) {
+        if (
+          cur === this.namXuongRoom ||
+          cur === this.dayThonViDaRoom ||
+          cur.userData?.preserveShadow ||
+          cur.userData?.isNamXuongShadowLight ||
+          cur.userData?.isViDaShadowLight
+        ) {
+          return true;
+        }
+        cur = cur.parent;
+      }
+      return false;
+    };
     root.traverse((child) => {
       if (child.isLight) {
-        child.castShadow = false;
+        if (
+          !child.userData?.isNamXuongShadowLight &&
+          !child.userData?.isViDaShadowLight &&
+          !child.userData?.preserveShadow
+        ) {
+          child.castShadow = false;
+        }
       }
       if (child.isMesh || child.isPoints || child.isSprite) {
         child.frustumCulled = true;
-        child.castShadow = false;
-        child.receiveShadow = false;
+        if (!shouldPreserveShadow(child)) {
+          child.castShadow = false;
+          child.receiveShadow = false;
+        }
         if (child.isMesh) {
           child.renderOrder = 0;
         }
@@ -1440,6 +1786,34 @@ class LiteratureCathedralApp {
     this.stairObjects = [];
 
     if (this.hitboxManager) {
+      if (!this.hitboxManager.__plaquePreservedWrapped && typeof this.hitboxManager.rebuildAllMuseumHitboxes === 'function') {
+        const origRebuild = this.hitboxManager.rebuildAllMuseumHitboxes.bind(this.hitboxManager);
+        this.hitboxManager.rebuildAllMuseumHitboxes = (...args) => {
+          // Bảo toàn các Proxy của Bảng Thông Tin 3D trước khi clearAllHitboxes dispose geometry/material dùng chung
+          if (Array.isArray(this.hitboxManager.clickProxies)) {
+            this.hitboxManager.clickProxies = this.hitboxManager.clickProxies.filter(
+              (proxy) => !proxy?.userData?.isPlaqueProxy
+            );
+          }
+          const res = origRebuild(...args);
+          const guide = this.immersionSystem?.loreGuide || (typeof window !== 'undefined' ? window.__loreGuide : null);
+          this.lobbyDecorator?.registerHitboxes?.(this.hitboxManager);
+          this.roomGenerator?.registerSolidHitboxes?.(this.hitboxManager);
+          this.roomGenerator?.registerPlaqueHitboxes?.(this.hitboxManager, guide, this.cameraManager);
+          this.tatDenRoom?.userData?.registerHitboxes?.(this.hitboxManager);
+          this.namQuocSonHaRoom?.userData?.registerHitboxes?.(this.hitboxManager);
+          this.thanhGiongRoom?.userData?.registerHitboxes?.(this.hitboxManager);
+          this.truyenKieuRoom?.userData?.registerHitboxes?.(this.hitboxManager);
+          this.sonTinhThuyTinhRoom?.userData?.registerHitboxes?.(this.hitboxManager);
+          this.anDuongVuongRoom?.userData?.registerHitboxes?.(this.hitboxManager);
+          this.voNhatRoom?.userData?.registerHitboxes?.(this.hitboxManager);
+          (this.namXuongRoom?.registerHitboxes || this.namXuongRoom?.userData?.registerHitboxes)?.(this.hitboxManager);
+          (this.dayThonViDaRoom?.registerHitboxes || this.dayThonViDaRoom?.userData?.registerHitboxes)?.(this.hitboxManager);
+          return res;
+        };
+        this.hitboxManager.__plaquePreservedWrapped = true;
+      }
+
       this.hitboxManager.rebuildAllMuseumHitboxes();
       this.collisionObjects = this.hitboxManager.solidBoxes.map(s => s.box);
     }
@@ -1456,15 +1830,22 @@ class LiteratureCathedralApp {
     this._lastCullCamPos = new THREE.Vector3(Infinity, Infinity, Infinity);
     this._lobbyCenter = new THREE.Vector3(0, 2.0, 0);
     this._lobbyLightSpecs = [];
+    this._plaqueLightSpecs = [];
+    this._namXuongLights = [];
+    this._namXuongCenter = getRoomCenterVector('nguoi_con_gai_nam_xuong');
+    this._dayThonViDaLights = [];
+    this._dayThonViDaCenter = getRoomCenterVector('day_thon_vi_da');
     this._collectedLights = new WeakSet();
     this._prewarmedTextures = new WeakSet();
     this._tempLightPos = new THREE.Vector3();
+    this._tempPlaqueTargetPos = new THREE.Vector3();
     this._lastPrewarmedMeshCount = -1;
     this._roomEntries = [
       {
         key: 'truyenKieu',
+        roomId: 'truyen_kieu',
         room: this.truyenKieuRoom,
-        center: new THREE.Vector3(-48.0, 10.0, 19.0),
+        center: getRoomCenterVector('truyen_kieu'),
         lightSpecs: [],
         cullableProps: [],
         shouldUpdate: true,
@@ -1473,8 +1854,9 @@ class LiteratureCathedralApp {
       },
       {
         key: 'thanhGiong',
+        roomId: 'thanh_giong',
         room: this.thanhGiongRoom,
-        center: new THREE.Vector3(-48.0, 0.0, 19.0),
+        center: getRoomCenterVector('thanh_giong'),
         lightSpecs: [],
         cullableProps: [],
         shouldUpdate: true,
@@ -1483,8 +1865,9 @@ class LiteratureCathedralApp {
       },
       {
         key: 'sonTinh',
+        roomId: 'son_tinh_thuy_tinh',
         room: this.sonTinhThuyTinhRoom,
-        center: new THREE.Vector3(-48.0, 0.0, -19.0),
+        center: getRoomCenterVector('son_tinh_thuy_tinh'),
         lightSpecs: [],
         cullableProps: [],
         shouldUpdate: true,
@@ -1493,8 +1876,9 @@ class LiteratureCathedralApp {
       },
       {
         key: 'namQuocSonHa',
+        roomId: 'nam_quoc_son_ha',
         room: this.namQuocSonHaRoom,
-        center: new THREE.Vector3(-48.0, 10.0, -19.0),
+        center: getRoomCenterVector('nam_quoc_son_ha'),
         lightSpecs: [],
         cullableProps: [],
         shouldUpdate: true,
@@ -1503,8 +1887,9 @@ class LiteratureCathedralApp {
       },
       {
         key: 'anDuongVuong',
+        roomId: 'an_duong_vuong',
         room: this.anDuongVuongRoom,
-        center: new THREE.Vector3(0.0, 0.0, -48.0),
+        center: getRoomCenterVector('an_duong_vuong'),
         lightSpecs: [],
         cullableProps: [],
         shouldUpdate: true,
@@ -1513,8 +1898,9 @@ class LiteratureCathedralApp {
       },
       {
         key: 'voNhat',
+        roomId: 'vo_nhat',
         room: this.voNhatRoom,
-        center: new THREE.Vector3(48.0, 20.0, -19.0),
+        center: getRoomCenterVector('vo_nhat'),
         lightSpecs: [],
         cullableProps: [],
         shouldUpdate: true,
@@ -1523,15 +1909,54 @@ class LiteratureCathedralApp {
       },
       {
         key: 'tatDen',
+        roomId: 'tat_den',
         room: this.tatDenRoom,
-        center: new THREE.Vector3(-48.0, 20.0, -19.0),
+        center: getRoomCenterVector('tat_den'),
         lightSpecs: [],
         cullableProps: [],
         shouldUpdate: true,
         propsVisible: true,
         updateFn: (d, et, c) => this.tatDenRoom?.userData?.update?.(d, et, c)
+      },
+      {
+        key: 'namXuong',
+        roomId: 'nguoi_con_gai_nam_xuong',
+        room: this.namXuongRoom,
+        center: this._namXuongCenter,
+        lightSpecs: [],
+        cullableProps: [],
+        shouldUpdate: true,
+        propsVisible: true,
+        updateFn: (d, et, c) => (this.namXuongRoom?.update || this.namXuongRoom?.userData?.update)?.(d, et, c)
+      },
+      {
+        key: 'dayThonViDa',
+        roomId: 'day_thon_vi_da',
+        room: this.dayThonViDaRoom,
+        center: this._dayThonViDaCenter,
+        lightSpecs: [],
+        cullableProps: [],
+        shouldUpdate: true,
+        propsVisible: true,
+        updateFn: (d, et, c) => (this.dayThonViDaRoom?.update || this.dayThonViDaRoom?.userData?.update)?.(d, et, c)
       }
     ];
+
+    // Đăng ký thêm 8 gian tiểu cảnh (non-custom) vào registry để Pooled_Room_PointLight thắp sáng đúng tọa độ
+    LITERATURE_REGISTRY.forEach((item) => {
+      if (CUSTOM_ROOM_IDS.has(item.id)) return;
+      this._roomEntries.push({
+        key: `alcove_${item.id}`,
+        roomId: item.id,
+        room: null,
+        center: getRoomCenterVector(item.id),
+        lightSpecs: [],
+        cullableProps: [],
+        shouldUpdate: false,
+        propsVisible: true,
+        updateFn: () => {}
+      });
+    });
   }
 
   _isStructuralShellNode(node) {
@@ -1575,7 +2000,10 @@ class LiteratureCathedralApp {
   collectSceneLightsAndCullTargets() {
     if (!this.mainScene || !this._roomEntries) return;
 
+    this.mainScene.updateMatrixWorld(true);
+
     const roomMap = new Map();
+    const alcoveEntryMap = new Map();
     for (let i = 0; i < this._roomEntries.length; i++) {
       const entry = this._roomEntries[i];
       for (let p = 0; p < entry.cullableProps.length; p++) {
@@ -1584,16 +2012,40 @@ class LiteratureCathedralApp {
       }
       entry.cullableProps.length = 0;
       if (entry.room) roomMap.set(entry.room, entry);
+      if (!entry.room && entry.roomId) alcoveEntryMap.set(entry.roomId, entry);
     }
 
     const poolSet = new Set(this._roomLightPool || []);
     const lightsToDetach = [];
+    this._namXuongLights = this._namXuongLights || [];
+    this._namXuongLights.length = 0;
+    this._dayThonViDaLights = this._dayThonViDaLights || [];
+    this._dayThonViDaLights.length = 0;
 
-    // 1. Ghi nhận thông số đèn phòng/sảnh và tách khỏi scene (chỉ dùng Pool 3 PointLight cố định)
+    // 1. Ghi nhận thông số đèn phòng/sảnh và tách khỏi scene (chỉ dùng Pool 3 PointLight + 1 Plaque SpotLight cố định)
+    // Bảo toàn nguyên vẹn đèn Chiaroscuro/Ánh trăng Phòng 204 & Nắng ban mai/Ánh trăng Phòng 302 (điều khiển theo cự ly)
     this.mainScene.traverse((child) => {
       if (!child.isLight) return;
+      if (child.userData?.isNamXuongShadowLight || child.userData?.isNamXuongMoonLight) {
+        if (child.userData.baseIntensity === undefined) {
+          child.userData.baseIntensity = child.intensity;
+        }
+        if (!this._namXuongLights.includes(child)) {
+          this._namXuongLights.push(child);
+        }
+        return;
+      }
+      if (child.userData?.isViDaMorningLight || child.userData?.isViDaMoonLight || child.userData?.isViDaShadowLight) {
+        if (child.userData.baseIntensity === undefined) {
+          child.userData.baseIntensity = child.intensity;
+        }
+        if (!this._dayThonViDaLights.includes(child)) {
+          this._dayThonViDaLights.push(child);
+        }
+        return;
+      }
       child.castShadow = false;
-      if (poolSet.has(child)) {
+      if (poolSet.has(child) || child === this._plaqueSpotLight) {
         child.visible = true;
         return;
       }
@@ -1618,7 +2070,27 @@ class LiteratureCathedralApp {
 
       if (!this._collectedLights.has(child)) {
         this._collectedLights.add(child);
-        if (child.isPointLight || child.isSpotLight) {
+        if (child.userData?.isPlaqueSpotLight && child.isSpotLight) {
+          child.updateWorldMatrix(true, false);
+          child.getWorldPosition(this._tempLightPos);
+          if (child.target) {
+            child.target.updateWorldMatrix(true, false);
+            child.target.getWorldPosition(this._tempPlaqueTargetPos);
+          } else {
+            this._tempPlaqueTargetPos.copy(this._tempLightPos).add(new THREE.Vector3(0, -1.2, -1.2));
+          }
+          this._plaqueLightSpecs = this._plaqueLightSpecs || [];
+          this._plaqueLightSpecs.push({
+            worldPos: this._tempLightPos.clone(),
+            targetWorldPos: this._tempPlaqueTargetPos.clone(),
+            color: child.color?.getHex?.() ?? 0xffdf73,
+            intensity: Math.min(child.intensity ?? 3.2, 4.5),
+            distance: child.distance > 0 ? child.distance : 6.0,
+            angle: child.angle ?? (Math.PI / 4),
+            penumbra: child.penumbra ?? 0.65,
+            decay: child.decay ?? 1.5
+          });
+        } else if (child.isPointLight || child.isSpotLight) {
           child.updateWorldMatrix(true, false);
           child.getWorldPosition(this._tempLightPos);
           const intensity = child.intensity ?? 1.0;
@@ -1630,9 +2102,17 @@ class LiteratureCathedralApp {
             decay: child.decay ?? 1.5,
             priority: (child.isSpotLight ? 2.0 : 1.0) * intensity
           };
-          if (ownerEntry) {
-            ownerEntry.lightSpecs.push(spec);
-            ownerEntry.lightSpecs.sort((a, b) => b.priority - a.priority);
+          let targetEntry = ownerEntry;
+          if (!targetEntry && typeof child.name === 'string') {
+            if (child.name.startsWith('Diorama_PointLight_')) {
+              targetEntry = alcoveEntryMap.get(child.name.slice('Diorama_PointLight_'.length)) || null;
+            } else if (child.name.startsWith('Diorama_SpotLight_')) {
+              targetEntry = alcoveEntryMap.get(child.name.slice('Diorama_SpotLight_'.length)) || null;
+            }
+          }
+          if (targetEntry) {
+            targetEntry.lightSpecs.push(spec);
+            targetEntry.lightSpecs.sort((a, b) => b.priority - a.priority);
           } else {
             this._lobbyLightSpecs.push(spec);
             this._lobbyLightSpecs.sort((a, b) => b.priority - a.priority);
@@ -1681,6 +2161,14 @@ class LiteratureCathedralApp {
 
       const collectCullNodes = (node) => {
         if (!node || shellNodes.has(node)) return;
+        if (
+          node.userData?.isNamXuongShadowLight ||
+          node.userData?.isNamXuongMoonLight ||
+          node.userData?.isViDaMorningLight ||
+          node.userData?.isViDaMoonLight ||
+          node.userData?.isViDaShadowLight ||
+          node.userData?.isLightTarget
+        ) return;
         if (node !== entry.room && !structuralAncestors.has(node)) {
           entry.cullableProps.push(node);
           if (node.visible !== entry.propsVisible) {
@@ -1757,7 +2245,39 @@ class LiteratureCathedralApp {
     if (!this.renderer || !targetScene || !this.camera) return;
     const savedHidden = [];
     const savedFrustumStates = [];
+    const savedNamXuongLightStates = [];
+    const savedViDaLightStates = [];
     try {
+      if (targetScene === this.mainScene && this._namXuongLights) {
+        for (let i = 0; i < this._namXuongLights.length; i++) {
+          const nl = this._namXuongLights[i];
+          if (!nl) continue;
+          savedNamXuongLightStates.push({
+            light: nl,
+            visible: nl.visible,
+            castShadow: nl.castShadow,
+            intensity: nl.intensity
+          });
+          nl.visible = true;
+          nl.castShadow = Boolean(nl.userData?.isNamXuongShadowLight);
+          nl.intensity = nl.userData?.baseIntensity ?? (nl.userData?.isNamXuongShadowLight ? 32.0 : 1.35);
+        }
+      }
+      if (targetScene === this.mainScene && this._dayThonViDaLights) {
+        for (let i = 0; i < this._dayThonViDaLights.length; i++) {
+          const vl = this._dayThonViDaLights[i];
+          if (!vl) continue;
+          savedViDaLightStates.push({
+            light: vl,
+            visible: vl.visible,
+            castShadow: vl.castShadow,
+            intensity: vl.intensity
+          });
+          vl.visible = true;
+          vl.castShadow = Boolean(vl.userData?.isViDaShadowLight);
+          vl.intensity = vl.userData?.baseIntensity ?? (vl.userData?.isViDaShadowLight ? 2.4 : 1.45);
+        }
+      }
       if (targetScene === this.mainScene && this._roomEntries) {
         for (let i = 0; i < this._roomEntries.length; i++) {
           const props = this._roomEntries[i].cullableProps;
@@ -1775,6 +2295,9 @@ class LiteratureCathedralApp {
         for (let i = 0; i < this._roomLightPool.length; i++) {
           this._roomLightPool[i].visible = true;
         }
+      }
+      if (this._plaqueSpotLight) {
+        this._plaqueSpotLight.visible = true;
       }
 
       this._prewarmedTextures = this._prewarmedTextures || new WeakSet();
@@ -1824,6 +2347,18 @@ class LiteratureCathedralApp {
       for (let i = 0; i < savedHidden.length; i++) {
         savedHidden[i].visible = false;
       }
+      for (let i = 0; i < savedNamXuongLightStates.length; i++) {
+        const s = savedNamXuongLightStates[i];
+        s.light.visible = s.visible;
+        s.light.castShadow = s.castShadow;
+        s.light.intensity = s.intensity;
+      }
+      for (let i = 0; i < savedViDaLightStates.length; i++) {
+        const s = savedViDaLightStates[i];
+        s.light.visible = s.visible;
+        s.light.castShadow = s.castShadow;
+        s.light.intensity = s.intensity;
+      }
     }
   }
 
@@ -1852,6 +2387,10 @@ class LiteratureCathedralApp {
 
     for (let i = 0; i < this._roomEntries.length; i++) {
       const entry = this._roomEntries[i];
+      if (entry.room && !entry.room.visible) {
+        entry.room.visible = true;
+      }
+
       const dx = camPos.x - entry.center.x;
       const dy = Math.abs(camPos.y - entry.center.y);
       const dz = camPos.z - entry.center.z;
@@ -1900,9 +2439,124 @@ class LiteratureCathedralApp {
         poolLight.visible = true;
       }
     }
+
+    // 3. Cập nhật Pool 1 SpotLight rọi Bảng Thông Tin 3D gần nhất trên cùng tầng
+    if (this._plaqueSpotLight) {
+      let nearestPlaqueSpec = null;
+      let nearestPlaqueDistSq = 26.0 * 26.0;
+      const specs = this._plaqueLightSpecs || [];
+      for (let i = 0; i < specs.length; i++) {
+        const spec = specs[i];
+        const dy = Math.abs(camPos.y - spec.targetWorldPos.y);
+        if (dy > 7.0) continue;
+        const dx = camPos.x - spec.targetWorldPos.x;
+        const dz = camPos.z - spec.targetWorldPos.z;
+        const distSq = dx * dx + dy * dy + dz * dz;
+        if (distSq < nearestPlaqueDistSq) {
+          nearestPlaqueDistSq = distSq;
+          nearestPlaqueSpec = spec;
+        }
+      }
+      if (nearestPlaqueSpec) {
+        this._plaqueSpotLight.position.copy(nearestPlaqueSpec.worldPos);
+        this._plaqueSpotLight.target.position.copy(nearestPlaqueSpec.targetWorldPos);
+        this._plaqueSpotLight.target.updateMatrixWorld();
+        this._plaqueSpotLight.updateMatrixWorld();
+        this._plaqueSpotLight.color.setHex(nearestPlaqueSpec.color);
+        this._plaqueSpotLight.intensity = nearestPlaqueSpec.intensity;
+        this._plaqueSpotLight.distance = nearestPlaqueSpec.distance;
+        this._plaqueSpotLight.angle = nearestPlaqueSpec.angle;
+        this._plaqueSpotLight.penumbra = nearestPlaqueSpec.penumbra;
+        this._plaqueSpotLight.decay = nearestPlaqueSpec.decay;
+      } else {
+        this._plaqueSpotLight.intensity = 0;
+      }
+      this._plaqueSpotLight.visible = true;
+    }
+
+    // 4. Điều khiển Pool đèn Chiaroscuro & Ánh trăng Hoàng Giang (Phòng 204) và Nắng Ban Mai & Sông Trăng (Phòng 302) theo cự ly <= 28m, |dy| <= 6m
+    let nearNamXuong = false;
+    if (this._namXuongLights && this._namXuongLights.length > 0) {
+      const center = this._namXuongCenter || this.namXuongRoom?.position;
+      if (center) {
+        const dx = camPos.x - center.x;
+        const dy = Math.abs(camPos.y - center.y);
+        const dz = camPos.z - center.z;
+        nearNamXuong = dy <= 6.0 && (dx * dx + dy * dy + dz * dz) <= (28.0 * 28.0);
+      }
+
+      for (let i = 0; i < this._namXuongLights.length; i++) {
+        const light = this._namXuongLights[i];
+        if (!light) continue;
+        if (nearNamXuong) {
+          const wasHidden = !light.visible;
+          light.visible = true;
+          if (light.userData?.isNamXuongShadowLight) {
+            light.castShadow = true;
+          }
+          if (wasHidden || light.intensity === 0) {
+            light.intensity = light.userData?.baseIntensity ?? (light.userData?.isNamXuongShadowLight ? 32.0 : 1.35);
+          }
+        } else {
+          light.intensity = 0;
+          light.visible = false;
+          if (light.userData?.isNamXuongShadowLight) {
+            light.castShadow = false;
+          }
+        }
+      }
+    }
+
+    let nearDayThonViDa = false;
+    if (this._dayThonViDaLights && this._dayThonViDaLights.length > 0) {
+      const center = this._dayThonViDaCenter || this.dayThonViDaRoom?.position;
+      if (center) {
+        const dx = camPos.x - center.x;
+        const dy = Math.abs(camPos.y - center.y);
+        const dz = camPos.z - center.z;
+        nearDayThonViDa = dy <= 6.0 && (dx * dx + dy * dy + dz * dz) <= (28.0 * 28.0);
+      }
+
+      for (let i = 0; i < this._dayThonViDaLights.length; i++) {
+        const light = this._dayThonViDaLights[i];
+        if (!light) continue;
+        if (nearDayThonViDa) {
+          const wasHidden = !light.visible;
+          light.visible = true;
+          if (light.userData?.isViDaShadowLight) {
+            light.castShadow = true;
+          }
+          if (wasHidden || light.intensity === 0) {
+            light.intensity = light.userData?.baseIntensity ?? (light.userData?.isViDaShadowLight ? 2.4 : 1.45);
+          }
+        } else {
+          light.intensity = 0;
+          light.visible = false;
+          if (light.userData?.isViDaShadowLight) {
+            light.castShadow = false;
+          }
+        }
+      }
+    }
+
+    if (this.renderer?.shadowMap) {
+      this.renderer.shadowMap.autoUpdate = nearNamXuong || nearDayThonViDa;
+    }
   }
 
   initEvents() {
+    // Ưu tiên phím ESC đóng Lore Card trước mọi hành vi thoát/menu khác
+    window.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' && e.code !== 'Escape') return;
+      const guide = this.immersionSystem?.loreGuide || (typeof window !== 'undefined' ? window.__loreGuide : null);
+      if (guide?.isOpen) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation?.();
+        guide.hideLoreCard?.();
+      }
+    }, true);
+
     window.addEventListener('resize', () => {
       try {
         const w = window.innerWidth;
@@ -1988,8 +2642,17 @@ class LiteratureCathedralApp {
         if (this._roomEntries) {
           for (let i = 0; i < this._roomEntries.length; i++) {
             const entry = this._roomEntries[i];
-            if (entry.shouldUpdate) {
+            if (entry.shouldUpdate && typeof entry.updateFn === 'function') {
               entry.updateFn(delta, elapsedTime, this.camera);
+              if (entry.key === 'namXuong' || entry.key === 'dayThonViDa') {
+                entry._wasUpdating = true;
+              }
+            } else if (entry.key === 'namXuong' && entry._wasUpdating) {
+              this.namXuongRoom?.updateAtmosphere?.(1.0, this.camera);
+              entry._wasUpdating = false;
+            } else if (entry.key === 'dayThonViDa' && entry._wasUpdating) {
+              (this.dayThonViDaRoom?.updateAtmosphere || this.dayThonViDaRoom?.userData?.updateAtmosphere)?.(1.0, this.camera);
+              entry._wasUpdating = false;
             }
           }
         }
@@ -2025,6 +2688,10 @@ class LiteratureCathedralApp {
         this.namQuocSonHaRoom?.updateRealm?.(delta, elapsedTime, this.camera);
       } else if (this.activeScene === this.thanhGiongScene) {
         (this.thanhGiongRoom?.updateRealm || this.thanhGiongRoom?.userData?.updateRealm)?.(delta, elapsedTime, this.camera);
+      } else if (this.activeScene === this.dayThonViDaScene) {
+        (this.dayThonViDaRoom?.updateRealm || this.dayThonViDaRoom?.userData?.updateRealm)?.(delta, elapsedTime, this.camera);
+      } else if (this.activeScene === this.namXuongScene) {
+        (this.namXuongRoom?.updateRealm || this.namXuongRoom?.userData?.updateRealm)?.(delta, elapsedTime, this.camera);
       }
 
       this.worldManager?.update(delta, elapsedTime);

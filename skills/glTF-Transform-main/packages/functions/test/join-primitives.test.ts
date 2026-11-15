@@ -1,0 +1,224 @@
+import { deepEqual, strictEqual } from 'node:assert/strict';
+import { describe, test } from 'node:test';
+import { type Accessor, Document, Primitive } from '@gltf-transform/core';
+import { KHRMeshPrimitiveRestart } from '@gltf-transform/extensions';
+import { joinPrimitives } from '@gltf-transform/functions';
+import { logger } from '@gltf-transform/test-utils';
+
+const { LINE_STRIP } = Primitive.Mode;
+
+describe('functions::joinPrimitives', () => {
+	test('unindexed', async () => {
+		const document = new Document().setLogger(logger);
+		const [primA, positionA, colorA] = createPrimA(document);
+		const [primB] = createPrimB(document);
+
+		const primAB = joinPrimitives([primA, primB]);
+
+		strictEqual(primA.isDisposed(), false, 'primA alive');
+		strictEqual(primB.isDisposed(), false, 'primB alive');
+
+		const positionAB = primAB.getAttribute('POSITION');
+		const colorAB = primAB.getAttribute('COLOR_0');
+
+		strictEqual(positionAB.getType(), positionA.getType(), 'position.type');
+		strictEqual(colorAB.getType(), colorA.getType(), 'color.type');
+		strictEqual(positionAB.getComponentType(), positionA.getComponentType(), 'position.componentType');
+		strictEqual(colorAB.getComponentType(), colorA.getComponentType(), 'color.componentType');
+
+		// biome-ignore format: Readability.
+		deepEqual(Array.from(positionAB.getArray()), [
+		// primA
+		0, 0, 0,
+		0, 0, 1,
+		0, 1, 0,
+		1, 0, 0,
+		0, 1, 1,
+		1, 0, 1,
+		// primB
+		10, 10, 10,
+		10, 10, 12,
+		10, 12, 10,
+	], 'position data');
+		// biome-ignore format: Readability.
+		deepEqual(Array.from(colorAB.getArray()), [
+		// primA
+		255, 0, 0, 255,
+		0, 255, 0, 255,
+		0, 0, 255, 255,
+		255, 0, 0, 255,
+		0, 255, 0, 255,
+		0, 0, 255, 255,
+		// primB
+		0, 0, 0, 255,
+		0, 0, 0, 127,
+		0, 0, 0, 0,
+	], 'position data');
+
+		strictEqual(primAB.getIndices(), null, 'indices data');
+	});
+
+	test('indexed', async () => {
+		const document = new Document().setLogger(logger);
+		const [primA, positionA, colorA] = createPrimA(document);
+		const [primB] = createPrimB(document);
+
+		const indicesA = document.createAccessor().setArray(new Uint16Array([0, 2, 4]));
+		const indicesB = document.createAccessor().setArray(new Uint16Array([0, 1, 2]));
+
+		primA.setIndices(indicesA);
+		primB.setIndices(indicesB);
+
+		const primAB = joinPrimitives([primA, primB]);
+
+		strictEqual(primA.isDisposed(), false, 'primA alive');
+		strictEqual(primB.isDisposed(), false, 'primB alive');
+
+		const positionAB = primAB.getAttribute('POSITION');
+		const colorAB = primAB.getAttribute('COLOR_0');
+
+		strictEqual(positionAB.getType(), positionA.getType(), 'position.type');
+		strictEqual(colorAB.getType(), colorA.getType(), 'color.type');
+		strictEqual(positionAB.getComponentType(), positionA.getComponentType(), 'position.componentType');
+		strictEqual(colorAB.getComponentType(), colorA.getComponentType(), 'color.componentType');
+
+		// biome-ignore format: Readability.
+		deepEqual(Array.from(positionAB.getArray()), [
+		// primA
+		0, 0, 0,
+		// 0, 0, 1, ❌
+		0, 1, 0,
+		// 1, 0, 0, ❌
+		0, 1, 1,
+		// 1, 0, 1, ❌
+		// primB
+		10, 10, 10,
+		10, 10, 12,
+		10, 12, 10,
+	], 'position data');
+		// biome-ignore format: Readability.
+		deepEqual(Array.from(colorAB.getArray()), [
+		// primA
+		255, 0, 0, 255,
+		// 0, 255, 0, 255, ❌
+		0, 0, 255, 255,
+		// 255, 0, 0, 255, ❌
+		0, 255, 0, 255,
+		// 0, 0, 255, 255, ❌
+		// primB
+		0, 0, 0, 255,
+		0, 0, 0, 127,
+		0, 0, 0, 0,
+	], 'position data');
+
+		deepEqual(Array.from(primAB.getIndices().getArray()), [0, 1, 2, 3, 4, 5], 'indices data');
+	});
+
+	test('indexed - primitive restart', async () => {
+		const document = new Document().setLogger(logger);
+		document.createExtension(KHRMeshPrimitiveRestart).setRequired(true);
+
+		const [primA, positionA] = createPrimA(document);
+		const [primB] = createPrimB(document);
+
+		const RESTART_U16 = 2 ** 16 - 1;
+
+		const indicesA = document
+			.createAccessor()
+			.setArray(new Uint16Array([0, 1, RESTART_U16, 2, 3, RESTART_U16, 4, 5]));
+		const indicesB = document.createAccessor().setArray(new Uint16Array([0, 1, RESTART_U16, 0, 2, RESTART_U16]));
+
+		primA.setMode(LINE_STRIP).setIndices(indicesA);
+		primB.setMode(LINE_STRIP).setIndices(indicesB);
+
+		const primAB = joinPrimitives([primA, primB]);
+		const indicesAB = Array.from(primAB.getIndices().getArray());
+
+		// biome-ignore format: Readability.
+		deepEqual(indicesAB, [
+		0, 1, RESTART_U16,
+		2, 3, RESTART_U16,
+		4, 5, RESTART_U16,
+		6, 7, RESTART_U16,
+		6, 8, RESTART_U16
+	], 'indices data');
+
+		const positionAB = primAB.getAttribute('POSITION');
+
+		strictEqual(positionAB.getType(), positionA.getType(), 'position.type');
+		strictEqual(positionAB.getComponentType(), positionA.getComponentType(), 'position.componentType');
+
+		// biome-ignore format: Readability.
+		deepEqual(Array.from(positionAB.getArray()), [
+		// primA
+		0, 0, 0,
+		0, 0, 1,
+		0, 1, 0,
+		1, 0, 0,
+		0, 1, 1,
+		1, 0, 1,
+		// primB
+		10, 10, 10,
+		10, 10, 12,
+		10, 12, 10,
+	], 'position data');
+	});
+});
+
+/******************************************************************************
+ * UTILITIES
+ */
+
+function createPrimA(document: Document): [Primitive, Accessor, Accessor] {
+	// biome-ignore format: Readability.
+	const positionA = document.createAccessor()
+		.setType('VEC3')
+		.setArray(new Uint16Array([
+			0, 0, 0,
+			0, 0, 1,
+			0, 1, 0,
+			1, 0, 0,
+			0, 1, 1,
+			1, 0, 1,
+		]));
+	// biome-ignore format: Readability.
+	const colorA = document.createAccessor()
+		.setType('VEC4')
+		.setNormalized(true)
+		.setArray(new Uint8Array([
+			255, 0, 0, 255,
+			0, 255, 0, 255,
+			0, 0, 255, 255,
+			255, 0, 0, 255,
+			0, 255, 0, 255,
+			0, 0, 255, 255,
+		]));
+
+	const primA = document.createPrimitive().setAttribute('POSITION', positionA).setAttribute('COLOR_0', colorA);
+
+	return [primA, positionA, colorA];
+}
+
+function createPrimB(document: Document): [Primitive, Accessor, Accessor] {
+	// biome-ignore format: Readability.
+	const positionB = document.createAccessor()
+		.setType('VEC3')
+		.setArray(new Uint16Array([
+			10, 10, 10,
+			10, 10, 12,
+			10, 12, 10,
+		]));
+	// biome-ignore format: Readability.
+	const colorB = document.createAccessor()
+		.setType('VEC4')
+		.setNormalized(true)
+		.setArray(new Uint8Array([
+			0, 0, 0, 255,
+			0, 0, 0, 127,
+			0, 0, 0, 0,
+		]));
+
+	const primB = document.createPrimitive().setAttribute('POSITION', positionB).setAttribute('COLOR_0', colorB);
+
+	return [primB, positionB, colorB];
+}

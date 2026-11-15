@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { loadGlbCached } from '../utils/modelLoaderHelper.js';
 import { mergeGroupMeshesByMaterial } from '../utils/geometryMerger.js';
+import { getRoomWorldPose, localRoomToWorld } from '../config/literatureRegistry.js';
 
 /**
  * ============================================================================
@@ -439,21 +440,45 @@ export function createTraditionalArchwayEntrance({
 
     // Chữ Hoành Phi thếp vàng sáng rực
     ctx.fillStyle = '#fef08a';
-    ctx.font = 'bold 62px "Times New Roman", "Palatino", serif';
+    ctx.font = 'bold 62px "Times New Roman", "Segoe UI", Arial, serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.shadowColor = '#facc15';
     ctx.shadowBlur = 18;
-    ctx.fillText(roomTitle, w / 2, h / 2);
+    ctx.fillText(roomTitle, w / 2, h / 2, w - 80);
     ctx.restore();
   });
 
-  const plaqueMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(archWidth * 0.76, 0.98),
-    new THREE.MeshBasicMaterial({ map: plaqueTex, side: THREE.DoubleSide })
-  );
+  const createDoubleFacedBoard = (width, height, tex, depth = 0.04) => {
+    const boardGroup = new THREE.Group();
+    boardGroup.userData.ignoreRaycaster = true;
+
+    const backing = new THREE.Mesh(
+      new THREE.BoxGeometry(width + 0.03, height + 0.03, depth),
+      lacquerWoodMat
+    );
+    backing.userData.ignoreRaycaster = true;
+    boardGroup.add(backing);
+
+    const faceGeo = new THREE.PlaneGeometry(width, height);
+    const faceMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.FrontSide });
+
+    const frontFace = new THREE.Mesh(faceGeo, faceMat);
+    frontFace.position.z = depth * 0.5 + 0.004;
+    frontFace.userData.ignoreRaycaster = true;
+    boardGroup.add(frontFace);
+
+    const backFace = new THREE.Mesh(faceGeo, faceMat);
+    backFace.position.z = -(depth * 0.5 + 0.004);
+    backFace.rotation.y = Math.PI;
+    backFace.userData.ignoreRaycaster = true;
+    boardGroup.add(backFace);
+
+    return boardGroup;
+  };
+
+  const plaqueMesh = createDoubleFacedBoard(archWidth * 0.76, 0.98, plaqueTex);
   plaqueMesh.position.set(0, archHeight + 0.22, 0.44);
-  plaqueMesh.userData.ignoreRaycaster = true;
   archGroup.add(plaqueMesh);
 
   // Đôi Câu Đối chữ quốc ngữ thư pháp treo dọc 2 bên cột sơn son (downscale 256x1280 -> 128x640)
@@ -478,7 +503,7 @@ export function createTraditionalArchwayEntrance({
 
       // Chữ quốc ngữ thư pháp viết dọc
       ctx.fillStyle = '#fef08a';
-      ctx.font = 'bold 44px "Times New Roman", "Palatino", serif';
+      ctx.font = 'bold 44px "Times New Roman", "Segoe UI", Arial, serif';
       ctx.textAlign = 'center';
       ctx.shadowColor = '#fde047';
       ctx.shadowBlur = 12;
@@ -488,17 +513,13 @@ export function createTraditionalArchwayEntrance({
       const step = (h - 220) / Math.max(words.length - 1, 1);
 
       words.forEach((word, idx) => {
-        ctx.fillText(word, w / 2, startY + idx * step);
+        ctx.fillText(word, w / 2, startY + idx * step, w - 36);
       });
       ctx.restore();
     });
 
-    const coupletMesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.56, archHeight * 0.78),
-      new THREE.MeshBasicMaterial({ map: cTex, side: THREE.DoubleSide })
-    );
+    const coupletMesh = createDoubleFacedBoard(0.56, archHeight * 0.78, cTex);
     coupletMesh.position.set(c.x, archHeight * 0.46, 0.44);
-    coupletMesh.userData.ignoreRaycaster = true;
     archGroup.add(coupletMesh);
   });
 
@@ -759,10 +780,243 @@ export function createCuratedArtifactStation({
  * ============================================================================
  */
 
+function toNamXuongWorldVec(pose, lx, ly, lz) {
+  const w = localRoomToWorld(pose, lx, ly, lz);
+  return new THREE.Vector3(w.x, w.y, w.z);
+}
+
+export function createNamXuongTourWaypoints() {
+  const pose = getRoomWorldPose('nguoi_con_gai_nam_xuong');
+  return [
+    {
+      id: 'namxuong_moon_gate',
+      roomId: 'nguoi_con_gai_nam_xuong',
+      title: 'Phòng 204 (1/3): Cổng Gỗ Hình Vành Trăng Khuyết',
+      narration: 'Bước qua Cổng Trăng Khuyết rêu phong treo đèn lồng vào không gian huyền ảo Chuyện Người Con Gái Nam Xương.',
+      cameraPos: toNamXuongWorldVec(pose, 0.0, 1.9, 13.2),
+      lookAtPos: toNamXuongWorldVec(pose, 0.0, 1.5, 2.8),
+      dwellTimeMs: 7000,
+      soundKey: 'namxuong_cottage',
+      loreKey: 'plaque_nguoi_con_gai_nam_xuong',
+      styleTheme: 'lua_trang'
+    },
+    {
+      id: 'namxuong_bamboo_shadow',
+      roomId: 'nguoi_con_gai_nam_xuong',
+      title: 'Phòng 204 (2/3): Đĩa Đèn Dầu & Vách Nứa Chiếc Bóng',
+      narration: 'Ngọn đèn dầu leo lắt hắt bóng nàng Vũ Nương khổng lồ lên vách nứa — nút thắt bi kịch oan khuất.',
+      cameraPos: toNamXuongWorldVec(pose, 2.8, 1.85, 6.2),
+      lookAtPos: toNamXuongWorldVec(pose, -1.2, 1.55, 1.9),
+      dwellTimeMs: 7500,
+      soundKey: 'namxuong_cottage',
+      loreKey: 'nam_xuong_vu_nuong',
+      styleTheme: 'lua_trang'
+    },
+    {
+      id: 'namxuong_hoang_giang',
+      roomId: 'nguoi_con_gai_nam_xuong',
+      title: 'Phòng 204 (3/3): Bến Hoàng Giang, Đàn Giải Oan & Lân Tinh',
+      narration: 'Chiếc Trâm Vàng xoay nhẹ giữa dòng Hoàng Giang, ánh lân tinh ngọc lam soi sáng Đàn Giải Oan.',
+      cameraPos: toNamXuongWorldVec(pose, 2.4, 2.25, -1.3),
+      lookAtPos: toNamXuongWorldVec(pose, 0.0, 1.3, -6.8),
+      dwellTimeMs: 8000,
+      soundKey: 'namxuong_river',
+      loreKey: 'nam_xuong_tram_vang',
+      styleTheme: 'lua_trang'
+    }
+  ];
+}
+
+export const NAM_XUONG_TOUR_WAYPOINTS = createNamXuongTourWaypoints();
+
+export function createDayThonViDaTourWaypoints() {
+  const pose = getRoomWorldPose('day_thon_vi_da');
+  return [
+    {
+      id: 'vida_bamboo_gate',
+      roomId: 'day_thon_vi_da',
+      title: 'Phòng 302 (1/4): Cổng Vòm Khóm Trúc & Bảng Ngọc Vĩ Dạ',
+      narration: 'Bước qua cổng gạch rêu phong dưới tán lá trúc che ngang mặt chữ điền để về thăm thôn Vĩ ban mai.',
+      cameraPos: toNamXuongWorldVec(pose, 0.0, 1.9, 13.0),
+      lookAtPos: toNamXuongWorldVec(pose, -0.8, 1.55, 6.2),
+      dwellTimeMs: 7000,
+      soundKey: 'dayThonViDa_garden',
+      loreKey: 'plaque_day_thon_vi_da',
+      styleTheme: 'ngoc_vi_da'
+    },
+    {
+      id: 'vida_sunlit_garden',
+      roomId: 'day_thon_vi_da',
+      title: 'Phòng 302 (2/4): Nắng Hàng Cau & Vườn Vĩ Dạ Xanh Như Ngọc',
+      narration: 'Nắng sớm xuyên qua hàng cau cao vút, phủ ánh ngọc bích mướt xanh lên khu vườn thôn Vĩ.',
+      cameraPos: toNamXuongWorldVec(pose, 3.2, 2.0, 7.6),
+      lookAtPos: toNamXuongWorldVec(pose, 0.0, 1.55, 3.9),
+      dwellTimeMs: 7500,
+      soundKey: 'dayThonViDa_garden',
+      loreKey: 'vida_vuon_vi_da',
+      styleTheme: 'ngoc_vi_da'
+    },
+    {
+      id: 'vida_moon_river_boat',
+      roomId: 'day_thon_vi_da',
+      title: 'Phòng 302 (3/4): Bến Sông Trăng, Hoa Bắp Lay & Thuyền Chở Trăng',
+      narration: 'Gió thổi nhẹ qua khóm hoa bắp ven bờ sông Hương, nơi chiếc thuyền nan cổ chở đầy bụi trăng vàng.',
+      cameraPos: toNamXuongWorldVec(pose, 2.2, 2.15, 0.4),
+      lookAtPos: toNamXuongWorldVec(pose, -2.0, 1.05, -2.9),
+      dwellTimeMs: 8000,
+      soundKey: 'dayThonViDa_river',
+      loreKey: 'vida_thuyen_trang',
+      styleTheme: 'ngoc_vi_da'
+    },
+    {
+      id: 'vida_mist_ao_dai',
+      roomId: 'day_thon_vi_da',
+      title: 'Phòng 302 (4/4): Cõi Mộng Sương Khói & Bóng Áo Trắng Hư Ảo',
+      narration: 'Dưới vầng trăng khổng lồ giữa đêm sương #0f172a, bóng dáng áo dài trắng tan vào sương khói hư vô.',
+      cameraPos: toNamXuongWorldVec(pose, 0.4, 1.85, -7.2),
+      lookAtPos: toNamXuongWorldVec(pose, 0.0, 1.65, -11.2),
+      dwellTimeMs: 8500,
+      soundKey: 'dayThonViDa_river',
+      loreKey: 'day_thon_vi_da',
+      styleTheme: 'ngoc_vi_da'
+    }
+  ];
+}
+
+export const DAY_THON_VI_DA_TOUR_WAYPOINTS = createDayThonViDaTourWaypoints();
+
+export function createAnDuongVuongTourWaypoints() {
+  const pose = getRoomWorldPose('an_duong_vuong');
+  const cosR = Math.cos(pose.rotY);
+  const sinR = Math.sin(pose.rotY);
+  const localToWorld = (lx, ly, lz) => new THREE.Vector3(
+    pose.x + lx * cosR + lz * sinR,
+    pose.y + ly,
+    pose.z - lx * sinR + lz * cosR
+  );
+
+  return [
+    {
+      id: 'adv_gate',
+      roomId: 'an_duong_vuong',
+      title: 'Điểm 1/4: Cổng Thành Cổ Loa & Mái Đao Cổ Đại',
+      narration: 'Cổng vòm đá xanh rêu phong uy nghiêm với phù điêu Thần Kim Quy và hoa văn chim Lạc Đông Sơn.',
+      cameraPos: localToWorld(0, 2.2, 16.5),
+      lookAtPos: localToWorld(0, 2.6, 12.8),
+      dwellTimeMs: 6500,
+      soundKey: 'anDuongVuong_dongSon',
+      loreKey: 'an_duong_vuong',
+      styleTheme: 'da_reu_phong'
+    },
+    {
+      id: 'adv_king_pedestal',
+      roomId: 'an_duong_vuong',
+      title: 'Điểm 2/4: Đài Uy Quyền Âu Lạc & Tượng Vua An Dương Vương',
+      narration: 'Bệ Đá Trống Đồng Đông Sơn 3 Tầng chạm nổi mặt trời 14 tia, tượng Thục Phán An Dương Vương hiên ngang giữa Loa Thành.',
+      cameraPos: localToWorld(0, 2.8, -4.5),
+      lookAtPos: localToWorld(0, 3.4, -8.5),
+      dwellTimeMs: 7500,
+      soundKey: 'anDuongVuong_dongSon',
+      loreKey: 'an_duong_vuong_statue',
+      styleTheme: 'da_reu_phong'
+    },
+    {
+      id: 'adv_crossbow_shrine',
+      roomId: 'an_duong_vuong',
+      title: 'Điểm 3/4: Điện Thờ Nỏ Thần Liên Châu & Vuốt Rùa Vàng',
+      narration: 'Án thờ nỏ thần Linh Quang Kim Quy Thần Cơ với lẫy móng rùa vàng và giá binh khí đồng cổ Loa Thành.',
+      cameraPos: localToWorld(-4.2, 2.0, -1.8),
+      lookAtPos: localToWorld(-6.5, 1.8, -3.8),
+      dwellTimeMs: 6500,
+      soundKey: 'anDuongVuong_noThan',
+      loreKey: 'an_duong_vuong_noThan',
+      styleTheme: 'da_reu_phong'
+    },
+    {
+      id: 'adv_da_son_sea',
+      roomId: 'an_duong_vuong',
+      title: 'Điểm 4/4: Bờ Biển Dạ Sơn, Giếng Ngọc & Dấu Lông Ngỗng Trắng',
+      narration: 'Sóng biển Dạ Sơn cuộn trào đón Thần Kim Quy, Giếng Cổ Loa tỏa ngọc sáng và vạt lông ngỗng trắng.',
+      cameraPos: localToWorld(3.6, 2.0, 0.2),
+      lookAtPos: localToWorld(5.5, 1.6, 2.2),
+      dwellTimeMs: 7000,
+      soundKey: 'anDuongVuong_sea',
+      loreKey: 'an_duong_vuong_giengNgoc',
+      styleTheme: 'da_reu_phong'
+    }
+  ];
+}
+
+export const AN_DUONG_VUONG_TOUR_WAYPOINTS = createAnDuongVuongTourWaypoints();
+
+export function createVoNhatTourWaypoints() {
+  const pose = getRoomWorldPose('vo_nhat');
+  const cosR = Math.cos(pose.rotY);
+  const sinR = Math.sin(pose.rotY);
+  const localToWorld = (lx, ly, lz) => new THREE.Vector3(
+    pose.x + lx * cosR + lz * sinR,
+    pose.y + ly,
+    pose.z - lx * sinR + lz * cosR
+  );
+
+  return [
+    {
+      id: 'vn_gate',
+      roomId: 'vo_nhat',
+      title: 'Điểm 1/4: Cổng Tre Xóm Ngụ Cư & Bảng Di Sản Hiện Thực',
+      narration: 'Bước qua Cổng Tre Xóm Ngụ Cư 1945 và Bảng Di Sản ghi dấu bối cảnh nạn đói mùa xuân năm Ất Dậu.',
+      cameraPos: localToWorld(0, 1.8, 14.5),
+      lookAtPos: localToWorld(0, 2.2, 11.5),
+      dwellTimeMs: 6500,
+      soundKey: 'voNhat',
+      loreKey: 'famine_context',
+      styleTheme: 'voNhat'
+    },
+    {
+      id: 'vn_statue_center',
+      roomId: 'vo_nhat',
+      title: 'Điểm 2/4: Tượng Đài "Vợ Nhặt" – Khát Vọng Sống Giữa Tang Thương',
+      narration: 'Tượng đài Tràng và người vợ nhặt hiên ngang trên Bệ Đá Ong hai tầng in hằn vệt bánh xe bò và khóm lúa nảy mầm.',
+      cameraPos: localToWorld(0, 2.0, 2.5),
+      lookAtPos: localToWorld(0, 2.4, -2.5),
+      dwellTimeMs: 7500,
+      soundKey: 'voNhat',
+      loreKey: 'trang_and_wife',
+      styleTheme: 'voNhat'
+    },
+    {
+      id: 'vn_cottage_meal',
+      roomId: 'vo_nhat',
+      title: 'Điểm 3/4: Ngôi Nhà Tranh Bà Cụ Tứ, Đèn Dầu & Nồi Chè Khoán',
+      narration: 'Mâm cơm ngày đói với bát cháo cám đắng chát đượm tình mẫu tử bao dung và ngọn đèn dầu xua tan bóng tối.',
+      cameraPos: localToWorld(-4.8, 1.8, 5.0),
+      lookAtPos: localToWorld(-7.5, 1.4, 3.5),
+      dwellTimeMs: 7000,
+      soundKey: 'voNhat',
+      loreKey: 'mrs_tu_meal',
+      styleTheme: 'voNhat'
+    },
+    {
+      id: 'vn_cart_flag',
+      roomId: 'vo_nhat',
+      title: 'Điểm 4/4: Xe Bò Thóc Liên Đoàn & Ánh Sáng Lá Cờ Đỏ Phá Kho Thóc',
+      narration: 'Chiếc xe bò đẩy thóc đầu chợ dẫn đến hình ảnh đoàn người đói đi phá kho thóc Nhật cùng Lá Cờ Đỏ Sao Vàng.',
+      cameraPos: localToWorld(4.8, 1.8, 5.0),
+      lookAtPos: localToWorld(7.5, 1.4, 3.5),
+      dwellTimeMs: 7000,
+      soundKey: 'voNhat',
+      loreKey: 'revolutionary_flag',
+      styleTheme: 'voNhat'
+    }
+  ];
+}
+
+export const VO_NHAT_TOUR_WAYPOINTS = createVoNhatTourWaypoints();
+
 export const DEFAULT_MUSEUM_TOUR_WAYPOINTS = [
   {
     id: 'lobby_center',
-    title: 'Điểm 1/5: Đại Sảnh Trống Đồng Đông Sơn',
+    title: 'Điểm 1/8: Đại Sảnh Trống Đồng Đông Sơn',
     narration: 'Đài Trống Đồng Ngọc Lũ ngàn năm tỏa sáng rực rỡ dưới vòm kính thiên đỉnh Đại Sảnh.',
     cameraPos: new THREE.Vector3(0, 2.0, 14.0),
     lookAtPos: new THREE.Vector3(0, 1.4, 0.0),
@@ -771,8 +1025,32 @@ export const DEFAULT_MUSEUM_TOUR_WAYPOINTS = [
     loreKey: 'lobby_dongSonDrum'
   },
   {
+    id: 'room_nam_xuong_shadow',
+    roomId: 'nguoi_con_gai_nam_xuong',
+    title: 'Điểm 2/8: Phòng 204 – Vách Nứa Chiếc Bóng (Nam Xương)',
+    narration: 'Chiêm ngưỡng nghệ thuật Chiaroscuro: ánh đèn dầu hắt bóng nàng Vũ Nương lên vách nứa đơn sơ.',
+    cameraPos: NAM_XUONG_TOUR_WAYPOINTS[1].cameraPos.clone(),
+    lookAtPos: NAM_XUONG_TOUR_WAYPOINTS[1].lookAtPos.clone(),
+    dwellTimeMs: 7000,
+    soundKey: 'namxuong_cottage',
+    loreKey: 'nam_xuong_vu_nuong',
+    styleTheme: 'lua_trang'
+  },
+  {
+    id: 'room_nam_xuong_river',
+    roomId: 'nguoi_con_gai_nam_xuong',
+    title: 'Điểm 3/8: Phòng 204 – Bến Hoàng Giang & Đàn Giải Oan',
+    narration: 'Chiếc Trâm Vàng tỏa sáng trên Đàn Giải Oan giữa sóng nước Hoàng Giang và làn lân tinh huyền ảo.',
+    cameraPos: NAM_XUONG_TOUR_WAYPOINTS[2].cameraPos.clone(),
+    lookAtPos: NAM_XUONG_TOUR_WAYPOINTS[2].lookAtPos.clone(),
+    dwellTimeMs: 7000,
+    soundKey: 'namxuong_river',
+    loreKey: 'nam_xuong_tram_vang',
+    styleTheme: 'lua_trang'
+  },
+  {
     id: 'room_truyen_kieu',
-    title: 'Điểm 2/5: Phòng Trưng Bày Kiệt Tác Truyện Kiều',
+    title: 'Điểm 4/8: Phòng Trưng Bày Kiệt Tác Truyện Kiều',
     narration: 'Chiêm ngưỡng Đàn Hồ Cầm và Kim Thoa Đêm Thề Nguyền của nàng Kiều tại Tầng 2.',
     cameraPos: new THREE.Vector3(-42.0, 11.8, 19.0),
     lookAtPos: new THREE.Vector3(-48.0, 11.2, 19.0),
@@ -782,7 +1060,7 @@ export const DEFAULT_MUSEUM_TOUR_WAYPOINTS = [
   },
   {
     id: 'room_son_tinh',
-    title: 'Điểm 3/5: Không Gian Huyền Sử Sơn Tinh - Thủy Tinh',
+    title: 'Điểm 5/8: Không Gian Huyền Sử Sơn Tinh - Thủy Tinh',
     narration: 'Tái hiện cuộc đối đầu trực diện giữa Sơn Tinh non cao và Thủy Tinh cuộn sóng thần.',
     cameraPos: new THREE.Vector3(-42.0, 1.8, -19.0),
     lookAtPos: new THREE.Vector3(-48.0, 1.4, -19.0),
@@ -792,7 +1070,7 @@ export const DEFAULT_MUSEUM_TOUR_WAYPOINTS = [
   },
   {
     id: 'room_an_duong_vuong',
-    title: 'Điểm 4/5: Phòng Thành Cổ Loa & Nỏ Thần Liên Châu',
+    title: 'Điểm 6/8: Phòng Thành Cổ Loa & Nỏ Thần Liên Châu',
     narration: 'Chiêm ngưỡng Nỏ Thần Kim Quy và Giếng Ngọc Mỵ Châu trong ánh sáng hoàng thành Âu Lạc.',
     cameraPos: new THREE.Vector3(0.0, 1.8, -41.0),
     lookAtPos: new THREE.Vector3(0.0, 1.5, -48.0),
@@ -801,16 +1079,46 @@ export const DEFAULT_MUSEUM_TOUR_WAYPOINTS = [
     loreKey: 'anDuongVuong_noThan'
   },
   {
+    id: 'room_day_thon_vi_da',
+    roomId: 'day_thon_vi_da',
+    title: 'Điểm 7/8: Phòng 302 – Đây Thôn Vĩ Dạ (Hàn Mặc Tử)',
+    narration: 'Dạo bước qua vườn Vĩ Dạ nắng mới hàng cau đến bến sông trăng xứ Huế và sương khói áo trắng.',
+    cameraPos: DAY_THON_VI_DA_TOUR_WAYPOINTS[2].cameraPos.clone(),
+    lookAtPos: DAY_THON_VI_DA_TOUR_WAYPOINTS[2].lookAtPos.clone(),
+    dwellTimeMs: 7500,
+    soundKey: 'dayThonViDa_river',
+    loreKey: 'vida_thuyen_trang',
+    styleTheme: 'ngoc_vi_da'
+  },
+  {
     id: 'room_vo_nhat',
-    title: 'Điểm 5/5: Không Gian Hiện Thực Vợ Nhặt (Kim Lân)',
+    roomId: 'vo_nhat',
+    title: 'Điểm 8/8: Không Gian Hiện Thực Vợ Nhặt (Kim Lân)',
     narration: 'Bát cháo cám ấm nồng tình nhân ái và ngọn đèn dầu xua tan bóng tối nạn đói năm 1945.',
-    cameraPos: new THREE.Vector3(41.0, 21.8, -19.0),
-    lookAtPos: new THREE.Vector3(48.0, 21.2, -19.0),
+    cameraPos: VO_NHAT_TOUR_WAYPOINTS[1].cameraPos.clone(),
+    lookAtPos: VO_NHAT_TOUR_WAYPOINTS[1].lookAtPos.clone(),
     dwellTimeMs: 7000,
     soundKey: 'voNhat',
-    loreKey: 'voNhat_nieuChao'
+    loreKey: 'trang_and_wife',
+    styleTheme: 'voNhat'
   }
 ];
+
+function normalizeTourWaypoint(wp, fallback = {}) {
+  const toVec3 = (v, fb) => {
+    if (v?.isVector3) return v.clone();
+    if (v && typeof v.x === 'number') return new THREE.Vector3(v.x, v.y, v.z);
+    if (Array.isArray(v) && v.length >= 3) return new THREE.Vector3(v[0], v[1], v[2]);
+    return fb ? fb.clone() : new THREE.Vector3();
+  };
+  return {
+    ...fallback,
+    ...wp,
+    cameraPos: toVec3(wp?.cameraPos || wp?.position, fallback.cameraPos),
+    lookAtPos: toVec3(wp?.lookAtPos || wp?.target || wp?.lookAt, fallback.lookAtPos),
+    dwellTimeMs: wp?.dwellTimeMs ?? fallback.dwellTimeMs ?? 7000
+  };
+}
 
 export class MuseumAutoTourDirector {
   constructor(camera, {
@@ -821,6 +1129,13 @@ export class MuseumAutoTourDirector {
   } = {}) {
     this.camera = camera;
     this.waypoints = waypoints;
+    this.activeWaypoints = waypoints;
+    this.roomTours = new Map([
+      ['nguoi_con_gai_nam_xuong', NAM_XUONG_TOUR_WAYPOINTS],
+      ['day_thon_vi_da', DAY_THON_VI_DA_TOUR_WAYPOINTS],
+      ['an_duong_vuong', AN_DUONG_VUONG_TOUR_WAYPOINTS],
+      ['vo_nhat', VO_NHAT_TOUR_WAYPOINTS]
+    ]);
     this.audioDirector = audioDirector;
     this.loreGuide = loreGuide;
     this.onTourStateChange = onTourStateChange;
@@ -932,6 +1247,7 @@ export class MuseumAutoTourDirector {
   _bindShortcuts() {
     if (typeof window === 'undefined') return;
     window.addEventListener('keydown', (e) => {
+      if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
       if (e.key === 't' || e.key === 'T') {
         this.toggleTour();
       } else if (e.key === 'Escape' && this.isActive) {
@@ -940,13 +1256,72 @@ export class MuseumAutoTourDirector {
     });
   }
 
+  _getActiveWaypoints() {
+    return (Array.isArray(this.activeWaypoints) && this.activeWaypoints.length > 0)
+      ? this.activeWaypoints
+      : this.waypoints;
+  }
+
+  registerRoomTour(roomId, roomWaypoints = []) {
+    if (!roomId || !Array.isArray(roomWaypoints) || roomWaypoints.length === 0) return;
+    const defaults = this.roomTours.get(roomId) || [];
+    const normalized = roomWaypoints.map((wp, idx) => normalizeTourWaypoint(wp, defaults[idx] || {}));
+    this.roomTours.set(roomId, normalized);
+  }
+
+  getRoomTourWaypoints(roomId = 'nguoi_con_gai_nam_xuong') {
+    if (roomId === 'nguoi_con_gai_nam_xuong' || roomId === 'nam_xuong' || roomId === '204') {
+      const roomObj = typeof window !== 'undefined' ? window.__namXuongRoom : null;
+      const roomProvided = roomObj?.getAutoTourWaypoints?.() || roomObj?.autoTourWaypoints;
+      if (Array.isArray(roomProvided) && roomProvided.length > 0) {
+        return roomProvided.map((wp, idx) => normalizeTourWaypoint(wp, NAM_XUONG_TOUR_WAYPOINTS[idx] || {}));
+      }
+      return this.roomTours.get('nguoi_con_gai_nam_xuong') || NAM_XUONG_TOUR_WAYPOINTS;
+    }
+    if (roomId === 'day_thon_vi_da' || roomId === 'vi_da' || roomId === 'vida' || roomId === '302') {
+      const roomObj = typeof window !== 'undefined' ? window.__dayThonViDaRoom : null;
+      const roomProvided = roomObj?.getAutoTourWaypoints?.() || roomObj?.autoTourWaypoints;
+      if (Array.isArray(roomProvided) && roomProvided.length > 0) {
+        return roomProvided.map((wp, idx) => normalizeTourWaypoint(wp, DAY_THON_VI_DA_TOUR_WAYPOINTS[idx] || {}));
+      }
+      return this.roomTours.get('day_thon_vi_da') || DAY_THON_VI_DA_TOUR_WAYPOINTS;
+    }
+    if (roomId === 'an_duong_vuong' || roomId === 'co_loa' || roomId === '103') {
+      const roomObj = typeof window !== 'undefined' ? window.__anDuongVuongRoom : null;
+      const roomProvided = roomObj?.getAutoTourWaypoints?.() || roomObj?.autoTourWaypoints;
+      if (Array.isArray(roomProvided) && roomProvided.length > 0) {
+        return roomProvided.map((wp, idx) => normalizeTourWaypoint(wp, AN_DUONG_VUONG_TOUR_WAYPOINTS[idx] || {}));
+      }
+      return this.roomTours.get('an_duong_vuong') || AN_DUONG_VUONG_TOUR_WAYPOINTS;
+    }
+    if (roomId === 'vo_nhat' || roomId === '304' || roomId === '305') {
+      const roomObj = typeof window !== 'undefined' ? window.__voNhatRoom : null;
+      const roomProvided = roomObj?.getAutoTourWaypoints?.() || roomObj?.autoTourWaypoints || roomObj?.userData?.tourWaypoints;
+      if (Array.isArray(roomProvided) && roomProvided.length > 0) {
+        return roomProvided.map((wp, idx) => normalizeTourWaypoint(wp, VO_NHAT_TOUR_WAYPOINTS[idx] || {}));
+      }
+      return this.roomTours.get('vo_nhat') || VO_NHAT_TOUR_WAYPOINTS;
+    }
+    return this.roomTours.get(roomId) || [];
+  }
+
   toggleTour() {
     if (this.isActive) this.stopTour();
     else this.startTour(0);
   }
 
-  startTour(startIndex = 0) {
-    if (!this.waypoints.length) return;
+  startTour(startIndex = 0, customWaypoints = null) {
+    if (Array.isArray(customWaypoints) && customWaypoints.length > 0) {
+      this.activeWaypoints = customWaypoints.map((wp) => normalizeTourWaypoint(wp));
+    } else {
+      this.activeWaypoints = this.waypoints;
+    }
+    const list = this._getActiveWaypoints();
+    if (!list.length) return;
+    if (typeof document !== 'undefined' && document.pointerLockElement) {
+      try { document.exitPointerLock?.(); } catch (_) {}
+    }
+
     this.isActive = true;
     this.onTourStateChange?.(true);
 
@@ -955,12 +1330,30 @@ export class MuseumAutoTourDirector {
     if (toggleBtn) toggleBtn.textContent = '⏹ Dừng Tour [ESC]';
     if (nextBtn) nextBtn.style.display = 'inline-block';
 
-    this._beginFlightTo(startIndex);
+    this._beginFlightTo(Math.max(0, Math.min(startIndex, list.length - 1)));
+  }
+
+  startRoomTour(roomIdOrWaypoints = 'nguoi_con_gai_nam_xuong', startIndex = 0) {
+    const waypoints = Array.isArray(roomIdOrWaypoints)
+      ? roomIdOrWaypoints
+      : this.getRoomTourWaypoints(roomIdOrWaypoints);
+    if (!waypoints.length) return false;
+    this.startTour(startIndex, waypoints);
+    return true;
+  }
+
+  startNamXuongTour(startIndex = 0) {
+    return this.startRoomTour('nguoi_con_gai_nam_xuong', startIndex);
+  }
+
+  startDayThonViDaTour(startIndex = 0) {
+    return this.startRoomTour('day_thon_vi_da', startIndex);
   }
 
   stopTour() {
     this.isActive = false;
     this.phase = 'idle';
+    this.activeWaypoints = this.waypoints;
     this.loreGuide?.hideLoreCard?.();
     this.onTourStateChange?.(false);
 
@@ -974,14 +1367,18 @@ export class MuseumAutoTourDirector {
 
   nextWaypoint() {
     if (!this.isActive) return;
+    const list = this._getActiveWaypoints();
+    if (!list.length) return;
     this.loreGuide?.hideLoreCard?.();
-    const nextIdx = (this.currentIndex + 1) % this.waypoints.length;
+    const nextIdx = (this.currentIndex + 1) % list.length;
     this._beginFlightTo(nextIdx);
   }
 
   _beginFlightTo(index) {
-    this.currentIndex = index;
-    const wp = this.waypoints[index];
+    const list = this._getActiveWaypoints();
+    if (!list.length) return;
+    this.currentIndex = index % list.length;
+    const wp = list[this.currentIndex];
     this.phase = 'flying';
     this.phaseStartTime = performance.now();
 
@@ -1005,7 +1402,9 @@ export class MuseumAutoTourDirector {
    */
   update(nowMs = performance.now()) {
     if (!this.isActive || this.phase === 'idle') return;
-    const wp = this.waypoints[this.currentIndex];
+    const list = this._getActiveWaypoints();
+    const wp = list[this.currentIndex];
+    if (!wp) return;
 
     if (this.phase === 'flying') {
       const elapsed = nowMs - this.phaseStartTime;
@@ -1032,9 +1431,10 @@ export class MuseumAutoTourDirector {
           this.audioDirector.playRealmSoundscape(wp.soundKey);
         }
 
-        // Tự động hiển thị thẻ thơ thuyết minh sơn mài
+        // Tự động hiển thị thẻ thơ thuyết minh di sản
         if (wp.loreKey && this.loreGuide) {
-          this.loreGuide.showLoreCard(wp.loreKey);
+          const meta = wp.styleTheme ? { styleTheme: wp.styleTheme, roomId: wp.roomId } : undefined;
+          this.loreGuide.showLoreCard(wp.loreKey, meta);
         }
       }
     } else if (this.phase === 'dwelling') {

@@ -1,24 +1,41 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 
 /**
  * MODULE CHUẨN HÓA VÀ NẠP MÔ HÌNH 3D (.GLB/.GLTF) CHO BẢO TÀNG 3D
  * - Chia sẻ GLTFLoader + Promise Cache toàn cục (tránh fetch/parse trùng lặp)
+ * - Tích hợp DRACOLoader giải mã hình học nén edgebreaker tốc độ cao
  * - Tự động downscale texture > maxTextureSize (mặc định 1024px) một lần duy nhất
  * - Bật frustumCulled = true, tắt castShadow/receiveShadow, giữ FrontSide cho vật liệu đặc
  * - Triệt tiêu transmission pass đắt đỏ và lỗi NaN/Infinity trên BufferGeometry
  */
 
 let _sharedGltfLoader = null;
+let _sharedDracoLoader = null;
 const _gltfPromiseCache = new Map();
 const _resolvedUrlCache = new Map();
 const _sanitizedGeometries = new WeakSet();
 const _processedTextures = new WeakMap();
 const _convertedMaterialCache = new WeakMap();
 
+export function getSharedDracoLoader() {
+  if (!_sharedDracoLoader) {
+    _sharedDracoLoader = new DRACOLoader();
+    _sharedDracoLoader.setDecoderPath('/draco/');
+    _sharedDracoLoader.preload();
+  }
+  return _sharedDracoLoader;
+}
+
 export function getSharedGltfLoader() {
   if (!_sharedGltfLoader) {
     _sharedGltfLoader = new GLTFLoader();
+    try {
+      _sharedGltfLoader.setDRACOLoader(getSharedDracoLoader());
+    } catch (e) {
+      console.warn('[DRACOLoader] Khởi tạo DRACOLoader tự động thất bại, tiếp tục với loader mặc định:', e);
+    }
   }
   return _sharedGltfLoader;
 }
@@ -676,4 +693,94 @@ export function createExhibitDisplay(model, {
   }
 
   return displayGroup;
+}
+
+/**
+ * ============================================================================
+ * CHUẨN HÓA MÔ HÌNH TOÀN CỤC (normalizeLoadedModel)
+ * - Tự động đo đạc Box3 chuẩn mét thực tế (targetSpan hoặc targetHeight)
+ * - Căn giữa X/Z, định vị min.y = 0 chạm chuẩn mặt sàn/bục trưng bày (100% không bay/lún)
+ * - Quét sạch buffer NaN/Infinity, tính lại normal nếu thiếu
+ * - Tinh chỉnh vật liệu PBR cân bằng (roughness, metalness, envMapIntensity)
+ * - Bật receiveShadow = true, chỉ bật castShadow cho lưới kích thước lớn/chính
+ * ============================================================================
+ */
+export function normalizeLoadedModel(model, {
+  targetSpan = 2.0,
+  targetHeight = null,
+  fitAxis = 'max', // 'x', 'y', 'z', or 'max'
+  castShadow = true,
+  receiveShadow = true,
+  roughness = 0.45,
+  metalness = 0.15,
+  envMapIntensity = 1.0,
+  minTrianglesForShadow = 250
+} = {}) {
+  if (!model) return model;
+
+  // 1. Quét toàn bộ hình học và vật liệu
+  model.updateMatrixWorld(true);
+  model.traverse((child) => {
+    if (!child.isMesh) return;
+
+    if (child.geometry) {
+      sanitizeGeometryBuffers(child.geometry);
+    }
+
+    const mats = Array.isArray(child.material) ? child.material : [child.material];
+    mats.forEach((mat) => {
+      if (!mat) return;
+      if (!mat.transparent && (mat.opacity ?? 1.0) >= 0.98) {
+        mat.side = THREE.FrontSide;
+      }
+      if (mat.roughness !== undefined && roughness !== null) mat.roughness = roughness;
+      if (mat.metalness !== undefined && metalness !== null) mat.metalness = metalness;
+      if (mat.envMapIntensity !== undefined && envMapIntensity !== null) {
+        mat.envMapIntensity = envMapIntensity;
+      }
+      if (mat.map && 'colorSpace' in mat.map && THREE.SRGBColorSpace) {
+        mat.map.colorSpace = THREE.SRGBColorSpace;
+      }
+    });
+
+    // Tối ưu hóa bóng đổ: chỉ lưới chính có số tam giác đủ lớn mới đổ bóng
+    child.receiveShadow = receiveShadow;
+    const vertexCount = child.geometry?.attributes?.position?.count || 0;
+    child.castShadow = castShadow && (vertexCount >= minTrianglesForShadow);
+    child.frustumCulled = true;
+  });
+
+  // 2. Đo đạc Bounding Box ban đầu
+  const box = new THREE.Box3().setFromObject(model);
+  const size = new THREE.Vector3();
+  const center = new THREE.Vector3();
+  box.getSize(size);
+  box.getCenter(center);
+
+  // 3. Tính toán tỷ lệ scale
+  let scaleFactor = 1.0;
+  if (targetHeight && size.y > 0.001) {
+    scaleFactor = targetHeight / size.y;
+  } else if (targetSpan) {
+    const dim = fitAxis === 'x' ? size.x : fitAxis === 'y' ? size.y : fitAxis === 'z' ? size.z : Math.max(size.x, size.y, size.z);
+    if (dim > 0.001) {
+      scaleFactor = targetSpan / dim;
+    }
+  }
+
+  model.scale.multiplyScalar(scaleFactor);
+  model.updateMatrixWorld(true);
+
+  // 4. Đo lại sau scale và căn chỉnh chính xác: tâm X=0, tâm Z=0, min.Y = 0 (chạm đất)
+  const finalBox = new THREE.Box3().setFromObject(model);
+  const finalCenter = new THREE.Vector3();
+  finalBox.getCenter(finalCenter);
+
+  // Dịch chuyển nội bộ các con hoặc offset root
+  model.position.x -= finalCenter.x;
+  model.position.z -= finalCenter.z;
+  model.position.y -= finalBox.min.y;
+
+  model.updateMatrixWorld(true);
+  return model;
 }

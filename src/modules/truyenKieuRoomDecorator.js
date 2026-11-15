@@ -1058,15 +1058,15 @@ export function buildTruyenKieuExhibition({
     wallHeight: ROOM_H
   });
 
-  // A1.1 CỔNG VÒM MÁI ĐAO HOÀNG GIA KÈM HOÀNH PHI CÂU ĐỐI TẠI MẶT TIỀN (Z = +12.0m)
+  // A1.1 CỔNG VÒM MÁI ĐAO HOÀNG GIA KÈM HOÀNH PHI CÂU ĐỐI ÔM SÁT NGƯỠNG CỬA (Z = +12.85m)
   const kieuTraditionalArchway = createTraditionalArchwayEntrance({
     roomTitle: 'ĐOẠN TRƯỜNG TÂN THANH',
     leftCouplet: 'Trăm năm trong cõi người ta',
     rightCouplet: 'Chữ tài chữ mệnh khéo là ghét nhau',
-    archWidth: 6.2,
+    archWidth: 6.6,
     archHeight: 4.8
   });
-  kieuTraditionalArchway.position.set(0, 0, 12.0);
+  kieuTraditionalArchway.position.set(0, 0, 12.85);
   interiorGroup.add(kieuTraditionalArchway);
 
   // A2. ÁNH SÁNG RIÊNG TRONG PHÒNG BẢO TÀNG (castShadow = false, 60+ FPS)
@@ -1659,6 +1659,28 @@ export function buildTruyenKieuExhibition({
   }
   mergeGroupMeshesByMaterial(treeGroup);
   peachTreePed.add(treeGroup);
+
+  const solidObstacleObjects = [];
+  function addSolidBox(name, w, h, d, x, y, z) {
+    const proxy = new THREE.Mesh(
+      new THREE.BoxGeometry(w, h, d),
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    proxy.name = name;
+    proxy.position.set(x, y, z);
+    proxy.userData.ignoreRaycaster = true;
+    interiorGroup.add(proxy);
+    solidObstacleObjects.push(proxy);
+    return proxy;
+  }
+
+  addSolidBox('TK_KimPedestal_Collider', 3.4, 3.8, 3.4, -3.8, 1.9, -6.2);
+  addSolidBox('TK_KieuPedestal_Collider', 3.4, 3.8, 3.4, 3.8, 1.9, -6.2);
+  addSolidBox('TK_BookAltar_Collider', 3.4, 3.0, 3.4, 0, 1.5, 0.6);
+  addSolidBox('TK_LuteStation_Collider', 3.1, 2.8, 3.1, 7.5, 1.4, 3.2);
+  addSolidBox('TK_HairpinStation_Collider', 3.1, 2.8, 3.1, -7.5, 1.4, 3.2);
+  addSolidBox('TK_IncensePed_Collider', 2.4, 3.0, 2.4, -7.8, 1.5, -2.8);
+  addSolidBox('TK_PeachTreePed_Collider', 2.4, 3.0, 2.4, 7.8, 1.5, -2.8);
 
   // =========================================================================
   // PHẦN B: CÕI THƠ TRUYỆN KIỀU ĐA CHI TIẾT (Y = 420m) - ĐÊM TRĂNG GIANG NAM
@@ -2711,11 +2733,32 @@ export function buildTruyenKieuExhibition({
     kieuPeachPinkLight.visible = v;
   };
 
+  function registerHitboxes(hitboxManager) {
+    const hbm = hitboxManager || (typeof window !== 'undefined' ? window.__museumHitboxManager : null);
+    if (!hbm || typeof hbm.registerSolidObjectCollider !== 'function') return;
+    roomGroup.updateMatrixWorld(true);
+    solidObstacleObjects.forEach((obj, idx) => {
+      hbm.registerSolidObjectCollider(obj, {
+        shrinkFactor: 0.96,
+        tag: `TruyenKieu_Solid_${idx}`,
+        helperColor: 0xf472b6,
+        realm: 'museum'
+      });
+    });
+  }
+
+  if (typeof window !== 'undefined' && window.__museumHitboxManager) {
+    registerHitboxes(window.__museumHitboxManager);
+  }
+
   root.enterRealm = enterRealm;
   root.exitRealm = exitRealm;
   root.teleportBook = bookAltar;
   root.isInsideRealm = () => _isInsideRealm;
   root.getCollisionObjects = () => enclosure.collisionSolids;
+  root.registerHitboxes = registerHitboxes;
+  root.userData.registerHitboxes = registerHitboxes;
+  roomGroup.userData.registerHitboxes = registerHitboxes;
 
   root.setupContext = function({
     scene = null,
@@ -2723,12 +2766,14 @@ export function buildTruyenKieuExhibition({
     camera = null,
     renderer = null,
     cameraManager = null,
-    portalInteraction = null
+    portalInteraction = null,
+    hitboxManager = null
   } = {}) {
     if (scene) _scene = scene;
     if (camera) _camera = camera;
     if (renderer) _renderer = renderer;
     if (cameraManager) _cameraManager = cameraManager;
+    if (hitboxManager) registerHitboxes(hitboxManager);
     if (poeticScene) {
       _poeticScene = poeticScene;
       if (tkRealmGroup.parent !== _poeticScene) {

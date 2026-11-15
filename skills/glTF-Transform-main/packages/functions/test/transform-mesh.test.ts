@@ -1,0 +1,197 @@
+import { deepEqual, ok, strictEqual } from 'node:assert/strict';
+import { describe, test } from 'node:test';
+import { type bbox, Document, Primitive, type PrimitiveTarget, type vec3 } from '@gltf-transform/core';
+import { transformMesh, transformPrimitive } from '@gltf-transform/functions';
+import { logger, mat4, round, roundBbox } from '@gltf-transform/test-utils';
+
+describe('functions::transformMesh', () => {
+	test('basic', async () => {
+		const document = new Document().setLogger(logger);
+		const prim = createPrimitive(document);
+		const normal = prim.getAttribute('NORMAL')!;
+		const tangent = prim.getAttribute('TANGENT')!;
+
+		transformPrimitive(prim, mat4.identity([]));
+		deepEqual(primBounds(prim), { min: [-0.5, 10, -0.5], max: [0.5, 10, 0.5] }, 'identity - position');
+		deepEqual(normal.getElement(0, []), [0, 1, 0], 'identity - normal');
+		deepEqual(tangent.getElement(0, []), [1, 0, 0, 1], 'identity - tangent');
+
+		transformPrimitive(prim, mat4.fromScaling([], [2, 1, 2]));
+		deepEqual(primBounds(prim), { min: [-1, 10, -1], max: [1, 10, 1] }, 'scale - position');
+		deepEqual(normal.getElement(0, []), [0, 1, 0], 'scale - normal');
+		deepEqual(tangent.getElement(0, []), [1, 0, 0, 1], 'scale - tangent');
+
+		transformPrimitive(prim, mat4.fromTranslation([], [0, -10, 0]));
+		deepEqual(primBounds(prim), { min: [-1, 0, -1], max: [1, 0, 1] }, 'translate - position');
+		deepEqual(normal.getElement(0, []), [0, 1, 0], 'translate - normal');
+		deepEqual(tangent.getElement(0, []), [1, 0, 0, 1], 'translate - tangent');
+
+		transformPrimitive(prim, mat4.fromRotation([], Math.PI / 2, [1, 0, 0]));
+		deepEqual(roundBbox(primBounds(prim)), { min: [-1, -1, 0], max: [1, 1, 0] }, 'rotate - position');
+		deepEqual(normal.getElement(0, []).map(round()), [0, 0, 1], 'rotate - normal');
+		deepEqual(tangent.getElement(0, []).map(round()), [1, 0, 0, 1], 'rotate - tangent');
+	});
+
+	test('shared prims', async () => {
+		const document = new Document().setLogger(logger);
+		const prim = createPrimitive(document);
+		const meshA = document.createMesh('A').addPrimitive(prim);
+		const meshB = document.createMesh('B').addPrimitive(prim);
+
+		strictEqual(meshA.listPrimitives()[0], meshB.listPrimitives()[0], 'meshA = meshB, before');
+
+		transformMesh(meshA, mat4.fromScaling([], [2, 2, 2]));
+
+		// Shared primitives must be cloned, and the copy transformed.
+		ok(meshA.listPrimitives()[0] !== meshB.listPrimitives()[0], 'meshA !== meshB, after');
+	});
+
+	test('shared vertex streams', async () => {
+		const document = new Document().setLogger(logger);
+		const prim = createPrimitive(document);
+		const primA = prim.clone();
+		const primB = prim.clone();
+		const meshA = document.createMesh('A').addPrimitive(primA);
+		document.createMesh('B').addPrimitive(primB);
+
+		strictEqual(primA.getAttribute('POSITION'), primB.getAttribute('POSITION'), 'primA = primB, before');
+
+		transformMesh(meshA, mat4.fromScaling([], [2, 2, 2]));
+
+		// Option 'overwrite' option removed in v4, all primitives are now compacted
+		// and their accessors cloned.
+		ok(
+			primA.getAttribute('POSITION') !== primB.getAttribute('POSITION'),
+			'primA !== primB, after (overwrite=true)',
+		);
+	});
+
+	test('update multiple vertex streams', async () => {
+		const document = new Document().setLogger(logger);
+		const primA = createPrimitive(document);
+		const primB = createPrimitive(document);
+		const mesh = document.createMesh().addPrimitive(primA).addPrimitive(primB);
+
+		transformMesh(mesh, mat4.fromScaling([], [2, 2, 2]));
+
+		// biome-ignore format: Readability.
+		const SCALED = [
+		0.5, 10, 0.5,
+		0.5, 10, -0.5,
+		-0.5, 10, -0.5,
+		-0.5, 10, 0.5
+	].map((value) => value * 2.0);
+
+		deepEqual(Array.from(primA.getAttribute('POSITION').getArray()), SCALED, 'primA.POSITION');
+		deepEqual(Array.from(primB.getAttribute('POSITION').getArray()), SCALED, 'primB.POSITION');
+	});
+
+	test('morph targets', async () => {
+		const document = new Document().setLogger(logger);
+		const primA = createPrimitive(document);
+		const primB = primA.clone();
+		const meshA = document.createMesh().addPrimitive(primA);
+		const meshB = document.createMesh().addPrimitive(primB);
+
+		const targetPosition = document
+			.createAccessor()
+			.setType('VEC3')
+			.setArray(
+				// biome-ignore format: Readability.
+				new Float32Array([
+				0, 1, 0,
+				0, 1, 0,
+				0, 1, 0,
+				0, 1, 0,
+			]),
+			);
+		const target = document.createPrimitiveTarget().setAttribute('POSITION', targetPosition);
+		primA.addTarget(target);
+		primB.addTarget(target.clone());
+
+		transformMesh(meshA, mat4.fromScaling([], [2, 2, 2]));
+
+		deepEqual(
+			Array.from(meshA.listPrimitives()[0].listTargets()[0].getAttribute('POSITION').getArray()),
+			// biome-ignore format: Readability.
+			[
+			0, 2, 0,
+			0, 2, 0,
+			0, 2, 0,
+			0, 2, 0,
+		],
+			'scales target position',
+		);
+
+		deepEqual(
+			Array.from(meshB.listPrimitives()[0].listTargets()[0].getAttribute('POSITION').getArray()),
+			// biome-ignore format: Readability.
+			[
+			0, 1, 0,
+			0, 1, 0,
+			0, 1, 0,
+			0, 1, 0,
+		],
+			'skips shared target position',
+		);
+	});
+});
+
+/* UTILITIES */
+
+function primBounds(prim: Primitive | PrimitiveTarget): bbox {
+	return {
+		min: prim.getAttribute('POSITION')!.getMinNormalized([]) as vec3,
+		max: prim.getAttribute('POSITION')!.getMaxNormalized([]) as vec3,
+	};
+}
+
+function createPrimitive(document: Document): Primitive {
+	const prim = document
+		.createPrimitive()
+		.setMode(Primitive.Mode.POINTS)
+		.setAttribute(
+			'POSITION',
+			// biome-ignore format: Readability.
+			document
+				.createAccessor('POSITION')
+				.setType('VEC3')
+				.setArray(new Float32Array([
+					0.5, 10, 0.5,
+					0.5, 10, -0.5,
+					-0.5, 10, -0.5,
+					-0.5, 10, 0.5,
+				])),
+		)
+		.setAttribute(
+			'NORMAL',
+			// biome-ignore format: Readability.
+			document
+				.createAccessor('NORMAL')
+				.setType('VEC3')
+				.setArray(
+					new Float32Array([
+						0, 1, 0,
+						0, 1, 0,
+						0, 1, 0,
+						0, 1, 0,
+					])
+				),
+		)
+		.setAttribute(
+			'TANGENT',
+			// biome-ignore format: Readability.
+			document
+				.createAccessor('TANGENT')
+				.setType('VEC4')
+				.setArray(
+					new Float32Array([
+						1, 0, 0, 1,
+						1, 0, 0, 1,
+						1, 0, 0, 1,
+						1, 0, 0, 1,
+					])
+				),
+		);
+	return prim;
+}

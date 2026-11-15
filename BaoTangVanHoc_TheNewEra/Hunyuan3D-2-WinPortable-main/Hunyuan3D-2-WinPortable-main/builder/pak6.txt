@@ -1,3 +1,0 @@
-mmgp==3.5.10
-#triton-windows
-PySide6

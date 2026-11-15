@@ -27,6 +27,9 @@ function createOptimizedCanvasTexture(key, drawCallback, repeatX = 2, repeatY = 
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
   texture.repeat.set(repeatX, repeatY);
+  if ('colorSpace' in texture && THREE.SRGBColorSpace) {
+    texture.colorSpace = THREE.SRGBColorSpace;
+  }
   // Tắt mipmaps để tiết kiệm 33% VRAM và tránh giật khung hình trên GTX 1050 2GB
   texture.generateMipmaps = false;
   texture.minFilter = THREE.LinearFilter;
@@ -278,10 +281,53 @@ export function getCalligraphyPlaqueMaterial(title = 'TRUYỆN KIỀU', id = 'tr
     ctx.fillRect(14, h - 14 - cornerSize, cornerSize, cornerSize);
     ctx.fillRect(w - 14 - cornerSize, h - 14 - cornerSize, cornerSize, cornerSize);
 
-    // Chữ thư pháp / hoành phi mạ vàng (Gold Foil Calligraphy)
+    // Chữ thư pháp / hoành phi mạ vàng (Gold Foil Calligraphy - tự động co chữ / ngắt dòng theo khung)
+    const label = String(title || '').normalize('NFC').trim().toUpperCase();
+    const maxWidth = w - 68;
+    const fontFamily = '"Times New Roman", "Segoe UI", Arial, serif';
+    let fontSize = 44;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = 'bold 44px "Georgia", "Times New Roman", serif';
+    ctx.font = `bold ${fontSize}px ${fontFamily}`;
+
+    while (fontSize > 24 && ctx.measureText(label).width > maxWidth) {
+      fontSize -= 2;
+      ctx.font = `bold ${fontSize}px ${fontFamily}`;
+    }
+
+    let lines = [label];
+    if (ctx.measureText(label).width > maxWidth && label.includes(' ')) {
+      const words = label.split(/\s+/);
+      let bestSplit = Math.ceil(words.length / 2);
+      let bestDiff = Infinity;
+      for (let i = 1; i < words.length; i++) {
+        const l1 = words.slice(0, i).join(' ');
+        const l2 = words.slice(i).join(' ');
+        const diff = Math.abs(l1.length - l2.length);
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          bestSplit = i;
+        }
+      }
+      lines = [words.slice(0, bestSplit).join(' '), words.slice(bestSplit).join(' ')];
+      fontSize = 32;
+      ctx.font = `bold ${fontSize}px ${fontFamily}`;
+      while (
+        fontSize > 16 &&
+        (ctx.measureText(lines[0]).width > maxWidth || ctx.measureText(lines[1]).width > maxWidth)
+      ) {
+        fontSize -= 2;
+        ctx.font = `bold ${fontSize}px ${fontFamily}`;
+      }
+    } else {
+      while (fontSize > 14 && ctx.measureText(label).width > maxWidth) {
+        fontSize -= 2;
+        ctx.font = `bold ${fontSize}px ${fontFamily}`;
+      }
+    }
+
+    const lineGap = fontSize * 1.22;
+    const startY = lines.length === 1 ? h / 2 : h / 2 - lineGap * 0.5;
 
     // Đổ bóng chữ vàng ấm áp
     ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
@@ -290,14 +336,18 @@ export function getCalligraphyPlaqueMaterial(title = 'TRUYỆN KIỀU', id = 'tr
     ctx.shadowOffsetY = 2;
 
     ctx.fillStyle = '#dfb738';
-    ctx.fillText(title.toUpperCase(), w / 2, h / 2);
+    lines.forEach((line, idx) => {
+      ctx.fillText(line, w / 2, startY + idx * lineGap, maxWidth);
+    });
 
     // Ánh kim phản chiếu trên mặt chữ
     ctx.shadowBlur = 0;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
     ctx.fillStyle = '#fff4cc';
-    ctx.fillText(title.toUpperCase(), w / 2 - 1, h / 2 - 1);
+    lines.forEach((line, idx) => {
+      ctx.fillText(line, w / 2 - 1, startY + idx * lineGap - 1, maxWidth);
+    });
   }, 1, 1, 512, 128);
 
   const mat = new THREE.MeshLambertMaterial({

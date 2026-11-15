@@ -145,6 +145,14 @@ export class PortalInteraction {
       mesh.userData.isTeleportBook = true;
       mesh.userData.isNamQuocSonHaTeleportBook = true;
     }
+    if (metadata.id === 'day_thon_vi_da' || metadata.targetRealm === 'DAY_THON_VI_DA_REALM') {
+      mesh.userData.isTeleportBook = true;
+      mesh.userData.isDayThonViDaTeleportBook = true;
+    }
+    if (metadata.id === 'nguoi_con_gai_nam_xuong' || metadata.id === 'nam_xuong' || metadata.id === 'namxuong' || metadata.targetRealm === 'NAM_XUONG_REALM') {
+      mesh.userData.isTeleportBook = true;
+      mesh.userData.isNamXuongTeleportBook = true;
+    }
 
     const worldPos = new THREE.Vector3();
     mesh.getWorldPosition(worldPos);
@@ -164,6 +172,14 @@ export class PortalInteraction {
         if (metadata.id === 'son_tinh_thuy_tinh' || metadata.id === 'son_tinh') {
           child.userData.isTeleportBook = true;
           child.userData.isSonTinhTeleportBook = true;
+        }
+        if (metadata.id === 'day_thon_vi_da' || metadata.targetRealm === 'DAY_THON_VI_DA_REALM') {
+          child.userData.isTeleportBook = true;
+          child.userData.isDayThonViDaTeleportBook = true;
+        }
+        if (metadata.id === 'nguoi_con_gai_nam_xuong' || metadata.id === 'nam_xuong' || metadata.id === 'namxuong' || metadata.targetRealm === 'NAM_XUONG_REALM') {
+          child.userData.isTeleportBook = true;
+          child.userData.isNamXuongTeleportBook = true;
         }
 
         if (!this.interactiveTargets.includes(child)) {
@@ -546,7 +562,7 @@ export class PortalInteraction {
         if (this.isTransitioning) return;
 
         // Bỏ qua nếu click vào UI HUD / Director panel
-        if (e.target.closest('#director-hud') || e.target.closest('#kieuworld-realm-hud') || e.target.closest('#directory-hud-modal') || e.target.closest('#sttt-realm-top-hud') || e.target.closest('#td-realm-top-hud')) {
+        if (e.target.closest('#director-hud') || e.target.closest('#kieuworld-realm-hud') || e.target.closest('#directory-hud-modal') || e.target.closest('#sttt-realm-top-hud') || e.target.closest('#td-realm-top-hud') || e.target.closest('#vida-realm-hud') || e.target.closest('#vida-room-tour-banner') || e.target.closest('#namxuong-realm-hud') || e.target.closest('#namxuong-room-tour-banner')) {
           return;
         }
 
@@ -591,6 +607,24 @@ export class PortalInteraction {
               onAct();
             } else if (window.__tatDenRoom?.enterRealm) {
               window.__tatDenRoom.enterRealm();
+            }
+            return;
+          }
+
+          if (targetRealm === 'DAY_THON_VI_DA_REALM' || mId === 'day_thon_vi_da' || mId === 'daythonvida' || result.rootBook.userData?.isDayThonViDaTeleportBook || result.hitMesh?.userData?.isDayThonViDaTeleportBook) {
+            if (typeof onAct === 'function') {
+              onAct();
+            } else if (typeof this.loadNarrativeWorld === 'function') {
+              this.loadNarrativeWorld('day_thon_vi_da', result.rootBook.userData?.targetSceneCoordinates, result.rootBook.userData?.portalMetadata);
+            }
+            return;
+          }
+
+          if (targetRealm === 'NAM_XUONG_REALM' || mId === 'nguoi_con_gai_nam_xuong' || mId === 'nam_xuong' || mId === 'namxuong' || result.rootBook.userData?.isNamXuongTeleportBook || result.hitMesh?.userData?.isNamXuongTeleportBook) {
+            if (typeof onAct === 'function') {
+              onAct();
+            } else if (typeof this.loadNarrativeWorld === 'function') {
+              this.loadNarrativeWorld('nguoi_con_gai_nam_xuong', result.rootBook.userData?.targetSceneCoordinates, result.rootBook.userData?.portalMetadata);
             }
             return;
           }
@@ -642,6 +676,24 @@ export class PortalInteraction {
               onAct();
             } else if (window.__tatDenRoom?.enterRealm) {
               window.__tatDenRoom.enterRealm();
+            }
+            return;
+          }
+
+          if (targetRealm === 'DAY_THON_VI_DA_REALM' || mId === 'day_thon_vi_da' || mId === 'daythonvida' || this.hoveredRoot.userData?.isDayThonViDaTeleportBook) {
+            if (typeof onAct === 'function') {
+              onAct();
+            } else if (typeof this.loadNarrativeWorld === 'function') {
+              this.loadNarrativeWorld('day_thon_vi_da', this.hoveredRoot.userData?.targetSceneCoordinates, this.hoveredRoot.userData?.portalMetadata);
+            }
+            return;
+          }
+
+          if (targetRealm === 'NAM_XUONG_REALM' || mId === 'nguoi_con_gai_nam_xuong' || mId === 'nam_xuong' || mId === 'namxuong' || this.hoveredRoot.userData?.isNamXuongTeleportBook) {
+            if (typeof onAct === 'function') {
+              onAct();
+            } else if (typeof this.loadNarrativeWorld === 'function') {
+              this.loadNarrativeWorld('nguoi_con_gai_nam_xuong', this.hoveredRoot.userData?.targetSceneCoordinates, this.hoveredRoot.userData?.portalMetadata);
             }
             return;
           }
@@ -880,7 +932,7 @@ export class PortalInteraction {
         if (quoteEl) quoteEl.textContent = `"${meta.quote ?? ''}"`;
 
         if (clickBtn) {
-          if (meta.id === 'truyen_kieu' || meta.id === 'son_tinh' || meta.id === 'son_tinh_thuy_tinh' || meta.id === 'an_duong_vuong' || meta.id === 'vo_nhat' || meta.id === 'nam_quoc_son_ha') {
+          if (meta.id === 'truyen_kieu' || meta.id === 'son_tinh' || meta.id === 'son_tinh_thuy_tinh' || meta.id === 'an_duong_vuong' || meta.id === 'vo_nhat' || meta.id === 'nam_quoc_son_ha' || meta.id === 'day_thon_vi_da' || meta.id === 'nguoi_con_gai_nam_xuong') {
             // Không hiển thị nút 2D đan xen vì đã có nút bấm 3D riêng biệt đặt ngay trên cuốn sách/cổng
             clickBtn.style.display = 'none';
           } else {
@@ -987,6 +1039,10 @@ export class PortalInteraction {
         ? 'vo_nhat'
         : (target.userData?.targetRealm === 'NAM_QUOC_SON_HA_REALM' || meta?.targetRealm === 'NAM_QUOC_SON_HA_REALM')
         ? 'nam_quoc_son_ha'
+        : (target.userData?.targetRealm === 'DAY_THON_VI_DA_REALM' || meta?.targetRealm === 'DAY_THON_VI_DA_REALM')
+        ? 'day_thon_vi_da'
+        : (target.userData?.targetRealm === 'NAM_XUONG_REALM' || meta?.targetRealm === 'NAM_XUONG_REALM' || meta?.id === 'nguoi_con_gai_nam_xuong' || target.userData?.isNamXuongTeleportBook)
+        ? 'nguoi_con_gai_nam_xuong'
         : (meta?.id || '');
       if (bookId) {
         const handled = this.loadNarrativeWorld(bookId, coords, meta);

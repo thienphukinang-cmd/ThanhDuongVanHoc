@@ -9,6 +9,11 @@ import {
   createNamQuocSonHaStoryRealm,
   createLyBannerTexture
 } from './namQuocSonHaStoryRealm.js';
+import {
+  createAutoSynthesizedRoomPlaque,
+  registerPlaqueWithSystems,
+  syncPlaqueWorldMetadata
+} from './roomInfoPlaque.js';
 
 /**
  * ============================================================================
@@ -225,16 +230,28 @@ function createPlaqueTexture(title, subtitle = '', {
   ctx.lineWidth = 3;
   ctx.strokeRect(20, 20, width - 40, height - 40);
 
+  const fontStack = '"Times New Roman", "Segoe UI", Arial, serif';
+  const maxW = Math.max(120, width - 60);
+  const fitText = (text, baseSize, minSize, stylePrefix = '') => {
+    let sz = baseSize;
+    while (sz > minSize) {
+      ctx.font = `${stylePrefix}${sz}px ${fontStack}`;
+      if (ctx.measureText(text).width <= maxW) break;
+      sz -= 1;
+    }
+    ctx.font = `${stylePrefix}${sz}px ${fontStack}`;
+  };
+
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = titleColor;
-  ctx.font = 'bold 40px Georgia, "Times New Roman", serif';
-  ctx.fillText(title, width / 2, subtitle ? height * 0.40 : height * 0.50);
+  fitText(title, 40, 18, 'bold ');
+  ctx.fillText(title, width / 2, subtitle ? height * 0.40 : height * 0.50, maxW);
 
   if (subtitle) {
     ctx.fillStyle = subColor;
-    ctx.font = 'italic 23px Georgia, "Times New Roman", serif';
-    ctx.fillText(subtitle, width / 2, height * 0.72);
+    fitText(subtitle, 23, 13, 'italic ');
+    ctx.fillText(subtitle, width / 2, height * 0.72, maxW);
   }
   return makeCanvasTexture(c, { srgb: true, disposables });
 }
@@ -264,14 +281,14 @@ function createPoetryMuralTexture(disposables = []) {
   ctx.fillStyle = 'rgba(139, 30, 30, 0.9)';
   ctx.fillRect(72, 72, 104, 104);
   ctx.fillStyle = '#fef3c7';
-  ctx.font = 'bold 26px Georgia, serif';
+  ctx.font = 'bold 26px "Times New Roman", "Segoe UI", Arial, serif';
   ctx.textAlign = 'center';
-  ctx.fillText('THIÊN', 124, 114);
-  ctx.fillText('THƯ', 124, 150);
+  ctx.fillText('THIÊN', 124, 114, 96);
+  ctx.fillText('THƯ', 124, 150, 96);
 
   ctx.fillStyle = '#5c0c0c';
-  ctx.font = 'bold 34px "Times New Roman", serif';
-  ctx.fillText('BẢN TUYÊN NGÔN ĐỘC LẬP ĐẦU TIÊN (1077)', 540, 108);
+  ctx.font = 'bold 34px "Times New Roman", "Segoe UI", Arial, serif';
+  ctx.fillText('BẢN TUYÊN NGÔN ĐỘC LẬP ĐẦU TIÊN (1077)', 540, 108, 720);
 
   const lines = [
     ['南國山河南帝居', 'Nam quốc sơn hà Nam đế cư'],
@@ -287,8 +304,8 @@ function createPoetryMuralTexture(disposables = []) {
     ctx.fillText(hanzi, 340, y);
 
     ctx.fillStyle = '#2b1a0c';
-    ctx.font = 'italic bold 28px Georgia, serif';
-    ctx.fillText(phienAm, 700, y);
+    ctx.font = 'italic bold 28px "Times New Roman", "Segoe UI", Arial, serif';
+    ctx.fillText(phienAm, 700, y, 420);
   });
 
   return makeCanvasTexture(c, { srgb: true, disposables });
@@ -417,8 +434,11 @@ export function buildNamQuocSonHaExhibition({
 
   const interiorGroup = new THREE.Group();
   interiorGroup.name = 'NamQuocSonHa_Interior_Group';
-  // Cánh Tây (+X hướng về sảnh) dùng +PI/2 để local +Z hướng ra cửa vòm sảnh
-  interiorGroup.rotation.y = roomCenter.x < 0 ? Math.PI / 2 : -Math.PI / 2;
+  // Đồng bộ quy ước xoay 4 hướng bảo tàng: local +Z luôn hướng ra cửa vòm đại sảnh
+  interiorGroup.rotation.y =
+    Math.abs(roomCenter.x) >= Math.abs(roomCenter.z)
+      ? (roomCenter.x > 0 ? -Math.PI / 2 : Math.PI / 2)
+      : (roomCenter.z < 0 ? 0 : Math.PI);
   roomGroup.add(interiorGroup);
 
   // Vật liệu chủ đạo: Vàng hoàng kim (#d4af37), Đỏ son (#8b1e1e), Xanh đêm huyền bí (#0b1528)
@@ -1193,6 +1213,35 @@ export function buildNamQuocSonHaExhibition({
   });
 
   // =========================================================================
+  // 8B. BẢNG THÔNG TIN DI SẢN 3D NAM QUỐC SƠN HÀ (LỤA HOÀNG KIM TRIỀU LÝ)
+  // Đặt tại tiền sảnh trái (-5.2, 0, 7.6), hoàn toàn thông thoáng khỏi đuốc và bệ chiếu
+  // =========================================================================
+  const nqshInfoPlaque = createAutoSynthesizedRoomPlaque('nam_quoc_son_ha', {
+    styleTheme: 'lua_hoang_kim',
+    mountMode: 'pedestal',
+    includeSpotLight: true,
+    position: new THREE.Vector3(-5.2, 0, 7.6),
+    rotationY: 0.35,
+    parent: interiorGroup
+  });
+  if (nqshInfoPlaque) {
+    nqshInfoPlaque.name = 'NQSH_InfoPlaque_3D';
+    nqshInfoPlaque.userData.roomId = 'nam_quoc_son_ha';
+    syncPlaqueWorldMetadata(nqshInfoPlaque);
+
+    const plaqueColliderProxy = new THREE.Mesh(
+      new THREE.BoxGeometry(1.48, 2.0, 0.70),
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    plaqueColliderProxy.name = 'NQSH_InfoPlaque_Collider';
+    plaqueColliderProxy.position.set(-5.2, 1.0, 7.6);
+    plaqueColliderProxy.rotation.y = 0.35;
+    plaqueColliderProxy.userData.ignoreRaycaster = true;
+    interiorGroup.add(plaqueColliderProxy);
+    solidObstacleObjects.push(plaqueColliderProxy);
+  }
+
+  // =========================================================================
   // 9. ĐĂNG KÝ HITBOX, LORE, AUDIO & SƯƠNG MÙ CỤC BỘ XANH ĐÊM HUYỀN BÍ
   // =========================================================================
   function registerHitboxes(hitboxManager) {
@@ -1214,6 +1263,28 @@ export function buildNamQuocSonHaExhibition({
       const holder = loadedArtifacts.get(cfg.key);
       if (holder) bindExhibitInteractions(cfg, holder);
     });
+
+    if (nqshInfoPlaque) {
+      registerPlaqueWithSystems(nqshInfoPlaque, {
+        hitboxManager: hbm,
+        loreGuide: wiredManagers.loreGuide || (typeof window !== 'undefined' ? window.__loreGuide : null),
+        realm: 'museum',
+        onFocusCamera: () => {
+          const camMgr = wiredManagers.cameraManager || (typeof window !== 'undefined' ? window.__museumCameraManager : null);
+          if (!camMgr) return;
+          if (typeof camMgr.smoothZoomToFocus === 'function') {
+            camMgr.smoothZoomToFocus(nqshInfoPlaque, { distance: 2.25 });
+          } else if (typeof camMgr.setView === 'function') {
+            const meta = syncPlaqueWorldMetadata(nqshInfoPlaque);
+            if (!meta) return;
+            const target = meta.focusPoint.clone();
+            const position = target.clone().addScaledVector(meta.focusNormal, 2.25);
+            position.y = Math.max(target.y - 0.04, position.y);
+            camMgr.setView({ position, target }, true);
+          }
+        }
+      });
+    }
   }
 
   function wireInteractiveSystems({ hitboxManager, loreGuide, spatialAudio, cameraManager: camMgr } = {}) {
@@ -1240,6 +1311,13 @@ export function buildNamQuocSonHaExhibition({
     }
     mainScene.traverse((obj) => {
       if (!obj.isLight) return;
+      if (
+        obj.userData?.isPlaqueSpotLight ||
+        obj.userData?.isPooledLight ||
+        obj.name?.startsWith('Pooled_')
+      ) {
+        return;
+      }
       let cur = obj;
       while (cur) {
         if (cur === roomGroup) return;
@@ -1251,13 +1329,17 @@ export function buildNamQuocSonHaExhibition({
 
   function isInsideNqshRoom(camPos) {
     if (!camPos) return false;
+    const dx = camPos.x - roomCenter.x;
+    const dz = camPos.z - roomCenter.z;
+    const cosY = Math.cos(interiorGroup.rotation.y);
+    const sinY = Math.sin(interiorGroup.rotation.y);
+    const lx = dx * cosY - dz * sinY;
+    const lz = dx * sinY + dz * cosY;
     return (
-      camPos.x >= -62.5 &&
-      camPos.x <= -34.15 &&
-      camPos.y >= 9.2 &&
-      camPos.y <= 19.2 &&
-      camPos.z >= -32.4 &&
-      camPos.z <= -5.6
+      Math.abs(lx) <= ROOM_W * 0.5 + 1.1 &&
+      Math.abs(lz) <= ROOM_D * 0.5 + 0.6 &&
+      camPos.y >= roomCenter.y - 0.8 &&
+      camPos.y <= roomCenter.y + ROOM_H + 1.0
     );
   }
 
@@ -1379,6 +1461,7 @@ export function buildNamQuocSonHaExhibition({
     realmController.dispose?.();
     const matSet = new Set();
     roomGroup.traverse((obj) => {
+      if (obj.userData?.isSharedCachedAsset || obj.userData?.isPlaqueProxy) return;
       if (obj.geometry) obj.geometry.dispose();
       if (obj.material) {
         const mats = Array.isArray(obj.material) ? obj.material : [obj.material];

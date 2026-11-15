@@ -35,33 +35,172 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 14px;
-        background: #07090d;
+        gap: 16px;
+        background: radial-gradient(circle at center, #241810 0%, #150d08 60%, #090604 100%);
         color: #f7eed8;
-        font-family: 'Segoe UI', system-ui, sans-serif;
-        transition: opacity 0.25s ease;
+        font-family: 'Times New Roman', 'Segoe UI', serif;
+        transition: opacity 0.4s ease, visibility 0.4s ease;
       }
       #museum-boot-loader.hidden {
         opacity: 0;
+        visibility: hidden;
         pointer-events: none;
       }
-      .boot-spinner {
-        width: 38px;
-        height: 38px;
-        border: 3px solid rgba(212, 175, 55, 0.22);
-        border-top-color: #ffd269;
-        border-radius: 50%;
-        animation: bootSpin 0.8s linear infinite;
+      .do-paper-card {
+        background: rgba(43, 29, 20, 0.92);
+        border: 2px solid #d4af37;
+        box-shadow: 0 0 30px rgba(212, 175, 55, 0.25), inset 0 0 20px rgba(0, 0, 0, 0.6);
+        border-radius: 8px;
+        padding: 28px 36px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        max-width: 460px;
+        width: 90%;
+        text-align: center;
+        position: relative;
       }
-      @keyframes bootSpin {
-        to { transform: rotate(360deg); }
+      .do-paper-card::before {
+        content: "❖";
+        position: absolute;
+        top: 6px;
+        left: 10px;
+        color: #d4af37;
+        font-size: 14px;
+      }
+      .do-paper-card::after {
+        content: "❖";
+        position: absolute;
+        bottom: 6px;
+        right: 10px;
+        color: #d4af37;
+        font-size: 14px;
+      }
+      .royal-seal {
+        width: 52px;
+        height: 52px;
+        border: 2px solid #b82828;
+        background: #871919;
+        color: #fff;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 22px;
+        box-shadow: 0 0 14px rgba(184, 40, 40, 0.5);
+      }
+      .loader-title {
+        font-size: 19px;
+        font-weight: 700;
+        letter-spacing: 2px;
+        color: #ffd875;
+        text-transform: uppercase;
+        text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+      }
+      .loader-subtitle {
+        font-size: 12px;
+        color: #c9b48e;
+        letter-spacing: 1px;
+        font-style: italic;
+        margin-top: -8px;
+      }
+      .progress-track {
+        width: 100%;
+        height: 8px;
+        background: rgba(15, 10, 7, 0.9);
+        border: 1px solid #785a28;
+        border-radius: 4px;
+        overflow: hidden;
+        position: relative;
+      }
+      .progress-fill {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #996e28, #f5d77f, #ffd269);
+        transition: width 0.15s ease-out;
+        box-shadow: 0 0 10px #ffd269;
+      }
+      .progress-label {
+        font-size: 12px;
+        color: #ffd875;
+        font-family: 'Segoe UI', system-ui, sans-serif;
+        font-weight: 600;
+        display: flex;
+        justify-content: space-between;
+        width: 100%;
+      }
+      body {
+        font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
+      }
+      /* Khắc phục lỗi font fallback làm tách dấu tiếng Việt trên các HUD/Overlay */
+      #td-realm-top-hud, #td-realm-top-hud *:not(code),
+      #nqsh-realm-top-hud, #nqsh-realm-top-hud *:not(code),
+      #tg-realm-top-hud, #tg-realm-top-hud *:not(code),
+      #tk-realm-top-hud, #tk-realm-top-hud *:not(code),
+      #adv-realm-top-hud, #adv-realm-top-hud *:not(code),
+      #vn-realm-top-hud, #vn-realm-top-hud *:not(code),
+      #sttt-realm-top-hud, #sttt-realm-top-hud *:not(code),
+      #kieuworld-realm-hud, #kieuworld-realm-hud *:not(code),
+      #kieuworld-top-exit, #kieuworld-top-exit *:not(code),
+      #kieuworld-warp-overlay, #kieuworld-warp-overlay *:not(code),
+      #museum-autotour-hud, #museum-autotour-hud *:not(code),
+      #museum-lore-overlay, #museum-lore-overlay *:not(code),
+      #director-hud, #director-hud *:not(code),
+      #directory-hud-modal, #directory-hud-modal *:not(.kbd):not(code),
+      #directory-hud-toggle-btn, #directory-hud-toggle-btn *:not(code),
+      #return-waypoint-prompt, #return-waypoint-prompt *:not(code),
+      #camera-mode-hint, #camera-mode-hint *:not(code),
+      .lore-popup, .lore-popup *:not(code) {
+        font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif !important;
+        font-kerning: normal;
+        font-variant-ligatures: normal;
+      }
+      #td-hud-title, #nqsh-hud-title, #tg-hud-title {
+        letter-spacing: 0.3px !important;
+      }
+      /* Tách biệt vị trí thanh 3 cõi Truyện Kiều và thanh Auto-Tour / Hitbox ở đáy màn hình */
+      #museum-autotour-hud {
+        bottom: 12px !important;
+        z-index: 9998 !important;
+        padding: 6px 16px !important;
+        max-width: calc(100vw - 32px);
+      }
+      #museum-autotour-hud .tour-btn {
+        white-space: nowrap;
+        padding: 6px 14px !important;
+        font-size: 12.5px !important;
+      }
+      #kieuworld-realm-hud,
+      #namquoc-realm-hud {
+        bottom: 104px !important;
+        z-index: 9999 !important;
+        max-width: calc(100vw - 32px);
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      #kieuworld-realm-hud .kieu-realm-btn {
+        white-space: nowrap;
+        padding: 6px 12px !important;
+        font-size: 12px !important;
       }
     </style>
   </head>
   <body>
     <div id="museum-boot-loader">
-      <div class="boot-spinner"></div>
-      <div style="font-size: 13px; font-weight: 700; letter-spacing: 1.4px; color: #ffd269;">ĐANG KHỞI TẠO BẢO TÀNG VĂN HỌC 3D...</div>
+      <div class="do-paper-card">
+        <div class="royal-seal">文</div>
+        <div class="loader-title">Thánh Đường Văn Học</div>
+        <div class="loader-subtitle">Bảo Tàng Văn Học Việt Nam 3D</div>
+        <div class="progress-track">
+          <div id="boot-progress-fill" class="progress-fill"></div>
+        </div>
+        <div class="progress-label">
+          <span id="boot-progress-status">Đang khởi tạo không gian di sản...</span>
+          <span id="boot-progress-percent">0%</span>
+        </div>
+      </div>
     </div>
     <div id="app"></div>
     <script type="module" src="/src/main.js"></script>

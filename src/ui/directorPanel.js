@@ -83,7 +83,7 @@ export class DirectorPanel {
         .hud-title {
           font-size: 16px;
           font-weight: 700;
-          letter-spacing: 1.2px;
+          letter-spacing: 0.4px;
           text-transform: uppercase;
           background: linear-gradient(135deg, #fff5d0 0%, #dfb746 55%, #ad821a 100%);
           -webkit-background-clip: text;
@@ -98,14 +98,14 @@ export class DirectorPanel {
           color: #ffe082;
           padding: 2px 7px;
           border-radius: 4px;
-          letter-spacing: 0.5px;
+          letter-spacing: 0.3px;
         }
 
         .hud-subtitle {
           font-size: 11px;
           color: #8da4b8;
           text-transform: uppercase;
-          letter-spacing: 0.8px;
+          letter-spacing: 0.35px;
           margin-bottom: 12px;
           display: flex;
           align-items: center;
@@ -135,7 +135,7 @@ export class DirectorPanel {
           font-weight: 700;
           color: #ffd770;
           text-transform: uppercase;
-          letter-spacing: 0.8px;
+          letter-spacing: 0.35px;
           margin-bottom: 6px;
           display: flex;
           justify-content: space-between;
@@ -147,9 +147,10 @@ export class DirectorPanel {
           background: linear-gradient(135deg, #d4af37 0%, #aa801a 100%);
           border: none;
           color: #0c0e14;
+          font-family: inherit;
           font-size: 12px;
           font-weight: 700;
-          letter-spacing: 0.8px;
+          letter-spacing: 0.35px;
           padding: 10px 12px;
           border-radius: 6px;
           cursor: pointer;
@@ -199,7 +200,7 @@ export class DirectorPanel {
           color: #ffd770;
           margin-bottom: 6px;
           text-transform: uppercase;
-          letter-spacing: 0.6px;
+          letter-spacing: 0.35px;
         }
 
         .btn-group {
@@ -213,6 +214,7 @@ export class DirectorPanel {
           background: rgba(255, 255, 255, 0.06);
           border: 1px solid rgba(255, 255, 255, 0.14);
           color: #e8eff5;
+          font-family: inherit;
           font-size: 10.5px;
           padding: 6px 6px;
           border-radius: 6px;
@@ -319,11 +321,14 @@ export class DirectorPanel {
           <button class="cam-btn" id="btn-room103" style="grid-column: span 2; background: linear-gradient(135deg, rgba(16, 185, 129, 0.35), rgba(5, 150, 105, 0.45)); border-color: #10b981; color: #ecfdf5; font-weight: 700;">
             🏹 Vào Phòng Cổ Loa - An Dương Vương (Tầng 1)
           </button>
-          <button class="cam-btn" id="btn-room302" style="grid-column: span 2; background: linear-gradient(135deg, rgba(64, 42, 26, 0.72), rgba(18, 14, 14, 0.85)); border-color: #d97706; color: #fde68a; font-weight: 700;">
-            🏮 Vào Phòng Tắt Đèn - Ngô Tất Tố (Tầng 3)
+          <button class="cam-btn" id="btn-room302" style="grid-column: span 2; background: linear-gradient(135deg, rgba(16, 185, 129, 0.35), rgba(6, 95, 70, 0.55)); border-color: #10b981; color: #ecfdf5; font-weight: 700;">
+            🌿 Vào Phòng Đây Thôn Vĩ Dạ - Hàn Mặc Tử (302)
+          </button>
+          <button class="cam-btn" id="btn-room303" style="grid-column: span 2; background: linear-gradient(135deg, rgba(64, 42, 26, 0.72), rgba(18, 14, 14, 0.85)); border-color: #d97706; color: #fde68a; font-weight: 700;">
+            🏮 Vào Phòng Tắt Đèn - Ngô Tất Tố (303)
           </button>
           <button class="cam-btn" id="btn-room304" style="grid-column: span 2; background: linear-gradient(135deg, rgba(234, 88, 12, 0.40), rgba(154, 52, 18, 0.45)); border-color: #fb923c; color: #ffedd5; font-weight: 700;">
-            🌾 Vào Phòng Vợ Nhặt - Kim Lân (Tầng 3)
+            🌾 Vào Phòng Vợ Nhặt - Kim Lân (305)
           </button>
           <button class="cam-btn" id="btn-staircase">Cầu Thang Chữ Y</button>
           <button class="cam-btn" id="btn-landing">Chiếu Nghỉ (Y=5.5m)</button>
@@ -359,6 +364,18 @@ export class DirectorPanel {
           </button>
           <button class="cam-btn" id="btn-tour-thanhgiong" style="grid-column: span 2; background: linear-gradient(135deg, rgba(245, 158, 11, 0.35), rgba(124, 45, 18, 0.85)); border-color: #fcd34d; color: #fef9c3; font-weight: 700;">
             🧭 Auto-Tour: Thánh Gióng ➔ Đỉnh Núi Sóc Sơn
+          </button>
+          <button class="cam-btn" id="btn-enter-vidarealm" style="grid-column: span 2; background: linear-gradient(135deg, rgba(6, 95, 70, 0.85), rgba(16, 185, 129, 0.52)); border-color: #34d399; color: #ecfdf5; font-weight: 700;">
+            🌿 Cổng Dịch Chuyển: Cõi Vườn Vĩ Dạ &amp; Sông Trăng
+          </button>
+          <button class="cam-btn" id="btn-tour-vida" style="grid-column: span 2; background: linear-gradient(135deg, rgba(16, 185, 129, 0.35), rgba(15, 23, 42, 0.85)); border-color: #6ee7b7; color: #d1fae5; font-weight: 700;">
+            🧭 Auto-Tour: Đây Thôn Vĩ Dạ ➔ Cõi Sông Trăng
+          </button>
+          <button class="cam-btn" id="btn-enter-namxuongrealm" style="grid-column: span 2; background: linear-gradient(135deg, rgba(79, 70, 229, 0.65), rgba(13, 17, 23, 0.88)); border-color: #818cf8; color: #e0e7ff; font-weight: 700;">
+            🏮 Cổng Dịch Chuyển: Cõi Người Con Gái Nam Xương
+          </button>
+          <button class="cam-btn" id="btn-tour-namxuong" style="grid-column: span 2; background: linear-gradient(135deg, rgba(99, 102, 241, 0.35), rgba(15, 23, 42, 0.85)); border-color: #a5b4fc; color: #ede9fe; font-weight: 700;">
+            🧭 Auto-Tour: Nam Xương ➔ Hoàng Giang &amp; Thủy Cung
           </button>
           <div style="grid-column: span 2; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-top: 2px;">
             <button class="cam-btn" id="hud-zone-1" style="font-size: 9.5px; padding: 5px 2px;">🌸 Vườn Thúy</button>
@@ -519,7 +536,9 @@ export class DirectorPanel {
 
     const forceExitTruyenKieuStoryWorldSync = () => {
       const tw = this.truyenKieuStoryWorld;
-      if (!tw || (!tw.isInsideWorld && !tw.isWarping)) return;
+      const appRef = typeof window !== 'undefined' ? window.__app : null;
+      const inKieuScene = Boolean(tw?.truyenKieuScene && appRef?.activeScene === tw.truyenKieuScene);
+      if (!tw || (!tw.isInsideWorld && !tw.isWarping && !inKieuScene)) return;
       try {
         if (tw.warpAnimId) { cancelAnimationFrame(tw.warpAnimId); tw.warpAnimId = null; }
         if (tw.pullBackAnimId) { cancelAnimationFrame(tw.pullBackAnimId); tw.pullBackAnimId = null; }
@@ -529,12 +548,44 @@ export class DirectorPanel {
         if (tw.realmHudElement) tw.realmHudElement.style.display = 'none';
         if (tw.topExitElement) tw.topExitElement.style.display = 'none';
         tw.hideWarpOverlay?.();
+        const warpOverlayEl = document.getElementById('kieuworld-warp-overlay');
+        if (warpOverlayEl) {
+          warpOverlayEl.classList.remove('active');
+          warpOverlayEl.style.opacity = '0';
+          warpOverlayEl.style.pointerEvents = 'none';
+        }
         if (tw.renderer) tw.renderer.toneMappingExposure = tw.savedExposure || 1.0;
         if (tw.cameraController) {
           tw.cameraController.setFloorHeightProvider?.(null);
           tw.cameraController.floorHeightProvider = null;
           tw.cameraController.velocity?.set?.(0, 0, 0);
           tw.cameraController.isEnabled = true;
+        }
+        // Khôi phục vị trí camera trong bảo tàng để cõi kế tiếp không lưu nhầm tọa độ bên trong Cõi Kiều (vd [110.19, 2.14, 4.98])
+        const targetMainScene = tw.mainScene || appRef?.mainScene || appRef?.scene;
+        if (appRef?.setActiveScene && targetMainScene) {
+          appRef.setActiveScene(targetMainScene);
+        }
+        const cam = tw.camera || this.camMgr?.camera;
+        if (cam) {
+          if (tw.savedPos && typeof tw.savedPos.x === 'number') {
+            cam.position.copy(tw.savedPos);
+          } else if (PRESET_VIEWS?.MAIN_ATRIUM?.position) {
+            cam.position.copy(PRESET_VIEWS.MAIN_ATRIUM.position);
+          }
+          if (cam.fov && Math.abs(cam.fov - 65) > 0.1) {
+            cam.fov = 65;
+            cam.updateProjectionMatrix();
+          }
+        }
+        if (this.camMgr?.controls) {
+          if (tw.savedTarget && typeof tw.savedTarget.x === 'number') {
+            this.camMgr.controls.target.copy(tw.savedTarget);
+          } else if (PRESET_VIEWS?.MAIN_ATRIUM?.target) {
+            this.camMgr.controls.target.copy(PRESET_VIEWS.MAIN_ATRIUM.target);
+          }
+          this.camMgr.controls.enabled = true;
+          this.camMgr.controls.update();
         }
         const kBtn = document.getElementById('btn-enter-kieuworld');
         if (kBtn) {
@@ -561,81 +612,241 @@ export class DirectorPanel {
     };
 
     this._panelTransitionToken = 0;
+    this._realmBusyUntilMs = 0;
+
+    const getTargetRealmEnterDurationMs = (targetRealmKey) => {
+      if (targetRealmKey === 'tatDen' || targetRealmKey === 'namQuocSonHa' || targetRealmKey === 'thanhGiong' || targetRealmKey === 'dayThonViDa' || targetRealmKey === 'namXuong') return 1280;
+      if (targetRealmKey === 'sonTinh' || targetRealmKey === 'anDuongVuong' || targetRealmKey === 'voNhat' || targetRealmKey === 'truyenKieuRoom') return 1050;
+      if (targetRealmKey === 'kieuStoryWorld') return 1380;
+      return 0;
+    };
+
+    const isAlreadyInTargetRealm = (targetRealmKey) => {
+      const appRef = typeof window !== 'undefined' ? window.__app : null;
+      if (!targetRealmKey) return false;
+      if (targetRealmKey === 'sonTinh') return isStttActive();
+      if (targetRealmKey === 'anDuongVuong') {
+        return Boolean(this.anDuongVuongRoom?.isInsideRealm?.() || (appRef?.anDuongVuongScene && appRef.activeScene === appRef.anDuongVuongScene));
+      }
+      if (targetRealmKey === 'voNhat') {
+        return Boolean(this.voNhatRoom?.isInsideRealm?.() || (appRef?.voNhatScene && appRef.activeScene === appRef.voNhatScene));
+      }
+      if (targetRealmKey === 'truyenKieuRoom') return isTruyenKieuRoomRealmActive();
+      if (targetRealmKey === 'tatDen') {
+        const td = this.tatDenRoom || (typeof window !== 'undefined' ? window.__tatDenRoom : null);
+        return Boolean(td?.isInsideRealm?.() || (appRef?.tatDenScene && appRef.activeScene === appRef.tatDenScene));
+      }
+      if (targetRealmKey === 'namQuocSonHa') {
+        const nq = this.namQuocSonHaRoom || (typeof window !== 'undefined' ? window.__namQuocSonHaRoom : null);
+        return Boolean(nq?.isInsideRealm?.() || (appRef?.namQuocSonHaScene && appRef.activeScene === appRef.namQuocSonHaScene));
+      }
+      if (targetRealmKey === 'thanhGiong') {
+        const tg = this.thanhGiongRoom || (typeof window !== 'undefined' ? window.__thanhGiongRoom : null);
+        return Boolean(tg?.isInsideRealm?.() || (appRef?.thanhGiongScene && appRef.activeScene === appRef.thanhGiongScene));
+      }
+      if (targetRealmKey === 'dayThonViDa') {
+        const vd = this.dayThonViDaRoom || (typeof window !== 'undefined' ? window.__dayThonViDaRoom : null);
+        return Boolean(vd?.isInsideRealm?.() || (appRef?.dayThonViDaScene && appRef.activeScene === appRef.dayThonViDaScene));
+      }
+      if (targetRealmKey === 'namXuong') {
+        const nx = this.namXuongRoom || (typeof window !== 'undefined' ? window.__namXuongRoom : null);
+        return Boolean(nx?.isInsideRealm?.() || (appRef?.namXuongScene && appRef.activeScene === appRef.namXuongScene));
+      }
+      return false;
+    };
+
     const switchContextSafely = (action, { targetRealmKey = null, ensureMainScene = false } = {}) => {
       const token = ++this._panelTransitionToken;
       unlockPointerCleanly();
 
-      if (targetRealmKey !== 'kieuStoryWorld') {
-        forceExitTruyenKieuStoryWorldSync();
-      }
-      if (targetRealmKey !== 'worldManager' && this.worldManager?.currentState === 'KIEU_WORLD') {
-        this.worldManager?.forceExitImmediate?.();
-      }
-      const activeThanhGiong = this.thanhGiongRoom || (typeof window !== 'undefined' ? window.__thanhGiongRoom : null);
-      if (targetRealmKey !== 'thanhGiong' && activeThanhGiong?.isInsideRealm?.()) {
-        activeThanhGiong.exitRealm?.({ immediate: true, moveCameraBack: false });
-      }
-      activeThanhGiong?.userData?.stopAutoTour?.();
-      activeThanhGiong?.stopAutoTour?.();
-
-      const activeTatDen = this.tatDenRoom || (typeof window !== 'undefined' ? window.__tatDenRoom : null);
-      if (targetRealmKey !== 'tatDen' && activeTatDen?.isInsideRealm?.()) {
-        activeTatDen.exitRealm?.({ immediate: true, moveCameraBack: false });
-      }
-      const activeNqsh = this.namQuocSonHaRoom || (typeof window !== 'undefined' ? window.__namQuocSonHaRoom : null);
-      if (targetRealmKey !== 'namQuocSonHa' && activeNqsh?.isInsideRealm?.()) {
-        activeNqsh.exitRealm?.({ immediate: true, moveCameraBack: false });
+      // Dừng tour / fast-travel / lerp camera đang chạy dở trước khi đổi ngữ cảnh
+      this.camMgr?.stopTour?.();
+      if (this.camMgr) this.camMgr.isTransitioning = false;
+      if (this.camMgr?.cameraController) {
+        this.camMgr.cameraController.isFastTraveling = false;
       }
 
-      // Kiểm tra các cõi dùng closure async cutscene để tránh xung đột scene/camera
-      let pendingClosureExit = false;
-      if (targetRealmKey !== 'truyenKieuRoom' && isTruyenKieuRoomRealmActive()) {
-        this.truyenKieuRoom?.exitRealm?.();
-        pendingClosureExit = true;
-      }
-      if (targetRealmKey !== 'sonTinh' && isStttActive()) {
-        this.sonTinhThuyTinhRoom?.exitRealm?.();
-        pendingClosureExit = true;
-      }
-      if (targetRealmKey !== 'anDuongVuong' && this.anDuongVuongRoom?.isInsideRealm?.()) {
-        this.anDuongVuongRoom.exitRealm?.();
-        pendingClosureExit = true;
-      }
-      if (targetRealmKey !== 'voNhat' && this.voNhatRoom?.isInsideRealm?.()) {
-        this.voNhatRoom.exitRealm?.();
-        pendingClosureExit = true;
-      }
-
-      const runTarget = () => {
+      const executeSwitchAfterPriorTransition = () => {
         if (token !== this._panelTransitionToken) return;
-        const appRef = typeof window !== 'undefined' ? window.__app : null;
-        if (ensureMainScene && appRef?.setActiveScene && appRef.mainScene) {
-          appRef.setActiveScene(appRef.mainScene);
+
+        if (targetRealmKey !== 'kieuStoryWorld') {
+          forceExitTruyenKieuStoryWorldSync();
         }
-        action();
-      };
+        if (targetRealmKey !== 'worldManager' && this.worldManager?.currentState === 'KIEU_WORLD') {
+          this.worldManager?.forceExitImmediate?.();
+        }
 
-      if (!pendingClosureExit) {
-        runTarget();
-        return;
-      }
+        const activeThanhGiong = this.thanhGiongRoom || (typeof window !== 'undefined' ? window.__thanhGiongRoom : null);
+        if (targetRealmKey !== 'thanhGiong' && activeThanhGiong?.isInsideRealm?.()) {
+          activeThanhGiong.exitRealm?.({ immediate: true, moveCameraBack: false });
+        }
+        activeThanhGiong?.userData?.stopAutoTour?.();
+        activeThanhGiong?.stopAutoTour?.();
 
-      const waitStart = performance.now();
-      const pollExit = () => {
-        if (token !== this._panelTransitionToken) return;
-        const stillInside =
-          (targetRealmKey !== 'truyenKieuRoom' && isTruyenKieuRoomRealmActive()) ||
-          (targetRealmKey !== 'sonTinh' && isStttActive()) ||
-          (targetRealmKey !== 'anDuongVuong' && this.anDuongVuongRoom?.isInsideRealm?.()) ||
-          (targetRealmKey !== 'voNhat' && this.voNhatRoom?.isInsideRealm?.());
-        if (!stillInside || (performance.now() - waitStart) > 1500) {
+        const activeTatDen = this.tatDenRoom || (typeof window !== 'undefined' ? window.__tatDenRoom : null);
+        if (targetRealmKey !== 'tatDen' && activeTatDen?.isInsideRealm?.()) {
+          activeTatDen.exitRealm?.({ immediate: true, moveCameraBack: false });
+        }
+        const activeNqsh = this.namQuocSonHaRoom || (typeof window !== 'undefined' ? window.__namQuocSonHaRoom : null);
+        if (targetRealmKey !== 'namQuocSonHa' && activeNqsh?.isInsideRealm?.()) {
+          activeNqsh.exitRealm?.({ immediate: true, moveCameraBack: false });
+        }
+        const activeViDa = this.dayThonViDaRoom || (typeof window !== 'undefined' ? window.__dayThonViDaRoom : null);
+        if (targetRealmKey !== 'dayThonViDa' && activeViDa?.isInsideRealm?.()) {
+          activeViDa.exitRealm?.({ immediate: true, moveCameraBack: false });
+        }
+        activeViDa?.userData?.stopAutoTour?.();
+        activeViDa?.stopAutoTour?.();
+
+        const activeNamXuong = this.namXuongRoom || (typeof window !== 'undefined' ? window.__namXuongRoom : null);
+        if (targetRealmKey !== 'namXuong' && activeNamXuong?.isInsideRealm?.()) {
+          activeNamXuong.exitRealm?.({ immediate: true, moveCameraBack: false });
+        }
+        activeNamXuong?.userData?.stopAutoTour?.();
+        activeNamXuong?.stopAutoTour?.();
+
+        // Kiểm tra các cõi dùng closure async cutscene để tránh xung đột scene/camera (phải đợi hết cutscene phase 2)
+        let exitSettleUntilMs = 0;
+        let pendingClosureExit = false;
+        const nowMs = performance.now();
+
+        if (targetRealmKey !== 'truyenKieuRoom' && isTruyenKieuRoomRealmActive()) {
+          this.truyenKieuRoom?.exitRealm?.();
+          pendingClosureExit = true;
+          exitSettleUntilMs = Math.max(exitSettleUntilMs, nowMs + 1150);
+        }
+        if (targetRealmKey !== 'sonTinh' && isStttActive()) {
+          this.sonTinhThuyTinhRoom?.exitRealm?.();
+          pendingClosureExit = true;
+          // Sơn Tinh set _isInsideRealm=false ngay lúc t=0 nhưng cutscene playBookSuckInCutscene chạy ~920ms mới gọi finishReturn()
+          exitSettleUntilMs = Math.max(exitSettleUntilMs, nowMs + 1020);
+        }
+        if (targetRealmKey !== 'anDuongVuong' && this.anDuongVuongRoom?.isInsideRealm?.()) {
+          this.anDuongVuongRoom.exitRealm?.();
+          pendingClosureExit = true;
+          // playBookReturnCutscene chạy 1050ms mới gọi onComplete khôi phục camera/controls
+          exitSettleUntilMs = Math.max(exitSettleUntilMs, nowMs + 1150);
+        }
+        if (targetRealmKey !== 'voNhat' && this.voNhatRoom?.isInsideRealm?.()) {
+          this.voNhatRoom.exitRealm?.();
+          pendingClosureExit = true;
+          exitSettleUntilMs = Math.max(exitSettleUntilMs, nowMs + 1150);
+        }
+
+        const runTarget = () => {
+          if (token !== this._panelTransitionToken) return;
+          const appRef = typeof window !== 'undefined' ? window.__app : null;
+
+          // Nếu người dùng bấm lại đúng cõi đang ở bên trong thì không thoát về mainScene hay enterRealm lần nữa
+          if (targetRealmKey && targetRealmKey !== 'kieuStoryWorld' && isAlreadyInTargetRealm(targetRealmKey)) {
+            return;
+          }
+
+          if (appRef?.camera) {
+            if (Math.abs((appRef.camera.fov || 65) - 65) > 0.1) {
+              appRef.camera.fov = 65;
+              appRef.camera.updateProjectionMatrix();
+            }
+          }
+          if (this.camMgr?.cameraController) {
+            this.camMgr.cameraController.setFloorHeightProvider?.(null);
+            this.camMgr.cameraController.floorHeightProvider = null;
+            this.camMgr.cameraController.velocity?.set?.(0, 0, 0);
+            this.camMgr.cameraController.isEnabled = true;
+          }
+          if (this.camMgr?.controls) {
+            this.camMgr.controls.enabled = true;
+          }
+          if (ensureMainScene && appRef?.setActiveScene && appRef.mainScene) {
+            appRef.setActiveScene(appRef.mainScene);
+          }
+
+          const enterDurationMs = getTargetRealmEnterDurationMs(targetRealmKey);
+          if (enterDurationMs > 0) {
+            this._realmBusyUntilMs = Math.max(this._realmBusyUntilMs || 0, performance.now() + enterDurationMs);
+          }
+          action();
+        };
+
+        const needsDollyRetry =
+          (targetRealmKey !== 'thanhGiong' && activeThanhGiong?.isInsideRealm?.()) ||
+          (targetRealmKey !== 'tatDen' && activeTatDen?.isInsideRealm?.()) ||
+          (targetRealmKey !== 'namQuocSonHa' && activeNqsh?.isInsideRealm?.()) ||
+          (targetRealmKey !== 'dayThonViDa' && activeViDa?.isInsideRealm?.()) ||
+          (targetRealmKey !== 'namXuong' && activeNamXuong?.isInsideRealm?.());
+
+        if (!pendingClosureExit && !needsDollyRetry) {
           runTarget();
-        } else {
-          setTimeout(pollExit, 60);
+          return;
         }
+
+        const waitStart = performance.now();
+        const pollExit = () => {
+          if (token !== this._panelTransitionToken) return;
+
+          // Nếu cõi dolly-zoom trước đó đang chạy animation nên lần gọi exitRealm đầu bị bỏ qua, thử thoát lại
+          if (targetRealmKey !== 'thanhGiong' && activeThanhGiong?.isInsideRealm?.()) {
+            activeThanhGiong.exitRealm?.({ immediate: true, moveCameraBack: false });
+          }
+          if (targetRealmKey !== 'tatDen' && activeTatDen?.isInsideRealm?.()) {
+            activeTatDen.exitRealm?.({ immediate: true, moveCameraBack: false });
+          }
+          if (targetRealmKey !== 'namQuocSonHa' && activeNqsh?.isInsideRealm?.()) {
+            activeNqsh.exitRealm?.({ immediate: true, moveCameraBack: false });
+          }
+          if (targetRealmKey !== 'dayThonViDa' && activeViDa?.isInsideRealm?.()) {
+            activeViDa.exitRealm?.({ immediate: true, moveCameraBack: false });
+          }
+          if (targetRealmKey !== 'namXuong' && activeNamXuong?.isInsideRealm?.()) {
+            activeNamXuong.exitRealm?.({ immediate: true, moveCameraBack: false });
+          }
+
+          const nowPoll = performance.now();
+          const stillInside =
+            (targetRealmKey !== 'truyenKieuRoom' && isTruyenKieuRoomRealmActive()) ||
+            (targetRealmKey !== 'sonTinh' && isStttActive()) ||
+            (targetRealmKey !== 'anDuongVuong' && this.anDuongVuongRoom?.isInsideRealm?.()) ||
+            (targetRealmKey !== 'voNhat' && this.voNhatRoom?.isInsideRealm?.()) ||
+            (targetRealmKey !== 'thanhGiong' && activeThanhGiong?.isInsideRealm?.()) ||
+            (targetRealmKey !== 'tatDen' && activeTatDen?.isInsideRealm?.()) ||
+            (targetRealmKey !== 'namQuocSonHa' && activeNqsh?.isInsideRealm?.()) ||
+            (targetRealmKey !== 'dayThonViDa' && activeViDa?.isInsideRealm?.()) ||
+            (targetRealmKey !== 'namXuong' && activeNamXuong?.isInsideRealm?.());
+
+          const exitAnimSettled = nowPoll >= exitSettleUntilMs;
+          if ((!stillInside && exitAnimSettled) || (nowPoll - waitStart) > 2200) {
+            runTarget();
+          } else {
+            setTimeout(pollExit, 60);
+          }
+        };
+        setTimeout(pollExit, 60);
       };
-      setTimeout(pollExit, 60);
+
+      // Nếu một cõi trước đó vẫn đang chạy animation enter (vd: runDollyZoomTransition chưa hết 1150ms), chờ hoàn tất trước khi thoát
+      const waitPriorTransition = () => {
+        if (token !== this._panelTransitionToken) return;
+        if (performance.now() < (this._realmBusyUntilMs || 0)) {
+          setTimeout(waitPriorTransition, 60);
+          return;
+        }
+        executeSwitchAfterPriorTransition();
+      };
+
+      if (performance.now() < (this._realmBusyUntilMs || 0)) {
+        setTimeout(waitPriorTransition, 60);
+      } else {
+        executeSwitchAfterPriorTransition();
+      }
     };
+
+    if (typeof window !== 'undefined') {
+      window.__exitAllRealmsSafely = (onReady) => {
+        switchContextSafely(() => {
+          if (typeof onReady === 'function') onReady();
+        }, { ensureMainScene: true });
+      };
+    }
 
     const buttons = {
       'btn-room201': PRESET_VIEWS?.ROOM_201_BOOK,
@@ -643,8 +854,9 @@ export class DirectorPanel {
       'btn-room101': PRESET_VIEWS?.ROOM_101_THANH_GIONG,
       'btn-room102': PRESET_VIEWS?.ROOM_102_SON_TINH,
       'btn-room103': PRESET_VIEWS?.ROOM_103_AN_DUONG_VUONG,
-      'btn-room302': PRESET_VIEWS?.ROOM_302_TAT_DEN,
-      'btn-room304': PRESET_VIEWS?.ROOM_304_VO_NHAT,
+      'btn-room302': PRESET_VIEWS?.ROOM_302_DAY_THON_VI_DA || PRESET_VIEWS?.DAY_THON_VI_DA,
+      'btn-room303': PRESET_VIEWS?.ROOM_303_TAT_DEN || PRESET_VIEWS?.ROOM_302_TAT_DEN,
+      'btn-room304': PRESET_VIEWS?.ROOM_305_VO_NHAT || PRESET_VIEWS?.ROOM_304_VO_NHAT,
       'btn-staircase': PRESET_VIEWS?.STAIRCASE_FRONT,
       'btn-landing': PRESET_VIEWS?.STAIRCASE_LANDING,
       'btn-rooms': PRESET_VIEWS?.LEVEL_2_ROOMS,
@@ -823,6 +1035,86 @@ export class DirectorPanel {
       });
     }
 
+    const enterViDaBtn = document.getElementById('btn-enter-vidarealm');
+    if (enterViDaBtn) {
+      enterViDaBtn.addEventListener('click', () => {
+        try {
+          document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
+          enterViDaBtn.classList.add('active');
+          switchContextSafely(() => {
+            const vd = this.dayThonViDaRoom || window.__dayThonViDaRoom;
+            if (vd?.enterRealm) {
+              vd.enterRealm('day_thon_vi_da');
+            } else if (vd?.userData?.enterRealm) {
+              vd.userData.enterRealm('day_thon_vi_da');
+            }
+          }, { targetRealmKey: 'dayThonViDa', ensureMainScene: true });
+        } catch (e) {
+          console.warn("[SELF-HEALING] Lỗi chuyển cõi Đây Thôn Vĩ Dạ:", e);
+        }
+      });
+    }
+
+    const tourViDaBtn = document.getElementById('btn-tour-vida');
+    if (tourViDaBtn) {
+      tourViDaBtn.addEventListener('click', () => {
+        try {
+          document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
+          tourViDaBtn.classList.add('active');
+          switchContextSafely(() => {
+            const vd = this.dayThonViDaRoom || window.__dayThonViDaRoom;
+            if (vd?.startFullAutoTour) {
+              vd.startFullAutoTour();
+            } else if (vd?.userData?.startFullAutoTour) {
+              vd.userData.startFullAutoTour();
+            }
+          }, { ensureMainScene: true });
+        } catch (e) {
+          console.warn("[SELF-HEALING] Lỗi Auto-Tour Đây Thôn Vĩ Dạ:", e);
+        }
+      });
+    }
+
+    const enterNamXuongBtn = document.getElementById('btn-enter-namxuongrealm');
+    if (enterNamXuongBtn) {
+      enterNamXuongBtn.addEventListener('click', () => {
+        try {
+          document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
+          enterNamXuongBtn.classList.add('active');
+          switchContextSafely(() => {
+            const nx = this.namXuongRoom || window.__namXuongRoom;
+            if (nx?.enterRealm) {
+              nx.enterRealm('nguoi_con_gai_nam_xuong');
+            } else if (nx?.userData?.enterRealm) {
+              nx.userData.enterRealm('nguoi_con_gai_nam_xuong');
+            }
+          }, { targetRealmKey: 'namXuong', ensureMainScene: true });
+        } catch (e) {
+          console.warn("[SELF-HEALING] Lỗi chuyển cõi Người Con Gái Nam Xương:", e);
+        }
+      });
+    }
+
+    const tourNamXuongBtn = document.getElementById('btn-tour-namxuong');
+    if (tourNamXuongBtn) {
+      tourNamXuongBtn.addEventListener('click', () => {
+        try {
+          document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
+          tourNamXuongBtn.classList.add('active');
+          switchContextSafely(() => {
+            const nx = this.namXuongRoom || window.__namXuongRoom;
+            if (nx?.startFullAutoTour) {
+              nx.startFullAutoTour();
+            } else if (nx?.userData?.startFullAutoTour) {
+              nx.userData.startFullAutoTour();
+            }
+          }, { ensureMainScene: true });
+        } catch (e) {
+          console.warn("[SELF-HEALING] Lỗi Auto-Tour Người Con Gái Nam Xương:", e);
+        }
+      });
+    }
+
     const enterKieuBtn = document.getElementById('btn-enter-kieuworld');
     if (enterKieuBtn) {
       enterKieuBtn._kieuBound = true; // Ngăn TruyenKieuWorld.bindHUD gắn listener trùng lặp
@@ -916,6 +1208,14 @@ export class DirectorPanel {
 
   setThanhGiongRoom(room) {
     this.thanhGiongRoom = room;
+  }
+
+  setDayThonViDaRoom(room) {
+    this.dayThonViDaRoom = room;
+  }
+
+  setNamXuongRoom(room) {
+    this.namXuongRoom = room;
   }
 
   setPerformanceOptimizer(optimizer) {

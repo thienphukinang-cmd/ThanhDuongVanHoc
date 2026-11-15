@@ -46,6 +46,25 @@ export const PLAYER_SPAWN_IN_MYTHIC_WORLD = new THREE.Vector3(5000, 37.7, 5088.0
 
 const STTT_CACHE = {};
 
+function drawFittedText(ctx, text, x, y, maxWidth, {
+  fontWeight = 'bold',
+  fontStyle = '',
+  startSize = 24,
+  minSize = 12,
+  fontFamily = '"Segoe UI", Arial, sans-serif'
+} = {}) {
+  const prefix = fontStyle ? `${fontStyle} ` : '';
+  const weight = fontWeight ? `${fontWeight} ` : '';
+  let size = startSize;
+  while (size > minSize) {
+    ctx.font = `${prefix}${weight}${size}px ${fontFamily}`;
+    if (ctx.measureText(text).width <= maxWidth) break;
+    size -= 1;
+  }
+  ctx.font = `${prefix}${weight}${size}px ${fontFamily}`;
+  ctx.fillText(text, x, y, maxWidth);
+}
+
 function getCachedTex(key, w, h, drawFn, repeatX = 1, repeatY = 1) {
   if (STTT_CACHE[key]) return STTT_CACHE[key];
   if (typeof document === 'undefined') return null;
@@ -102,14 +121,25 @@ function createRelicPlaque(title, subtitle, borderColor = '#facc15') {
     ctx.lineWidth = 6;
     ctx.strokeRect(8, 8, w - 16, h - 16);
 
-    ctx.fillStyle = '#fde047';
-    ctx.font = 'bold 30px "Times New Roman", serif';
+    const safeWidth = w - 40;
     ctx.textAlign = 'center';
-    ctx.fillText(title, w / 2, 66);
+    ctx.textBaseline = 'middle';
+
+    ctx.fillStyle = '#fde047';
+    drawFittedText(ctx, title, w / 2, 60, safeWidth, {
+      fontWeight: 'bold',
+      startSize: 30,
+      minSize: 16,
+      fontFamily: '"Times New Roman", Georgia, serif'
+    });
 
     ctx.fillStyle = '#e0f2fe';
-    ctx.font = '23px "Segoe UI", sans-serif';
-    ctx.fillText(subtitle, w / 2, 126);
+    drawFittedText(ctx, subtitle, w / 2, 122, safeWidth, {
+      fontWeight: 'normal',
+      startSize: 23,
+      minSize: 14,
+      fontFamily: '"Segoe UI", Arial, sans-serif'
+    });
   });
 
   return new THREE.Mesh(
@@ -165,13 +195,22 @@ function buildCharacteristicFourWalls(interiorGroup, {
     ctx.strokeRect(12, 12, w - 24, h - 24);
 
     ctx.fillStyle = '#fde047';
-    ctx.font = 'bold 40px "Times New Roman", serif';
     ctx.textAlign = 'center';
-    ctx.fillText('THẦN THOẠI SƠN TINH • THỦY TINH', w / 2, 66);
+    drawFittedText(ctx, 'THẦN THOẠI SƠN TINH • THỦY TINH', w / 2, 66, w - 64, {
+      fontWeight: 'bold',
+      startSize: 40,
+      minSize: 24,
+      fontFamily: '"Times New Roman", Georgia, serif'
+    });
 
     ctx.fillStyle = '#e0f2fe';
-    ctx.font = 'italic 25px "Times New Roman", serif';
-    ctx.fillText('“Nước dâng cao lên bao nhiêu • Đồi núi Tản Viên dâng cao lên bấy nhiêu”', w / 2, 114);
+    drawFittedText(ctx, '“Nước dâng cao lên bao nhiêu • Đồi núi Tản Viên dâng cao lên bấy nhiêu”', w / 2, 114, w - 64, {
+      fontWeight: 'normal',
+      fontStyle: 'italic',
+      startSize: 25,
+      minSize: 16,
+      fontFamily: '"Times New Roman", Georgia, serif'
+    });
   });
 
   // 2. TƯỜNG TRÁI (X = -halfW): TẢN VIÊN SƠN THÁNH (XANH NGỌC & VÀNG ĐỒNG)
@@ -199,13 +238,22 @@ function buildCharacteristicFourWalls(interiorGroup, {
     ctx.strokeRect(12, 12, w - 24, h - 24);
 
     ctx.fillStyle = '#fde047';
-    ctx.font = 'bold 36px "Times New Roman", serif';
     ctx.textAlign = 'center';
-    ctx.fillText('TẢN VIÊN SƠN THÁNH • ĐỆ NHẤT TỨ BẤT TỬ', w / 2, 68);
+    drawFittedText(ctx, 'TẢN VIÊN SƠN THÁNH • ĐỆ NHẤT TỨ BẤT TỬ', w / 2, 68, w - 64, {
+      fontWeight: 'bold',
+      startSize: 36,
+      minSize: 22,
+      fontFamily: '"Times New Roman", Georgia, serif'
+    });
 
     ctx.fillStyle = '#a7f3d0';
-    ctx.font = 'italic 24px "Times New Roman", serif';
-    ctx.fillText('“Dời từng quả đồi, bốc từng dãy núi • Giữ yên bờ cõi Văn Lang”', w / 2, 116);
+    drawFittedText(ctx, '“Dời từng quả đồi, bốc từng dãy núi • Giữ yên bờ cõi Văn Lang”', w / 2, 116, w - 64, {
+      fontWeight: 'normal',
+      fontStyle: 'italic',
+      startSize: 24,
+      minSize: 16,
+      fontFamily: '"Times New Roman", Georgia, serif'
+    });
   });
 
   // 3. TƯỜNG PHẢI (X = +halfW): ĐÔNG HẢI THỦY THẦN (LAM ĐẠI DƯƠNG & SÓNG THẦN)
@@ -234,13 +282,22 @@ function buildCharacteristicFourWalls(interiorGroup, {
     ctx.strokeRect(12, 12, w - 24, h - 24);
 
     ctx.fillStyle = '#fde047';
-    ctx.font = 'bold 36px "Times New Roman", serif';
     ctx.textAlign = 'center';
-    ctx.fillText('ĐÔNG HẢI THỦY THẦN • HÔ MƯA GỌI GIÓ', w / 2, 68);
+    drawFittedText(ctx, 'ĐÔNG HẢI THỦY THẦN • HÔ MƯA GỌI GIÓ', w / 2, 68, w - 64, {
+      fontWeight: 'bold',
+      startSize: 36,
+      minSize: 22,
+      fontFamily: '"Times New Roman", Georgia, serif'
+    });
 
     ctx.fillStyle = '#bae6fd';
-    ctx.font = 'italic 24px "Times New Roman", serif';
-    ctx.fillText('“Nước ngập ruộng đồng, sóng cuộn thành Phong Châu”', w / 2, 116);
+    drawFittedText(ctx, '“Nước ngập ruộng đồng, sóng cuộn thành Phong Châu”', w / 2, 116, w - 64, {
+      fontWeight: 'normal',
+      fontStyle: 'italic',
+      startSize: 24,
+      minSize: 16,
+      fontFamily: '"Times New Roman", Georgia, serif'
+    });
   });
 
   // 4. TƯỜNG MẶT TIỀN (Z = frontZ): Mở rộng cửa vòm không che lối vào
@@ -306,22 +363,43 @@ function buildCharacteristicFourWalls(interiorGroup, {
     ctx.lineWidth = 6;
     ctx.strokeRect(8, 8, w - 16, h - 16);
 
-    ctx.fillStyle = '#fde047';
-    ctx.font = 'bold 34px "Times New Roman", serif';
+    const safeWidth = w - 44;
     ctx.textAlign = 'center';
-    ctx.fillText('❖ THẦN THOẠI SƠN TINH • THỦY TINH ❖', w / 2, 72);
+    ctx.textBaseline = 'middle';
+
+    ctx.fillStyle = '#fde047';
+    drawFittedText(ctx, '❖ THẦN THOẠI SƠN TINH • THỦY TINH ❖', w / 2, 68, safeWidth, {
+      fontWeight: 'bold',
+      startSize: 34,
+      minSize: 20,
+      fontFamily: '"Times New Roman", Georgia, serif'
+    });
 
     ctx.fillStyle = '#38bdf8';
-    ctx.font = 'italic 22px "Times New Roman", serif';
-    ctx.fillText('Đệ Nhất Tứ Bất Tử Việt Nam • Bản Hùng Ca Trị Thủy', w / 2, 134);
+    drawFittedText(ctx, 'Đệ Nhất Tứ Bất Tử Việt Nam • Bản Hùng Ca Trị Thủy', w / 2, 134, safeWidth, {
+      fontWeight: 'normal',
+      fontStyle: 'italic',
+      startSize: 22,
+      minSize: 14,
+      fontFamily: '"Times New Roman", Georgia, serif'
+    });
   });
-  const gateSign = new THREE.Mesh(
-    new THREE.PlaneGeometry(Math.min(doorWidth * 0.68, 8.5), 1.1),
-    new THREE.MeshBasicMaterial({ map: signTex, side: THREE.FrontSide, fog: false })
-  );
-  gateSign.position.set(0, doorHeight + 0.65, frontZ - 0.05);
-  gateSign.rotation.y = Math.PI; // Quay vào trong phòng
+  const signGeo = new THREE.PlaneGeometry(Math.min(doorWidth * 0.68, 8.5), 1.1);
+  const signMat = new THREE.MeshBasicMaterial({ map: signTex, side: THREE.FrontSide, fog: false });
+  const signClearOffset = wallThick * 0.5 + 0.03;
+
+  // Mặt trong (quay vào trong phòng, tách khỏi doorLintel [frontZ - 0.08, frontZ + 0.08])
+  const gateSign = new THREE.Mesh(signGeo, signMat);
+  gateSign.userData.isSignMesh = true;
+  gateSign.position.set(0, doorHeight + 0.65, frontZ - signClearOffset);
+  gateSign.rotation.y = Math.PI;
   wallsGroup.add(gateSign);
+
+  // Mặt ngoài (quay ra đại sảnh bảo tàng, tách khỏi doorLintel)
+  const gateSignOuter = new THREE.Mesh(signGeo, signMat);
+  gateSignOuter.userData.isSignMesh = true;
+  gateSignOuter.position.set(0, doorHeight + 0.65, frontZ + signClearOffset);
+  wallsGroup.add(gateSignOuter);
 
   interiorGroup.add(wallsGroup);
   return wallsGroup;
@@ -615,28 +693,48 @@ function createGiantVoidHologram({
     ctx.fillStyle = accentColor;
     ctx.fillRect(40, 40, w - 80, 76);
     ctx.fillStyle = '#04101e';
-    ctx.font = 'bold 36px "Segoe UI", Arial, sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText(`◈ ${headerTag}`, 64, 78);
+    drawFittedText(ctx, `◈ ${headerTag}`, 64, 78, w - 128, {
+      fontWeight: 'bold',
+      startSize: 36,
+      minSize: 22,
+      fontFamily: '"Segoe UI", Arial, sans-serif'
+    });
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 60px "Segoe UI", sans-serif';
-    ctx.fillText(title.toUpperCase(), 64, 185);
+    drawFittedText(ctx, title.toUpperCase(), 64, 185, w - 128, {
+      fontWeight: 'bold',
+      startSize: 60,
+      minSize: 34,
+      fontFamily: '"Segoe UI", Arial, sans-serif'
+    });
 
+    const sourceLabel = '• Nguồn gốc: ';
     ctx.fillStyle = secondaryColor;
-    ctx.font = 'bold 38px "Segoe UI", sans-serif';
-    ctx.fillText('• Nguồn gốc: ', 64, 265);
+    ctx.font = 'bold 36px "Segoe UI", Arial, sans-serif';
+    ctx.fillText(sourceLabel, 64, 265);
+    const sourceX = 64 + ctx.measureText(sourceLabel).width + 6;
     ctx.fillStyle = '#e2f1ff';
-    ctx.font = '38px "Segoe UI", sans-serif';
-    ctx.fillText(author, 330, 265);
+    drawFittedText(ctx, author, sourceX, 265, w - 64 - sourceX, {
+      fontWeight: 'normal',
+      startSize: 36,
+      minSize: 22,
+      fontFamily: '"Segoe UI", Arial, sans-serif'
+    });
 
+    const contextLabel = '• Bối cảnh: ';
     ctx.fillStyle = secondaryColor;
-    ctx.font = 'bold 38px "Segoe UI", sans-serif';
-    ctx.fillText('• Bối cảnh: ', 64, 330);
+    ctx.font = 'bold 36px "Segoe UI", Arial, sans-serif';
+    ctx.fillText(contextLabel, 64, 330);
+    const contextX = 64 + ctx.measureText(contextLabel).width + 6;
     ctx.fillStyle = '#e2f1ff';
-    ctx.font = '38px "Segoe UI", sans-serif';
-    ctx.fillText(year, 290, 330);
+    drawFittedText(ctx, year, contextX, 330, w - 64 - contextX, {
+      fontWeight: 'normal',
+      startSize: 36,
+      minSize: 22,
+      fontFamily: '"Segoe UI", Arial, sans-serif'
+    });
 
     ctx.strokeStyle = 'rgba(56, 189, 248, 0.55)';
     ctx.lineWidth = 3;
@@ -646,7 +744,7 @@ function createGiantVoidHologram({
     ctx.stroke();
 
     ctx.fillStyle = '#d8eeff';
-    ctx.font = '36px "Segoe UI", sans-serif';
+    ctx.font = '36px "Segoe UI", Arial, sans-serif';
     let curY = 445;
     const maxW = w - 130;
     const lineH = 54;
@@ -657,14 +755,14 @@ function createGiantVoidHologram({
       for (let i = 0; i < words.length; i++) {
         const test = line + words[i] + ' ';
         if (ctx.measureText(test).width > maxW && i > 0) {
-          ctx.fillText(line, 64, curY);
+          ctx.fillText(line, 64, curY, maxW);
           line = '   ' + words[i] + ' ';
           curY += lineH;
         } else {
           line = test;
         }
       }
-      ctx.fillText(line, 64, curY);
+      ctx.fillText(line, 64, curY, maxW);
       curY += lineH + 16;
     });
     ctx.restore();
@@ -908,15 +1006,15 @@ export function buildSonTinhThuyTinhExhibition({
     wallHeight: ROOM_H
   });
 
-  // A1.1 CỔNG VÒM MÁI ĐAO HOÀNG GIA KÈM HOÀNH PHI CÂU ĐỐI TẠI MẶT TIỀN (Z = +12.0m)
+  // A1.1 CỔNG VÒM MÁI ĐAO HOÀNG GIA KÈM HOÀNH PHI CÂU ĐỐI ÔM SÁT NGƯỠNG CỬA (Z = +12.85m)
   const stTraditionalArchway = createTraditionalArchwayEntrance({
     roomTitle: 'SƠN THỦY THẦN CHIẾN',
     leftCouplet: 'Nước dâng cao dâng cao đồi núi',
     rightCouplet: 'Sóng gầm thét chuyển đất Tản Viên',
-    archWidth: 6.2,
+    archWidth: 6.6,
     archHeight: 4.8
   });
-  stTraditionalArchway.position.set(0, 0, 12.0);
+  stTraditionalArchway.position.set(0, 0, 12.85);
   interiorGroup.add(stTraditionalArchway);
 
   const woodMat = new THREE.MeshLambertMaterial({ color: 0x261509 });
@@ -1262,6 +1360,28 @@ export function buildSonTinhThuyTinhExhibition({
   bookAltar.add(promptBanner);
 
   // A7. 4 BỆ HIỆN VẬT SÍNH LỄ (Nạp Bệ Đá Cổ .GLB từ web thay thế CylinderGeometry)
+  const solidObstacleObjects = [];
+  function addSolidBox(name, w, h, d, x, y, z) {
+    const proxy = new THREE.Mesh(
+      new THREE.BoxGeometry(w, h, d),
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    proxy.name = name;
+    proxy.position.set(x, y, z);
+    proxy.userData.ignoreRaycaster = true;
+    interiorGroup.add(proxy);
+    solidObstacleObjects.push(proxy);
+    return proxy;
+  }
+
+  addSolidBox('STTT_SonTinhPed_Collider', 3.8, 4.2, 3.8, -4.2, 2.1, -6.4);
+  addSolidBox('STTT_ThuyTinhPed_Collider', 3.8, 4.2, 3.8, 4.2, 2.1, -6.4);
+  addSolidBox('STTT_BookAltar_Collider', 3.6, 3.2, 3.6, 0, 1.6, 0.8);
+  addSolidBox('STTT_Relic_Voi_Collider', 3.1, 2.8, 3.1, -6.6, 1.4, -1.8);
+  addSolidBox('STTT_Relic_Ga_Collider', 3.1, 2.8, 3.1, -6.4, 1.4, 3.2);
+  addSolidBox('STTT_Relic_Ngua_Collider', 2.4, 3.0, 2.4, 6.6, 1.5, -1.8);
+  addSolidBox('STTT_Relic_Trong_Collider', 3.1, 2.8, 3.1, 6.4, 1.4, 3.2);
+
   const relicMats = { goldMat, ivoryMat, crimsonMat, jadeMat, oceanMat, bronzeMat };
   const relicDefinitions = [
     { pos: new THREE.Vector3(-6.6, 0, -1.8), type: 'VOI_CHIN_NGA', title: 'VOI CHÍN NGÀ', subtitle: 'Sính lễ Linh Thú Sơn Lâm', accent: '#facc15', ray: 0xfacc15 },
@@ -1751,7 +1871,7 @@ export function buildSonTinhThuyTinhExhibition({
         font-family: 'Segoe UI', sans-serif;
       `;
       hud.innerHTML = `
-        <span style="color: #fde047; font-weight: bold; font-size: 15px; letter-spacing: 1px;">⚡ ĐẠI CẢNH: SƠN TINH DỜI NON ĐỐI ĐẦU ĐẠI HỒNG THỦY THỦY TINH 🌊</span>
+        <span style="color: #fde047; font-weight: bold; font-size: 15px; letter-spacing: 0.4px;">⚡ ĐẠI CẢNH: SƠN TINH DỜI NON ĐỐI ĐẦU THỦY TINH • ĐẠI HỒNG THỦY 🌊</span>
         <button id="sttt-btn-exit-realm" style="
           background: linear-gradient(135deg, #0284c7, #1e3a8a);
           color: #ffffff; border: 1px solid #fde047; padding: 6px 16px;
@@ -2050,23 +2170,46 @@ export function buildSonTinhThuyTinhExhibition({
   root.userData.sonTinhHolder = sonTinhHolder;
   root.userData.thuyTinhHolder = thuyTinhHolder;
 
+  function registerHitboxes(hitboxManager) {
+    const hbm = hitboxManager || (typeof window !== 'undefined' ? window.__museumHitboxManager : null);
+    if (!hbm || typeof hbm.registerSolidObjectCollider !== 'function') return;
+    roomGroup.updateMatrixWorld(true);
+    solidObstacleObjects.forEach((obj, idx) => {
+      hbm.registerSolidObjectCollider(obj, {
+        shrinkFactor: 0.96,
+        tag: `SonTinhThuyTinh_Solid_${idx}`,
+        helperColor: 0x38bdf8,
+        realm: 'museum'
+      });
+    });
+  }
+
+  if (typeof window !== 'undefined' && window.__museumHitboxManager) {
+    registerHitboxes(window.__museumHitboxManager);
+  }
+
   root.enterRealm = () => teleportToBattleRealm();
   root.exitRealm = () => teleportBackToMuseum();
   root.teleportBook = bookMeshGroup;
   root.updateRealm = (dt, et, cam) => stepAnimation(dt, et, cam);
   root.update = (dt, et, cam) => stepAnimation(dt, et, cam);
+  root.registerHitboxes = registerHitboxes;
+  root.userData.registerHitboxes = registerHitboxes;
+  roomGroup.userData.registerHitboxes = registerHitboxes;
   root.setupContext = function({
     scene = null,
     battleScene = null,
     camera = null,
     renderer = null,
     cameraManager = null,
-    portalInteraction = null
+    portalInteraction = null,
+    hitboxManager = null
   } = {}) {
     if (scene) _scene = scene;
     if (camera) _camera = camera;
     if (renderer) _renderer = renderer;
     if (cameraManager) _cameraManager = cameraManager;
+    if (hitboxManager) registerHitboxes(hitboxManager);
     if (battleScene) {
       _battleScene = battleScene;
       if (battleRealm.parent !== _battleScene) {

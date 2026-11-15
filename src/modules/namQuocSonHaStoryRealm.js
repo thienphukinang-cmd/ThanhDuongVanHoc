@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { loadGlbCached, normalizeModelToHeight, sanitizeGeometryBuffers } from '../utils/modelLoaderHelper.js';
 import { mergeGroupMeshesByMaterial } from '../utils/geometryMerger.js';
+import { localRoomToWorld } from '../config/literatureRegistry.js';
 import {
   createLyDynastyDragonRelief3D,
   createLyCloudAndWaveRelief3D,
@@ -174,16 +175,28 @@ function createSignPlaqueTex(title, subtitle, {
   ctx.lineWidth = 3;
   ctx.strokeRect(20, 20, w - 40, h - 40);
 
+  const fontStack = '"Times New Roman", "Segoe UI", Arial, serif';
+  const maxW = Math.max(120, w - 60);
+  const fitText = (text, baseSize, minSize, stylePrefix = '') => {
+    let sz = baseSize;
+    while (sz > minSize) {
+      ctx.font = `${stylePrefix}${sz}px ${fontStack}`;
+      if (ctx.measureText(text).width <= maxW) break;
+      sz -= 1;
+    }
+    ctx.font = `${stylePrefix}${sz}px ${fontStack}`;
+  };
+
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = titleCol;
-  ctx.font = 'bold 42px Georgia, "Times New Roman", serif';
-  ctx.fillText(title, w / 2, subtitle ? h * 0.38 : h * 0.5);
+  fitText(title, 42, 20, 'bold ');
+  ctx.fillText(title, w / 2, subtitle ? h * 0.38 : h * 0.5, maxW);
 
   if (subtitle) {
     ctx.fillStyle = subCol;
-    ctx.font = 'italic 24px Georgia, "Times New Roman", serif';
-    ctx.fillText(subtitle, w / 2, h * 0.72);
+    fitText(subtitle, 24, 14, 'italic ');
+    ctx.fillText(subtitle, w / 2, h * 0.72, maxW);
   }
   return makeCanvasTex(c, { srgb: true, disposables });
 }
@@ -382,7 +395,12 @@ export function createNamQuocSonHaStoryRealm({
   let _tourFlightStartQuat = new THREE.Quaternion();
   let _tourFlightEndQuat = new THREE.Quaternion();
 
-  const museumPortalTriggerWorldPos = new THREE.Vector3(-58.15, 11.8, -19.0);
+  const defaultPortalWorld = localRoomToWorld('nam_quoc_son_ha', 0, 1.8, -10.15);
+  const museumPortalTriggerWorldPos = new THREE.Vector3(
+    defaultPortalWorld.x,
+    defaultPortalWorld.y,
+    defaultPortalWorld.z
+  );
   const realmSpawnPos = new THREE.Vector3(0, 2.9, 25.5);
   const realmSpawnLookAt = new THREE.Vector3(-4.0, 2.2, -12.0);
 
@@ -394,9 +412,11 @@ export function createNamQuocSonHaStoryRealm({
         lookAt: interiorGroup.localToWorld(new THREE.Vector3(0, 2.2, -4.5))
       };
     }
+    const fallbackCam = localRoomToWorld('nam_quoc_son_ha', 0, 1.8, 7.6);
+    const fallbackLook = localRoomToWorld('nam_quoc_son_ha', 0, 2.2, -4.5);
     return {
-      camPos: new THREE.Vector3(-40.4, 11.8, -19.0),
-      lookAt: new THREE.Vector3(-52.5, 12.2, -19.0)
+      camPos: new THREE.Vector3(fallbackCam.x, fallbackCam.y, fallbackCam.z),
+      lookAt: new THREE.Vector3(fallbackLook.x, fallbackLook.y, fallbackLook.z)
     };
   }
 

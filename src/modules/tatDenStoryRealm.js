@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { registerInteractiveBook } from './PortalInteraction.js';
 import { loadGlbCached, normalizeModelToHeight as sharedNormalizeModelToHeight, sanitizeGeometryBuffers } from '../utils/modelLoaderHelper.js';
 import { mergeGroupMeshesByMaterial } from '../utils/geometryMerger.js';
+import { getRoomCode, localRoomToWorld } from '../config/literatureRegistry.js';
 
 /**
  * ============================================================================
@@ -227,15 +228,27 @@ function createPlaqueTex(mainText, subText, { bg = '#120705', border = '#c4962c'
   ctx.strokeStyle = border;
   ctx.lineWidth = 7;
   ctx.strokeRect(10, 10, w - 20, h - 20);
+  const fontStack = '"Times New Roman", "Segoe UI", Arial, serif';
+  const maxW = Math.max(120, w - 56);
+  const fitText = (text, baseSize, minSize, stylePrefix = '') => {
+    let sz = baseSize;
+    while (sz > minSize) {
+      ctx.font = `${stylePrefix}${sz}px ${fontStack}`;
+      if (ctx.measureText(text).width <= maxW) break;
+      sz -= 1;
+    }
+    ctx.font = `${stylePrefix}${sz}px ${fontStack}`;
+  };
+
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = mainColor;
-  ctx.font = 'bold 44px Georgia, "Times New Roman", serif';
-  ctx.fillText(mainText, w / 2, subText ? h * 0.42 : h * 0.5);
+  fitText(mainText, 44, 20, 'bold ');
+  ctx.fillText(mainText, w / 2, subText ? h * 0.40 : h * 0.5, maxW);
   if (subText) {
     ctx.fillStyle = subColor;
-    ctx.font = 'italic 24px Georgia, "Times New Roman", serif';
-    ctx.fillText(subText, w / 2, h * 0.74);
+    fitText(subText, 24, 14, 'italic ');
+    ctx.fillText(subText, w / 2, h * 0.74, maxW);
   }
   return makeTex(c, { srgb: true, disposables });
 }
@@ -412,9 +425,27 @@ export function createTatDenStoryRealm({
   let _tourFlightStartQuat = new THREE.Quaternion();
   let _tourFlightEndQuat = new THREE.Quaternion();
 
-  const museumPortalWorldPos = new THREE.Vector3(-58.15, 21.8, -19.0);
-  const museumReturnCamPos = new THREE.Vector3(-39.5, 21.8, -19.0);
-  const museumReturnLookAt = new THREE.Vector3(-52.8, 22.0, -19.0);
+  const tatDenRoomCode = getRoomCode('tat_den');
+  const defaultPortalWorld = localRoomToWorld('tat_den', 0, 1.8, -10.15);
+  const defaultReturnCam = localRoomToWorld('tat_den', 0, 1.8, 8.5);
+  const defaultReturnLook = localRoomToWorld('tat_den', 0, 2.0, -4.8);
+  const museumPortalWorldPos = new THREE.Vector3(defaultPortalWorld.x, defaultPortalWorld.y, defaultPortalWorld.z);
+  const museumReturnCamPos = new THREE.Vector3(defaultReturnCam.x, defaultReturnCam.y, defaultReturnCam.z);
+  const museumReturnLookAt = new THREE.Vector3(defaultReturnLook.x, defaultReturnLook.y, defaultReturnLook.z);
+
+  function getMuseumReturnPose() {
+    if (interiorGroup) {
+      interiorGroup.updateMatrixWorld(true);
+      return {
+        camPos: interiorGroup.localToWorld(new THREE.Vector3(0, 1.8, 8.5)),
+        lookAt: interiorGroup.localToWorld(new THREE.Vector3(0, 2.0, -4.8))
+      };
+    }
+    return {
+      camPos: museumReturnCamPos.clone(),
+      lookAt: museumReturnLookAt.clone()
+    };
+  }
 
   const realmSpawnPos = new THREE.Vector3(0, 2.1, 20.5);
   const realmSpawnLookAt = new THREE.Vector3(0, 2.0, -8.0);
@@ -560,6 +591,9 @@ export function createTatDenStoryRealm({
     if (!roomGroup) return;
     roomGroup.updateMatrixWorld(true);
     portalGroup.getWorldPosition(museumPortalWorldPos);
+    const syncedReturn = getMuseumReturnPose();
+    museumReturnCamPos.copy(syncedReturn.camPos);
+    museumReturnLookAt.copy(syncedReturn.lookAt);
 
     if (_hitboxManager) {
       // Hai trụ gạch cổng chặn va chạm, chừa khe giữa thông thoáng để bước xuyên cổng
@@ -629,7 +663,7 @@ export function createTatDenStoryRealm({
         white-space: nowrap;
         background: linear-gradient(135deg, rgba(16, 11, 8, 0.94), rgba(5, 5, 8, 0.96));
         border: 1.5px solid #d97706; border-radius: 999px;
-        padding: 7px 14px; color: #fde68a; font-family: Georgia, serif;
+        padding: 7px 14px; color: #fde68a; font-family: "Times New Roman", "Segoe UI", serif;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.78);
       `;
       hud.innerHTML = `
@@ -646,7 +680,7 @@ export function createTatDenStoryRealm({
           background: linear-gradient(90deg, #3b1c0e, #572711); color: #fed7aa;
           border: 1px solid #ea580c; border-radius: 999px; padding: 5px 12px;
           font-size: 12px; font-weight: 700; cursor: pointer;">
-          🚪 Về Phòng 302 [ESC]
+          🚪 Về Phòng ${tatDenRoomCode} [ESC]
         </button>
       `;
       document.body.appendChild(hud);
@@ -693,9 +727,9 @@ export function createTatDenStoryRealm({
 
     const tex = createRealmTextures(disposables);
 
-    // 1. Sky Dome Đêm Tối Như Mực (#040407) hoàn toàn không sao, mây đen vần vũ + FogExp2
-    realmScene.background = new THREE.Color(0x040407);
-    realmScene.fog = new THREE.FogExp2(0x040407, 0.0135);
+    // 1. Sky Dome Đêm Tối Như Mực (#090b12) mây đen vần vũ + FogExp2 dịu hơn để nhìn rõ bối cảnh
+    realmScene.background = new THREE.Color(0x090b12);
+    realmScene.fog = new THREE.FogExp2(0x090b12, 0.0085);
 
     const skyMat = new THREE.ShaderMaterial({
       side: THREE.BackSide,
@@ -736,12 +770,15 @@ export function createTatDenStoryRealm({
     root.add(skyDome);
 
     // Ánh sáng đêm u uất nhưng đủ hắt khối rõ rệt (Three.js r186 PBR physical lights)
-    const realmAmbient = new THREE.AmbientLight(0x283044, 0.72);
-    const nightHemi = new THREE.HemisphereLight(0x3a4663, 0x1c140e, 0.95);
-    const moonlessRim = new THREE.DirectionalLight(0x52668f, 1.05);
+    const realmAmbient = new THREE.AmbientLight(0x43506e, 1.15);
+    const nightHemi = new THREE.HemisphereLight(0x5c6e96, 0x2e241b, 1.25);
+    const moonlessRim = new THREE.DirectionalLight(0x7c95c9, 1.45);
     moonlessRim.position.set(-18, 28, -22);
     moonlessRim.castShadow = false;
-    root.add(realmAmbient, nightHemi, moonlessRim);
+    const villageFill = new THREE.DirectionalLight(0x5b6c8f, 0.75);
+    villageFill.position.set(16, 20, 24);
+    villageFill.castShadow = false;
+    root.add(realmAmbient, nightHemi, moonlessRim, villageFill);
 
     // 2. Lớp bóng núi và lũy tre xa mờ bao quanh làng Đông Xá (Layered Silhouettes - Merged 1 Draw Call)
     const silMat = new THREE.MeshBasicMaterial({ color: 0x06060b, fog: true });
@@ -1635,12 +1672,13 @@ export function createTatDenStoryRealm({
       }
 
       if (moveCameraBack) {
+        const retPose = getMuseumReturnPose();
         if (cam) {
-          cam.position.copy(museumReturnCamPos);
-          cam.lookAt(museumReturnLookAt);
+          cam.position.copy(retPose.camPos);
+          cam.lookAt(retPose.lookAt);
         }
         if (ctrl) {
-          ctrl.target.copy(museumReturnLookAt);
+          ctrl.target.copy(retPose.lookAt);
           ctrl.update();
         }
       }
