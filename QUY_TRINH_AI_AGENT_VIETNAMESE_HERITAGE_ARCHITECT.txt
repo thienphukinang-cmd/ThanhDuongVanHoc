@@ -1,0 +1,185 @@
+================================================================================
+🏛 BẢO TÀNG VĂN HỌC 3D (BAOTANG3D) - HỒ SƠ & QUY TRÌNH ĐÓNG GÓI AI AGENT
+================================================================================
+Tên Agent:       vietnamese_heritage_architect
+Chức danh:       Kỹ Sư Trưởng Tái Thiết & Dựng Bảo Tàng 3D Di Sản
+                 (Lead Heritage WebGL Architect & Blender-ThreeJS Procedural Engineer)
+Phiên bản:       1.0.0 (Tương thích Antigravity 2.0 & WebGL Three.js)
+Dự án:           D:\BaoTang3D
+Vị trí cấu hình: .agents/agents/vietnamese_heritage_architect/agent.md
+Plugin:          .agents/plugins/vietnamese-museum-architect/
+================================================================================
+
+I. TỔNG QUAN VỀ AI AGENT
+--------------------------------------------------------------------------------
+Agent "vietnamese_heritage_architect" là chuyên gia kỹ thuật AI độc lập chuyên trách
+toàn bộ vòng đời kiến tạo hoặc tái thiết lập từ con số 0 (Clean Slate Rebuild) cho
+bất kỳ phòng triển lãm văn học 3D hoặc cõi mở (Open Story Realm) nào trong BaoTang3D.
+
+Agent sở hữu khả năng thực thi khép kín: từ dọn sạch bộ nhớ cũ (Hard Purge), viết code
+Blender Python (bpy) dựng mô hình di sản, nén Draco PBR, chuẩn hóa Box3 tiếp đất tự động,
+chống va chạm toán học tuyệt đối (clearance >= 1.5m), chiếu sáng Chiaroscuro 60+ FPS,
+tích hợp Lore học thuật 4 chương tương tác Raycaster, cho đến tự kiểm thử E2E (Self-Healing).
+
+
+II. QUY TRÌNH KỸ THUẬT 6 BƯỚC CHUẨN MỰC (THE 6-STAGE PIPELINE)
+--------------------------------------------------------------------------------
+
+[BƯỚC 0] CLEAN-SLATE HARD PURGE (XÓA SẠCH BẢN CŨ & DỌN RÁC BỘ NHỚ)
+--------------------------------------------------------------------------------
+Mục tiêu: Đảm bảo không còn bất kỳ đối tượng rác nào tồn tại, chống tràn VRAM.
+1. Quét duyệt toàn bộ cây node Three.js của phòng cũ:
+   - Với Mesh: gọi geometry.dispose() giải phóng đỉnh và chỉ số buffer.
+   - Với Material: gọi mat.dispose(), duyệt và dispose toàn bộ texture đính kèm
+     (map, normalMap, roughnessMap, metalnessMap, aoMap).
+2. Gỡ bỏ Group khỏi scene thông qua scene.remove(roomGroup).
+3. Xóa sạch mọi phần tử trong SpatialRegistry, mảng colliders, hitboxes, raycastProxies.
+4. Ngắt và giải phóng toàn bộ các luồng âm thanh PositionalAudio đang phát.
+
+
+[BƯỚC 1] TỰ ĐỘNG HÓA BLENDER PYTHON (bpy + bmesh) SINH MÔ HÌNH DI SẢN
+--------------------------------------------------------------------------------
+Mục tiêu: Tạo hình học di sản chính xác bằng code không cần thao tác tay thủ công.
+1. Viết kịch bản Python: scripts/blender_build_<ten_phong>_kit.py sử dụng bpy và bmesh.
+2. Dựng các chi tiết kiến trúc truyền thống Việt Nam:
+   - Cổng thành vòm sa thạch, mái đao cong ngói mũi hài.
+   - Bệ rồng đá, hoa văn mặt trời Trống Đồng Đông Sơn 14 tia sáng, chim Lạc.
+   - Tường lũy thành xoắn ốc Loa Thành, đền thờ nỏ thần, giá vũ khí giáo mác.
+   - Giếng ngọc cổ phong, rùa vàng Kim Quy, hạt dạ minh châu.
+3. Gán vật liệu Principled BSDF PBR: BaseColor, Roughness, Metalness, Normal Map.
+4. Chạy Blender nền (Headless CLI):
+   Command: blender --background --python scripts/blender_build_<ten_phong>_kit.py
+5. Xuất file .glb nén Draco Level 6-7:
+   - Quy chuẩn dung lượng Kit < 5 MB, Hero Model < 12 MB (chuẩn GitHub/Vercel).
+   - Tự động đồng bộ file .glb ra 3 thư mục:
+     + public/model/<ten_phong>_kit.glb
+     + public/models/<ten_phong>_kit.glb
+     + model/<ten_phong>_kit.glb
+
+
+[BƯỚC 2] CHUẨN HÓA MÔ HÌNH & TIẾP ĐẤT TỰ ĐỘNG (prepareUnlitVividGlbModel + Box3)
+--------------------------------------------------------------------------------
+Mục tiêu: Chống lộn ngược mô hình, chạm đất chuẩn 100%, khử triệt để lỗi đen màn hình.
+1. Khóa và bảo toàn Quaternion gốc từ Blender:
+   - Thường là [0.7071068, 0, 0, 0.7071068] (xoay trục Y-up).
+2. Auto-Grounding qua THREE.Box3:
+   const box = new THREE.Box3().setFromObject(modelMesh);
+   modelMesh.position.y += (groundY - box.min.y);
+   -> Đảm bảo chân mô hình đặt khít mặt bệ (Y = groundY) với 0% lơ lửng, 0% chìm chân.
+3. Khử độc tố hình học (Zero NaN Poisoning):
+   - Quét Position và Normal BufferAttribute, thay thế mọi giá trị NaN/Infinity về 0.
+   - Gọi computeVertexNormals(), computeBoundingBox(), computeBoundingSphere().
+
+
+[BƯỚC 3] THUẬT TOÁN CHỐNG VA CHẠM TOÁN HỌC & PHÂN KHU (SpatialRegistry + Box3)
+--------------------------------------------------------------------------------
+Mục tiêu: Đảm bảo không bao giờ có hiện tượng xuyên tường, chồng lấn vật thể.
+1. Quy hoạch 3 đại phân khu rõ ràng:
+   - Phân khu 1 (Tâm điểm): Bệ tượng đài nhân vật chính & kiến trúc trung tâm.
+   - Phân khu 2 (Cánh tả): Đền thờ, sa bàn vũ khí, hiện vật phụ trợ.
+   - Phân khu 3 (Cánh hữu & Hậu cảnh): Cảnh quan non nước, cõi mở, cổng Portal.
+2. Ma trận khoảng cách Pairwise Clearance giữa toàn bộ các cặp đối tượng chính:
+   deltaX = Math.max(0, boxB.min.x - boxA.max.x, boxA.min.x - boxB.max.x);
+   deltaZ = Math.max(0, boxB.min.z - boxA.max.z, boxA.min.z - boxB.max.z);
+   clearance = Math.sqrt(deltaX * deltaX + deltaZ * deltaZ);
+   -> BẮT BUỘC: clearance >= 1.5m (Tỷ lệ chồng lấn: 0%).
+3. Hành lang giao thông trung tâm:
+   - Giữ thông thoáng 100% khoảng |X| <= 2.3m (lối đi rộng >= 3.5m) từ cửa vào đến bệ trung tâm.
+
+
+[BƯỚC 4] ÁNH SÁNG CHIAROSCURO ĐIỆN ẢNH, ÂM THANH 3D & HIỆU NĂNG 60+ FPS
+--------------------------------------------------------------------------------
+Mục tiêu: Đạt hiệu ứng thị giác điện ảnh tương phản cao nhưng mượt mà 60+ FPS.
+1. Thiết lập ánh sáng Chiaroscuro:
+   - Cặp SpotLights vàng kim cổ (#ffaa33 hoặc #d4af37) rọi tiêu điểm bệ tượng.
+   - Đèn nhấn lam ngọc (#00f5d4) huyền bí tại cõi mở / giếng ngọc / cổng dịch chuyển.
+   - Đèn Hemisphere và Ambient dịu mát, loại bỏ 100% các vùng tối chết đen kịt.
+2. Âm thanh không gian 3D (THREE.PositionalAudio):
+   - Đặt refDistance = 3m - 5m, rolloffFactor = 1.0 - 1.5.
+   - Âm thanh tự động giảm dần khi người xem di chuyển ra xa, không bị xung đột.
+3. Tối ưu hóa 60+ FPS (Zero-Allocation):
+   - Gán userData.ignoreRaycaster = true trên 100% hạt VFX, sương mù, mặt nước, god rays.
+   - Tuyệt đối không new Vector3, new Box3, new Matrix4 trong vòng lặp update(timeSec).
+
+
+[BƯỚC 5] LORE HỌC THUẬT 4 CHƯƠNG, RAYCASTER HITBOX & WEBAUDIO
+--------------------------------------------------------------------------------
+Mục tiêu: Cung cấp trải nghiệm văn hóa sâu sắc và tương tác chuột mượt mà.
+1. Thẻ thuyết minh 4 chương chuẩn mực:
+   - Chương 1: Hoàn cảnh sáng tác & Bối cảnh lịch sử thời đại.
+   - Chương 2: Bút pháp nghệ thuật, thi pháp & thủ pháp tượng trưng.
+   - Chương 3: Hình tượng nhân vật trung tâm & Nghịch lý bi tráng.
+   - Chương 4: Di sản văn hóa, giá trị nhân sinh & Bài học thời đại.
+2. Trải nghiệm điều khiển camera & giao diện:
+   - Tự động nhả con trỏ chuột: document.exitPointerLock().
+   - Hỗ trợ phím tắt ESC và nút [X] đóng tức thì.
+   - Camera zoom mượt mà vào hiện vật (smoothFocusCameraOnArtifact).
+   - Phát âm thanh chuông đồng cổ phong ngân vang qua WebAudio API.
+3. Hitbox Raycaster tàng hình (Transparent Proxies):
+   - Bọc hiện vật bằng hình khối BoxGeometry vô hình (transparent: true, opacity: 0).
+   - Đảm bảo click chuột bắt trúng 100% mà không bị lỗi xuyên qua mesh phức tạp.
+
+
+[BƯỚC 6] KIỂM THỬ TỰ VÁ LỖI TỰ ĐỘNG (SELF-HEALING QA & E2E VERIFICATION)
+--------------------------------------------------------------------------------
+Mục tiêu: Tự động phát hiện lỗi và chứng minh chất lượng trước khi bàn giao.
+1. Kiểm tra cú pháp (node --check):
+   - Kiểm tra Decorator file và Lore Overlay file.
+2. Kiểm tra bộ kiểm thử đơn vị & kiểm tra va chạm Box3:
+   - Đảm bảo 100% mesh không có NaN / Infinity.
+   - Xác thực toàn bộ các khoảng cách pairwise >= 1.5m.
+3. Kiểm tra bản build thành phẩm:
+   - Chạy npm run build (Vite production bundle) đảm bảo 0 lỗi và 0 cảnh báo rò rỉ.
+
+
+III. CẤU TRÚC TỆP TIN ĐÃ THIẾT LẬP TRONG HỆ THỐNG
+--------------------------------------------------------------------------------
+1. File định nghĩa AI Agent:
+   - D:\BaoTang3D\.agents\agents\vietnamese_heritage_architect\agent.md
+   - D:\BaoTang3D\.agents\plugins\vietnamese-museum-architect\agents\vietnamese_heritage_architect.md
+
+2. File kỹ năng SOP (Standard Operating Procedure):
+   - D:\BaoTang3D\.agents\plugins\vietnamese-museum-architect\skills\heritage-room-pipeline\SKILL.md
+
+3. File đăng ký Plugin hệ thống:
+   - D:\BaoTang3D\.agents\plugins\vietnamese-museum-architect\plugin.json
+
+4. Bộ công cụ dòng lệnh CLI tự động hóa:
+   - D:\BaoTang3D\scripts\heritage_pipeline_runner.mjs
+
+
+IV. BẢNG LỆNH ĐIỀU KHIỂN DÀNH CHO AGENT & LẬP TRÌNH VIÊN
+--------------------------------------------------------------------------------
+# 1. Liệt kê tình trạng kỹ thuật của tất cả các phòng hiện có trong bảo tàng:
+node scripts/heritage_pipeline_runner.mjs list
+
+# 2. Kiểm chứng toàn diện một phòng (Cú pháp, Unit tests, Box3, Vite build):
+node scripts/heritage_pipeline_runner.mjs verify anDuongVuong
+
+# 3. Chạy script Blender Python sinh mô hình mới:
+blender --background --python scripts/blender_build_<ten_phong>_kit.py
+
+# 4. Kiểm tra cú pháp nhanh file JavaScript:
+node --check src/modules/<ten_phong>RoomDecorator.js
+node --check src/modules/<ten_phong>LoreOverlay.js
+
+# 5. Build kiểm tra sản phẩm Vite:
+npm.cmd run build
+
+
+V. CÁCH KÍCH HOẠT AGENT BẰNG LỜI NHẮC (PROMPT EXAMPLES)
+--------------------------------------------------------------------------------
+Người dùng có thể kích hoạt agent này cho bất kỳ phòng nào bằng các câu lệnh:
+
+Ví dụ 1:
+"Hãy dùng agent vietnamese_heritage_architect để làm mới hoàn toàn phòng Nam Quốc Sơn Hà bằng quy trình 6 bước."
+
+Ví dụ 2:
+"Dùng quy trình của vietnamese_heritage_architect viết script Blender Python sinh kit kiến trúc cho phòng Thánh Gióng và kiểm tra va chạm Box3."
+
+Ví dụ 3:
+"Chạy heritage_pipeline_runner kiểm chứng toàn bộ tiêu chuẩn 60+ FPS cho phòng An Dương Vương."
+
+================================================================================
+KẾT THÚC TÀI LIỆU - BAOTANG3D DEEPMIND ARCHITECTURE TEAM
+================================================================================

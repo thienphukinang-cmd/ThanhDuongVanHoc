@@ -52,6 +52,7 @@ let _portalLight = null;
 let _portalSignMesh = null;
 let _portalClickProxy = null;
 let _proximityArmed = true;
+let _isRealmLocked = true; // 🔒 Phong ấn Cõi Mở – tạm khóa tu bổ
 const _portalWorldPos = new THREE.Vector3();
 const _cameraWorldPos = new THREE.Vector3();
 export let teleportBook = null;
@@ -84,6 +85,30 @@ function prepGeo(g) {
     console.warn('[prepGeo] geometry repair warning:', err?.message);
   }
   return g;
+}
+
+let _cachedStarTexture = null;
+function createSoftStarTexture() {
+  if (_cachedStarTexture) return _cachedStarTexture;
+  if (typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
+  grad.addColorStop(0.35, 'rgba(224, 242, 254, 0.85)');
+  grad.addColorStop(0.7, 'rgba(186, 230, 253, 0.25)');
+  grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 64, 64);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  _cachedStarTexture = tex;
+  return tex;
 }
 
 // ─── 1. Soft Hand-painted White Goose Feather Texture (128x128 Canvas) ────────
@@ -441,11 +466,11 @@ function createPortalSignTexture() {
   ctx.textAlign = 'center';
   ctx.fillStyle = '#ffd700';
   ctx.font = 'bold 36px "Segoe UI", Arial, sans-serif';
-  ctx.fillText('BƯỚC VÀO HUYỀN SỬ CỔ LOA – DẠ SƠN', 512, 95);
+  ctx.fillText('PHONG ẤN CÕI DẠ SƠN', 512, 95);
 
   ctx.fillStyle = '#00f5d4';
   ctx.font = 'italic 24px "Segoe UI", Arial, sans-serif';
-  ctx.fillText('Cõi Mở Dạ Sơn & Thần Kim Quy • Sử Thi Âu Lạc', 512, 160);
+  ctx.fillText('Hào Khí Âu Lạc • Tạm Khóa Tu Bổ', 512, 160);
 
   ctx.fillStyle = '#e2e8f0';
   ctx.font = '20px "Segoe UI", Arial, sans-serif';
@@ -767,6 +792,30 @@ export function playImmediateClickSound(kind = 'drum') {
   return kind;
 }
 
+// ─── Realm Lock Toast Notification ───────────────────────────────────────────
+function showLockedRealmToast(msg = '🔒 Cõi Mở Huyền Sử An Dương Vương – Dạ Sơn hiện đang tạm phong ấn để tu bổ.') {
+  if (typeof window === 'undefined') return;
+  if (window.__museumToast?.show) { window.__museumToast.show(msg, 'warning'); return; }
+  try {
+    const toast = document.createElement('div');
+    toast.style.cssText = [
+      'position:fixed', 'top:88px', 'left:50%', 'transform:translateX(-50%)',
+      'background:rgba(18,22,31,0.92)', 'color:#fde68a',
+      'border:2px solid #d4af37', 'border-radius:8px',
+      'padding:14px 24px', 'font-size:16px', 'z-index:99999',
+      'box-shadow:0 4px 24px #000a', 'text-align:center',
+      'max-width:600px', 'pointer-events:none', 'line-height:1.5'
+    ].join(';');
+    toast.textContent = msg;
+    document.body.appendChild(toast);
+    setTimeout(() => { try { toast.remove(); } catch (_) {} }, 4200);
+  } catch (_) {}
+}
+
+// ─── Realm Lock Control (exportable) ─────────────────────────────────────────
+export function lockAnDuongVuongRealm() { _isRealmLocked = true; }
+export function unlockAnDuongVuongRealm() { _isRealmLocked = false; }
+
 // ─── Setup & Standardize An Duong Vuong GLB Model ────────────────────────────
 export function setupAnDuongVuongGlb(model, pedestalTopY = 1.35) {
   if (!model) return null;
@@ -1023,9 +1072,11 @@ function createDaSonNightBackdrop(roomW, roomH) {
   }
   const starGeo = prepGeo(new THREE.BufferGeometry());
   starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+  const starTex = createSoftStarTexture();
   const starMat = new THREE.PointsMaterial({
+    map: starTex,
     color: 0xe0f2fe,
-    size: 0.10,
+    size: 0.18,
     transparent: true,
     opacity: 0.90,
     blending: THREE.AdditiveBlending,
@@ -1034,6 +1085,7 @@ function createDaSonNightBackdrop(roomW, roomH) {
   const starPoints = new THREE.Points(starGeo, starMat);
   starPoints.name = 'ADV_DaSon_Night_Stars';
   starPoints.userData.ignoreRaycaster = true;
+  starPoints.raycast = () => {};
   group.add(starPoints);
 
   // Silhouetted Mount Dạ Sơn Cliffs
@@ -1277,11 +1329,12 @@ function createSwirlingVortexPortal(options = {}) {
     type: 'portal',
     action: 'enterRealm',
     realmId: 'an_duong_vuong',
-    title: 'Bước Vào Huyền Sử Cổ Loa – Dạ Sơn',
+    title: 'Cõi Mở Dạ Sơn (Đang Phong Ấn)',
     interactive: true,
     isBookPortal: true,
     isTeleportBook: true,
     targetRealm: 'an_duong_vuong',
+    portalReady: false, // 🔒 Phong ấn
     loreKey: 'cuon_sach_thien_thu',
     onActivate: () => {
       playImmediateClickSound('portal');
@@ -1301,25 +1354,27 @@ function createSwirlingVortexPortal(options = {}) {
     type: 'portal',
     action: 'enterRealm',
     realmId: 'an_duong_vuong',
-    title: 'Bước Vào Huyền Sử Cổ Loa – Dạ Sơn',
+    title: 'Cõi Mở Dạ Sơn (Đang Phong Ấn)',
     isClickProxy: true,
     isBookPortal: true,
     isTeleportBook: true,
     interactive: true,
     roomId: 'an_duong_vuong',
     targetRealm: 'an_duong_vuong',
+    portalReady: false, // 🔒 Phong ấn
     onActivate: () => {
       playImmediateClickSound('portal');
       enterRealm('an_duong_vuong');
     },
     portalMetadata: {
       id: 'an_duong_vuong',
-      title: 'Bước Vào Huyền Sử Cổ Loa – Dạ Sơn',
-      subtitle: 'Sử Thi Âu Lạc • Thần Kim Quy Rẽ Sóng Trùng Dương',
+      title: 'Cõi Mở Dạ Sơn (Đang Phong Ấn)',
+      subtitle: 'Hào Khí Âu Lạc • Tạm Khóa Tu Bổ',
       author: 'Truyền thuyết Cổ Loa • Dân gian Lạc Việt',
       genre: 'Truyền thuyết Lịch sử & Dựng Nước',
       themeColor: '#00f5d4',
       targetRealm: 'an_duong_vuong',
+      portalReady: false,
       onActivate: () => {
         playImmediateClickSound('portal');
         enterRealm('an_duong_vuong');
@@ -2234,6 +2289,7 @@ export async function buildAnDuongVuongRoom(roomGroup, options = {}) {
   _featherPoints = new THREE.Points(featherGeo, featherMat);
   _featherPoints.name = 'ADV_Goose_Feather_Particles';
   _featherPoints.userData.ignoreRaycaster = true;
+  _featherPoints.raycast = () => {};
   _featherPoints.userData.phases = featherPhases;
   interior.add(_featherPoints);
   _disposables.push(_featherPoints);
@@ -2838,6 +2894,11 @@ export function buildAnDuongVuongExhibition(options = {}) {
 
   // Realm transitions
   function enterRealm(targetRealm = 'an_duong_vuong') {
+    if (_isRealmLocked) {
+      playImmediateClickSound('chime');
+      showLockedRealmToast('🔒 Cõi Mở Huyền Sử An Dương Vương – Dạ Sơn hiện đang tạm phong ấn để tu bổ.');
+      return;
+    }
     if (_isInsideRealm || _isTransitioning) return;
     _isTransitioning = true;
     _isInsideRealm = true;
@@ -2918,9 +2979,10 @@ export function buildAnDuongVuongExhibition(options = {}) {
         const dy = Math.abs(_cameraWorldPos.y - _portalWorldPos.y);
         const distXZ = Math.hypot(dx, dz);
 
-        // Awakening lerp: 1.0 when within 6.0m, else 0.05 (idle)
-        const targetAwaken = distXZ < 6.0 ? 1.0 : 0.05;
+        // Awakening lerp: 1.0 when within 6.0m, else 0.05 (idle); clamp to 0.05 when realm locked
+        const targetAwaken = (!_isRealmLocked && distXZ < 6.0) ? 1.0 : 0.05;
         _vortexUniforms.uAwaken.value += (targetAwaken - _vortexUniforms.uAwaken.value) * Math.min(1.0, delta * 3.5);
+        if (_isRealmLocked) _vortexUniforms.uAwaken.value = Math.min(0.05, _vortexUniforms.uAwaken.value);
 
         // Adjust portal light & sign glow with awakening factor
         if (_portalLight) {
@@ -2930,8 +2992,8 @@ export function buildAnDuongVuongExhibition(options = {}) {
           _portalSignMesh.material.opacity = 0.65 + _vortexUniforms.uAwaken.value * 0.35;
         }
 
-        // Proximity Trigger: when player is < 2.2m and dy < 2.5m
-        if (distXZ < 2.2 && dy < 2.5 && !_isInsideRealm && !_isTransitioning && _proximityArmed) {
+        // Proximity Trigger: when player is < 2.2m and dy < 2.5m (disabled when locked)
+        if (!_isRealmLocked && distXZ < 2.2 && dy < 2.5 && !_isInsideRealm && !_isTransitioning && _proximityArmed) {
           _proximityArmed = false;
           enterRealm('an_duong_vuong');
         } else if (!_isInsideRealm && !_proximityArmed && distXZ > 3.8) {

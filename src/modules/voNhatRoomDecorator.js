@@ -21,6 +21,35 @@ let _roomGroup = null;
 let _disposables = [];
 let _lights = [];
 let _sounds = [];
+let _isRealmLocked = true; // 🔒 Tạm phong ấn Cõi Mở Xóm Ngụ Cư (Vợ Nhặt) để tu bổ
+
+export function lockVoNhatRealm() { _isRealmLocked = true; }
+export function unlockVoNhatRealm() { _isRealmLocked = false; }
+export function isVoNhatRealmLocked() { return _isRealmLocked; }
+
+// ─── Realm Lock Toast Notification ───────────────────────────────────────────
+function showLockedRealmToast(msg = '🔒 Cõi Mở Xóm Ngụ Cư (Vợ Nhặt) hiện đang tạm phong ấn để tu bổ.') {
+  if (typeof window === 'undefined') return;
+  if (window.__museumToast?.show) { window.__museumToast.show(msg, 'warning'); return; }
+  try {
+    const existing = document.getElementById('museum-realm-locked-toast');
+    if (existing) existing.remove();
+    const toast = document.createElement('div');
+    toast.id = 'museum-realm-locked-toast';
+    toast.style.cssText = [
+      'position:fixed', 'top:88px', 'left:50%', 'transform:translateX(-50%)',
+      'background:rgba(28,25,23,0.95)', 'color:#fed7aa',
+      'border:2px solid #ea580c', 'border-radius:8px',
+      'padding:14px 28px', 'font-size:16px', 'font-family:"Times New Roman", serif',
+      'z-index:99999', 'box-shadow:0 4px 24px rgba(0,0,0,0.7)',
+      'text-align:center', 'max-width:620px', 'pointer-events:none',
+      'line-height:1.5', 'letter-spacing:0.5px'
+    ].join(';');
+    toast.textContent = msg;
+    document.body.appendChild(toast);
+    setTimeout(() => { try { toast.remove(); } catch (_) {} }, 4000);
+  } catch (_) {}
+}
 
 // ─── Đăng ký 4 Chương Học Thuật Vợ Nhặt vào ARTIFACT_LORE_DATABASE ─────────────
 function registerVoNhatAcademicLore() {
@@ -1459,34 +1488,59 @@ export async function buildVoNhatRoom(roomGroup, options = {}) {
 
   const bookGeo = prepGeo(new THREE.BoxGeometry(0.55, 0.08, 0.40));
   const bookMat = new THREE.MeshStandardMaterial({
-    color: 0xff5722,
-    emissive: new THREE.Color(0xff5722),
-    emissiveIntensity: 1.4,
-    roughness: 0.25
+    color: 0x8c3b1a, // Đổi sang tông nâu trầm phong ấn
+    emissive: new THREE.Color(0x3d1708),
+    emissiveIntensity: 0.35,
+    roughness: 0.45
   });
   const bookMesh = new THREE.Mesh(bookGeo, bookMat);
   bookMesh.name = 'Interactive_VoNhat_Teleport_Book';
   bookMesh.position.set(0, 1.06, 0);
   bookMesh.rotation.x = -Math.PI / 6;
-  bookMesh.userData.interactive = true;
-  bookMesh.userData.targetRealm = 'VO_NHAT_REALM';
-  bookMesh.userData.isVoNhatTeleportBook = true;
+  bookMesh.userData = {
+    interactive: true,
+    type: 'portal',
+    action: 'enterRealm',
+    realmId: 'vo_nhat',
+    targetRealm: 'VO_NHAT_REALM',
+    isVoNhatTeleportBook: true,
+    isBookPortal: true,
+    isTeleportBook: true,
+    portalReady: false, // 🔒 Tạm phong ấn Cõi Mở Xóm Ngụ Cư
+    title: 'Cõi Mở Xóm Ngụ Cư (Đang Phong Ấn)',
+    onActivate: () => {
+      showLockedRealmToast('🔒 Cõi Mở Xóm Ngụ Cư (Vợ Nhặt) hiện đang tạm phong ấn để tu bổ.');
+    },
+    onClick: () => {
+      showLockedRealmToast('🔒 Cõi Mở Xóm Ngụ Cư (Vợ Nhặt) hiện đang tạm phong ấn để tu bổ.');
+    }
+  };
   bookAltar.add(bookMesh);
 
-  // Luồng sáng đỏ rực rỡ từ lá cờ đê chiếu qua cổng cõi mở (Chiaroscuro)
-  const flagBeaconLight = new THREE.PointLight(0xef4444, 5.5, 18.0, 1.4);
+  // Dải lụa son đỏ niêm phong cuốn sách
+  const sealRibbonGeo = prepGeo(new THREE.BoxGeometry(0.58, 0.02, 0.10));
+  const sealRibbonMat = new THREE.MeshStandardMaterial({ color: 0xb91c1c, roughness: 0.4 });
+  const sealRibbon = new THREE.Mesh(sealRibbonGeo, sealRibbonMat);
+  sealRibbon.position.set(0, 1.11, 0);
+  sealRibbon.rotation.x = -Math.PI / 6;
+  sealRibbon.userData.ignoreRaycaster = true;
+  bookAltar.add(sealRibbon);
+
+  // Đĩa đồng niêm phong hoàng triều
+  const sealDiskGeo = prepGeo(new THREE.CylinderGeometry(0.09, 0.09, 0.025, 16));
+  const sealDiskMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.35, metalness: 0.6 });
+  const sealDisk = new THREE.Mesh(sealDiskGeo, sealDiskMat);
+  sealDisk.position.set(0, 1.13, 0);
+  sealDisk.rotation.x = -Math.PI / 6;
+  sealDisk.userData.ignoreRaycaster = true;
+  bookAltar.add(sealDisk);
+
+  // Ánh sáng ngọn đèn phong ấn trầm ấm dịu nhẹ
+  const flagBeaconLight = new THREE.PointLight(0xd97706, 1.2, 8.0, 1.4);
   flagBeaconLight.name = 'VN_Flag_Beacon_Light';
   flagBeaconLight.position.set(0, 1.6, 0.2);
   bookAltar.add(flagBeaconLight);
   _lights.push(flagBeaconLight);
-
-  const flagHaloSpot = new THREE.SpotLight(0xff3322, 35.0, 18.0, Math.PI / 3.8, 0.75, 1.2);
-  flagHaloSpot.name = 'VN_Flag_Halo_Spot';
-  flagHaloSpot.position.set(6.8, floorY + 2.4, -7.5);
-  flagHaloSpot.target.position.set(6.8, floorY + 4.5, -halfL);
-  interior.add(flagHaloSpot);
-  interior.add(flagHaloSpot.target);
-  _lights.push(flagHaloSpot, flagHaloSpot.target);
 
   // ══════════════════════════════════════════════════════════════════════════
   // H. VFX HẠT BỤI NẮNG SỚM & LÀN KHÓI BẾP MỀM MẠI (150 hạt CanvasTexture tròn)
@@ -1786,6 +1840,10 @@ export function triggerVoNhatLore(loreKey = 'famine_context', options = {}) {
 export let teleportBook = null;
 
 export function enterRealm(targetRealm = 'vo-nhat') {
+  if (_isRealmLocked) {
+    showLockedRealmToast('🔒 Cõi Mở Xóm Ngụ Cư (Vợ Nhặt) hiện đang tạm phong ấn để tu bổ.');
+    return;
+  }
   if (typeof window !== 'undefined' && window.__voNhatRoom?.enterRealm) {
     window.__voNhatRoom.enterRealm(targetRealm);
   }
@@ -1854,6 +1912,10 @@ export function buildVoNhatExhibition(options = {}) {
 
   // Realm transitions
   function enterRealm(targetRealm = 'vo-nhat') {
+    if (_isRealmLocked) {
+      showLockedRealmToast('🔒 Cõi Mở Xóm Ngụ Cư (Vợ Nhặt) hiện đang tạm phong ấn để tu bổ.');
+      return;
+    }
     if (_isInsideRealm || _isTransitioning) return;
     _isTransitioning = true;
     _isInsideRealm = true;
@@ -1969,6 +2031,7 @@ export function buildVoNhatExhibition(options = {}) {
   root.enterRealm = enterRealm;
   root.exitRealm = exitRealm;
   root.isInsideRealm = () => _isInsideRealm;
+  root.isRealmLocked = () => _isRealmLocked;
   root.getGroup = () => roomGroup;
   root.teleportBook = root.getObjectByName?.('Interactive_VoNhat_Teleport_Book') || null;
 

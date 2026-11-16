@@ -239,6 +239,30 @@ function createHighResFeatherTexture() {
   }
 }
 
+let _cachedAdvMistTex = null;
+function getAdvMistTexture() {
+  if (_cachedAdvMistTex) return _cachedAdvMistTex;
+  if (typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
+  grad.addColorStop(0.35, 'rgba(255, 209, 102, 0.85)');
+  grad.addColorStop(0.7, 'rgba(255, 209, 102, 0.25)');
+  grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 64, 64);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  _cachedAdvMistTex = tex;
+  return tex;
+}
+
 /**
  * Thân tre Phong Khê đốt xanh vàng ngả bóng
  */
@@ -1490,6 +1514,7 @@ export class AnDuongVuongWorld {
     const featherPoints = new THREE.Points(this._featherGeo, featherMat);
     featherPoints.name = 'AdvWorld_GooseFeathers_Trail';
     featherPoints.userData.ignoreRaycaster = true;
+    featherPoints.raycast = () => {};
     this.scene.add(featherPoints);
     this._objects.push(featherPoints);
     this._disposables.push(this._featherGeo, featherMat);
@@ -1662,7 +1687,8 @@ export class AnDuongVuongWorld {
     mistGeo.setAttribute('position', new THREE.BufferAttribute(mistPositions, 3));
 
     const mistMat = new THREE.PointsMaterial({
-      size: 0.42,
+      map: getAdvMistTexture(),
+      size: 0.52,
       color: 0xffd166,
       transparent: true,
       opacity: 0.72,
@@ -1671,6 +1697,7 @@ export class AnDuongVuongWorld {
     });
     const mistPoints = new THREE.Points(mistGeo, mistMat);
     mistPoints.userData.ignoreRaycaster = true;
+    mistPoints.raycast = () => {};
     this._mistGroup.add(mistPoints);
     this._disposables.push(mistGeo, mistMat);
 

@@ -1647,6 +1647,7 @@ export function buildNamXuongExhibition({
   wispPoints.name = 'NamXuong_Phosphorescent_Wisps';
   wispPoints.frustumCulled = true;
   wispPoints.userData.ignoreRaycaster = true;
+  wispPoints.raycast = () => {};
   interiorGroup.add(wispPoints);
 
   // =========================================================================

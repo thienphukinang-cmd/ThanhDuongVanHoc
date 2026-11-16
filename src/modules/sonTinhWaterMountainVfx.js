@@ -20,6 +20,30 @@ import { mergeGroupMeshesByMaterial } from '../utils/geometryMerger.js';
 
 export const SON_TINH_REALM_OFFSET = new THREE.Vector3(5000, 0, 5000);
 
+let _stormParticleTex = null;
+function getStormParticleTexture() {
+  if (_stormParticleTex) return _stormParticleTex;
+  if (typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
+  grad.addColorStop(0.35, 'rgba(255, 255, 255, 0.85)');
+  grad.addColorStop(0.7, 'rgba(255, 255, 255, 0.25)');
+  grad.addColorStop(1, 'rgba(255, 255, 255, 0.0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 64, 64);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  _stormParticleTex = tex;
+  return tex;
+}
+
 // Giữ chuẩn vị trí đối đầu trực diện 76m giữa 2 vị thần
 export const SON_TINH_LOCAL_POS = new THREE.Vector3(-38, 42.0, -16);
 export const THUY_TINH_LOCAL_POS = new THREE.Vector3(38, 18.5, -16);
@@ -809,7 +833,8 @@ function createColossalSealsLightningAndStormParticles() {
   pGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(10, 50, -15), 115);
 
   const pMat = new THREE.PointsMaterial({
-    size: 0.92,
+    map: getStormParticleTexture(),
+    size: 1.35,
     vertexColors: true,
     transparent: true,
     opacity: 0.88,
@@ -820,6 +845,7 @@ function createColossalSealsLightningAndStormParticles() {
   const stormParticles = new THREE.Points(pGeo, pMat);
   stormParticles.frustumCulled = true;
   stormParticles.userData.ignoreRaycaster = true;
+  stormParticles.raycast = () => {};
   fxGroup.add(stormParticles);
 
   const updateFx = (timeSec) => {

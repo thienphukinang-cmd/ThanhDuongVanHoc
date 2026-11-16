@@ -671,6 +671,8 @@ export class KieuWorld {
     this.smokePoints = new THREE.Points(smokeGeo, smokeMat);
     this.smokePoints.name = "DamTien_Incense_Smoke";
     this.smokePoints.frustumCulled = true;
+    this.smokePoints.userData.ignoreRaycaster = true;
+    this.smokePoints.raycast = () => {};
     this.group.add(this.smokePoints);
 
     this.graveOriginY = gy;
@@ -876,6 +878,8 @@ export class KieuWorld {
     this.blossomPoints = new THREE.Points(geo, pMat);
     this.blossomPoints.name = "Spring_Blossom_Particles";
     this.blossomPoints.frustumCulled = true;
+    this.blossomPoints.userData.ignoreRaycaster = true;
+    this.blossomPoints.raycast = () => {};
     this.group.add(this.blossomPoints);
   }
 

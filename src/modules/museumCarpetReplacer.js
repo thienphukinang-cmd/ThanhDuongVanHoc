@@ -94,12 +94,13 @@ export function getTimelinePatternCarpetMaterial() {
       hCtx.scale(0.25, 0.25);
       const w = 2048;
       const h = 4096;
-      // --- A. NỀN VÀNG ĐỒNG ẤM (WARM BRONZE / TAN GOLD) ---
+      // --- A. NỀN THẢM ĐỎ HOÀNG GIA GẤM NHUNG DÁT VÀNG (ROYAL CRIMSON VELVET) ---
       const bgGrad = aCtx.createLinearGradient(0, 0, w, h);
-      bgGrad.addColorStop(0.0, '#deb089');
-      bgGrad.addColorStop(0.35, '#cf9669');
-      bgGrad.addColorStop(0.7, '#c28558');
-      bgGrad.addColorStop(1.0, '#d8a479');
+      bgGrad.addColorStop(0.0, '#7f1d1d');
+      bgGrad.addColorStop(0.25, '#991b1b');
+      bgGrad.addColorStop(0.5, '#881337');
+      bgGrad.addColorStop(0.75, '#991b1b');
+      bgGrad.addColorStop(1.0, '#701a2b');
       aCtx.fillStyle = bgGrad;
       aCtx.fillRect(0, 0, w, h);
 
@@ -107,8 +108,8 @@ export function getTimelinePatternCarpetMaterial() {
       hCtx.fillStyle = 'rgb(225, 225, 225)';
       hCtx.fillRect(0, 0, w, h);
 
-      // Vân kim loại / sợi dệt phay xước vi thể ngang (Brushed hairline grain)
-      aCtx.strokeStyle = 'rgba(65, 32, 14, 0.12)';
+      // Vân tơ lụa gấm dệt vi thể sang trọng
+      aCtx.strokeStyle = 'rgba(254, 240, 138, 0.14)';
       aCtx.lineWidth = 1.6;
       for (let y = 0; y < h; y += 12) {
         aCtx.beginPath();
@@ -154,16 +155,16 @@ export function getTimelinePatternCarpetMaterial() {
       // Khung viền mảnh bao quanh mép thảm
       const padX = 84;
       [aCtx, hCtx].forEach((ctx, isHeight) => {
-        ctx.strokeStyle = isHeight ? 'rgb(35, 35, 35)' : '#261408';
+        ctx.strokeStyle = isHeight ? 'rgb(35, 35, 35)' : '#facc15';
         ctx.lineWidth = isHeight ? 9 : 6;
         ctx.strokeRect(padX, 36, w - padX * 2, h - 72);
       });
 
-      // --- C. ĐƯỜNG TRỤC DỌC MÀU ĐEN ĐẬM CHÍNH GIỮA THẢM (CENTRAL TIMELINE AXIS) ---
+      // --- C. ĐƯỜNG TRỤC DỌC HOÀNG KIM CHÍNH GIỮA THẢM (CENTRAL TIMELINE AXIS) ---
       const cx = w * 0.5;
       [aCtx, hCtx].forEach((ctx, isHeight) => {
-        ctx.strokeStyle = isHeight ? 'rgb(12, 12, 12)' : '#1a0e06';
-        ctx.lineWidth = isHeight ? 28 : 22;
+        ctx.strokeStyle = isHeight ? 'rgb(12, 12, 12)' : '#fde047';
+        ctx.lineWidth = isHeight ? 24 : 16;
         ctx.beginPath();
         ctx.moveTo(cx, 36);
         ctx.lineTo(cx, h - 36);
@@ -186,8 +187,8 @@ export function getTimelinePatternCarpetMaterial() {
         const radiusX = idx === 0 ? 510 : (idx === 1 ? 490 : 470);
         const radiusY = radiusX * kAspect;
 
-        // Xóa trục dọc bên trong lòng vòng tròn để tạo nền đồng sáng
-        aCtx.fillStyle = '#d69e72';
+        // Nền nhung thẫm quý phái bên trong lòng vòng tròn
+        aCtx.fillStyle = '#581121';
         aCtx.beginPath();
         aCtx.ellipse(cx, cy, radiusX, radiusY, 0, 0, Math.PI * 2);
         aCtx.fill();
@@ -197,10 +198,10 @@ export function getTimelinePatternCarpetMaterial() {
         hCtx.ellipse(cx, cy, radiusX, radiusY, 0, 0, Math.PI * 2);
         hCtx.fill();
 
-        // Vành tròn viền kép đen đậm to lớn, bề thế và đạt chuẩn 100% tròn trịa trong 3D
+        // Vành tròn viền kép hoàng kim dát vàng, bề thế và đạt chuẩn 100% tròn trịa trong 3D
         [aCtx, hCtx].forEach((ctx, isHeight) => {
-          ctx.strokeStyle = isHeight ? 'rgb(12, 12, 12)' : '#1a0e06';
-          ctx.lineWidth = isHeight ? 28 : 22;
+          ctx.strokeStyle = isHeight ? 'rgb(12, 12, 12)' : '#fde047';
+          ctx.lineWidth = isHeight ? 26 : 20;
           ctx.beginPath();
           ctx.ellipse(cx, cy, radiusX, radiusY, 0, 0, Math.PI * 2);
           ctx.stroke();
@@ -213,9 +214,9 @@ export function getTimelinePatternCarpetMaterial() {
           ctx.stroke();
         });
 
-        // Đường nhánh vuông góc dẫn ra hai mép thảm kèm móc góc vuông (Right-angle hooks)
+        // Đường nhánh vuông góc dẫn ra hai mép thảm dát vàng (Right-angle hooks)
         [aCtx, hCtx].forEach((ctx, isHeight) => {
-          ctx.strokeStyle = isHeight ? 'rgb(25, 25, 25)' : '#261408';
+          ctx.strokeStyle = isHeight ? 'rgb(25, 25, 25)' : '#facc15';
           ctx.lineWidth = isHeight ? 9 : 6;
 
           // Nhánh Trái
@@ -233,13 +234,13 @@ export function getTimelinePatternCarpetMaterial() {
           ctx.stroke();
         });
 
-        // CHỮ TRONG THẢM TO HƠN RÕ RỆT (CHỮ SỐ TÂM VÒNG TRÒN TĂNG TỪ 84-94px LÊN 165px)
+        // CHỮ TRONG THẢM TO HƠN RÕ RỆT (CHỮ SỐ TÂM VÒNG TRÒN VÀNG HOÀNG GIA DÁT VÀNG)
         [aCtx, hCtx].forEach((ctx, isHeight) => {
           ctx.save();
           ctx.translate(cx, cy);
           ctx.scale(1.0, kAspect * 2.3);
 
-          ctx.fillStyle = isHeight ? 'rgb(18, 18, 18)' : '#1a0e06';
+          ctx.fillStyle = isHeight ? 'rgb(18, 18, 18)' : '#fef08a';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
 
@@ -255,7 +256,7 @@ export function getTimelinePatternCarpetMaterial() {
           ctx.restore();
         });
 
-        // CÁC HÀNG CHỮ THUYẾT MINH TO HƠN (TĂNG TỪ 30px LÊN 46px)
+        // CÁC HÀNG CHỮ THUYẾT MINH VÀNG ÁNH KIM SANG TRỌNG
         const leftSpacing = 200 * kAspect;
         const startY = cy - radiusY - 45;
 
@@ -263,7 +264,7 @@ export function getTimelinePatternCarpetMaterial() {
           const ry = startY - rIdx * leftSpacing;
 
           // Đường gạch chỉ kẻ ngang dưới dòng chữ
-          aCtx.strokeStyle = 'rgba(40, 20, 10, 0.32)';
+          aCtx.strokeStyle = 'rgba(253, 224, 71, 0.45)';
           aCtx.lineWidth = 2.5;
           aCtx.beginPath();
           aCtx.moveTo(cx - radiusX - 16, ry + 18 * kAspect);
@@ -282,7 +283,7 @@ export function getTimelinePatternCarpetMaterial() {
             ctx.save();
             ctx.translate(cx - 60, ry);
             ctx.scale(1.0, kAspect * 2.2);
-            ctx.fillStyle = isHeight ? 'rgb(35, 35, 35)' : '#1a0e06';
+            ctx.fillStyle = isHeight ? 'rgb(35, 35, 35)' : '#fffbeb';
             ctx.textAlign = 'right';
             ctx.textBaseline = 'middle';
             ctx.font = 'bold 46px "Times New Roman", serif';
@@ -295,7 +296,7 @@ export function getTimelinePatternCarpetMaterial() {
           const ry = startY - rIdx * leftSpacing;
 
           // Đường gạch chỉ kẻ ngang dưới dòng chữ
-          aCtx.strokeStyle = 'rgba(40, 20, 10, 0.32)';
+          aCtx.strokeStyle = 'rgba(253, 224, 71, 0.45)';
           aCtx.lineWidth = 2.5;
           aCtx.beginPath();
           aCtx.moveTo(cx + radiusX + 16, ry + 18 * kAspect);
@@ -314,7 +315,7 @@ export function getTimelinePatternCarpetMaterial() {
             ctx.save();
             ctx.translate(cx + 60, ry);
             ctx.scale(1.0, kAspect * 2.2);
-            ctx.fillStyle = isHeight ? 'rgb(35, 35, 35)' : '#1a0e06';
+            ctx.fillStyle = isHeight ? 'rgb(35, 35, 35)' : '#fffbeb';
             ctx.textAlign = 'left';
             ctx.textBaseline = 'middle';
             ctx.font = 'bold 46px "Times New Roman", serif';
@@ -369,6 +370,8 @@ export function applyTimelineCarpetToMesh(mesh) {
   }
 
   if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+  mesh.updateMatrix();
+  mesh.updateMatrixWorld(true);
   _carpetBoxScratch.setFromObject(mesh);
   _carpetBoxScratch.getSize(_carpetSizeScratch);
 
@@ -426,11 +429,8 @@ export function replaceAllMuseumCarpetsWithTimelinePattern(rootScene) {
     if (
       child.name === 'Museum_Timeline_Floor_System' ||
       child.name === 'Flanking_Red_Carpet_Platforms' ||
-      child.name === 'Focal_Bronze_Medallion_Wall' ||
       child.name === 'Lobby_West_Rotunda_Connector' ||
-      child.name === 'Lobby_East_Rotunda_Connector' ||
-      child.name === 'Lobby_Main_South_Carpet' ||
-      child.name === 'Lobby_North_Carpet'
+      child.name === 'Lobby_East_Rotunda_Connector'
     ) {
       staleSystems.push(child);
     }

@@ -4,6 +4,12 @@ import {
 } from './museumReliefSculptor.js';
 import { upgradeRoomWallArchitecture } from './museumWallArchitectureSystem.js';
 import { MuseumHitboxManager, getMuseumHitboxManager } from './museumHitboxSystem.js';
+import { createFloatingPastelLanterns } from './museumSpaceEnrichmentSystem.js';
+import {
+  createFocalBronzeMedallionWall,
+  createLobbyOctagonalWoodenTower,
+  createLobbyHorizontalLacqueredBanners
+} from './museumLobbyCorridorDecorator.js';
 
 /**
  * ============================================================================
@@ -23,11 +29,10 @@ export function removeLobbyCeilingAndOverheadClutter(container) {
     if (child === container) return;
     const name = child.name || '';
 
-    // 1. Xóa bỏ trần hoa sen và đèn lồng thả trần thấp đè lên đầu sảnh chính
+    // 1. Chỉ dọn trần hoa sen thấp bịt kín giếng trời, TUYỆT ĐỐI BẢO VỆ ĐÈN LỒNG TREO TRẦN
     if (
       name === 'Sculpted_Lotus_Coffered_Ceiling' ||
-      name === 'Ceiling_Palace_Lanterns_Instanced' ||
-      name.toLowerCase().includes('coffered_ceiling')
+      (name.toLowerCase().includes('coffered_ceiling') && !name.toLowerCase().includes('lantern'))
     ) {
       toRemove.push(child);
       return;
@@ -38,16 +43,16 @@ export function removeLobbyCeilingAndOverheadClutter(container) {
       const pos = child.position;
       const rot = child.rotation;
       if (Math.abs(rot.x - Math.PI / 2) < 0.15 && pos.y >= 5.0 && pos.y <= 16.0) {
-        if (!child.userData?.isStructural && !child.userData?.isFloor) {
+        if (!child.userData?.isStructural && !child.userData?.isFloor && !child.userData?.isHeritageDecor) {
           toRemove.push(child);
         }
       }
     }
 
-    // 3. Ẩn lớp đèn lồng cầu trôi lơ lửng không có dây treo của hàng cột
+    // 3. Mở hiển thị chao đèn lồng trên đỉnh Hàng Cột Gỗ Lim (Instanced_Corridor_Pillars_And_Lanterns)
     if (name === 'Instanced_Corridor_Pillars_And_Lanterns' && child.children) {
       if (child.children[3] && child.children[3].isInstancedMesh) {
-        child.children[3].visible = false;
+        child.children[3].visible = true;
       }
     }
   });
@@ -136,11 +141,53 @@ export async function setupGrandLobbyGiantBookCenterpiece(lobbyGroup, {
   centerpieceGroup.name = 'Grand_Lobby_Giant_Book_Centerpiece';
   centerpieceGroup.position.set(0, 0, 0);
 
-  // 2. DỰNG SÁCH MỞ ĐIÊU KHẮC 3D CÓ HIỆU ỨNG TỰ ĐỘNG LẬT (tránh probe 3 file GLB không tồn tại gây lag)
-  const bookVisualRoot = createProceduralMonumentalOpenBook();
-  bookVisualRoot.position.set(0, 1.18, 0); // Đặt trang trọng trên bục tròn 3 tầng
+  // 1. DỰNG BỆ ĐÁ TRÒN ĐÔNG SƠN & ĐÀI SEN HOÀNG KIM 16 CÁNH 3 TẦNG (BỆ TRƯNG SÁCH UY NGHI)
+  const lotusPedestal = createGrandDongSonLotusPedestal();
+  centerpieceGroup.add(lotusPedestal);
 
+  // 2. DỰNG 4 TỦ KÍNH BẢO VẬT HOÀNG GIA QUANH ĐÀI SEN (KIM VÂN KIỀU, CHIẾU DỜI ĐÔ, NGỌC TỶ, BÚT LÔNG)
+  const displayCases = createGrandLobbyDisplayCases();
+  centerpieceGroup.add(displayCases);
+
+  // 3. DỰNG SÁCH MỞ ĐIÊU KHẮC 3D CÓ HIỆU ỨNG TỰ ĐỘNG LẬT
+  const bookVisualRoot = createProceduralMonumentalOpenBook();
+  bookVisualRoot.position.set(0, 1.18, 0); // Ngự trang trọng vững chãi trên đỉnh Đài Sen
   centerpieceGroup.add(bookVisualRoot);
+
+  // 3. CỘT SÁNG VOLUMETRIC GOD RAYS VÀNG KIM PHÁT SÁNG LÊN GIẾNG TRỜI (18M)
+  const godRays = createMonumentalBookGodRays();
+  centerpieceGroup.add(godRays);
+
+  // 4. BỤI SÁNG HOÀNG KIM & KÝ TỰ PHÁT SÁNG BAY XOẮN ỐC TỪ TRANG SÁCH
+  const spiralParticles = createMonumentalBookSpiralParticles();
+  centerpieceGroup.add(spiralParticles);
+
+  // 5. ĐÈN POINTLIGHT VÀNG KIM ẤM ÁP RỌI TRANG SÁCH & SẢNH CHÍNH
+  const bookLight = new THREE.PointLight(0xfde047, 3.4, 15.0, 1.8);
+  bookLight.name = 'Monumental_Book_Illumination_Light';
+  bookLight.position.set(0, 2.5, 0);
+  bookLight.userData.ignoreRaycaster = true;
+  centerpieceGroup.add(bookLight);
+
+  // 6. VÒNG HÀO QUANG TRẬN ĐỒ HOÀNG KIM TRÊN MẶT BỤC TRÒN
+  const ringGeo = new THREE.RingGeometry(1.95, 2.25, 48);
+  ringGeo.computeVertexNormals();
+  ringGeo.computeBoundingBox();
+  ringGeo.computeBoundingSphere();
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: 0xfde047,
+    transparent: true,
+    opacity: 0.42,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  });
+  const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+  ringMesh.name = 'Monumental_Book_Pedestal_AuraRing';
+  ringMesh.rotation.x = -Math.PI / 2;
+  ringMesh.position.y = 1.19; // Nằm sát bề mặt bục tròn
+  ringMesh.userData.ignoreRaycaster = true;
+  centerpieceGroup.add(ringMesh);
 
   // 4. HITBOX VẬT CẢN & CLICK TƯƠNG TÁC ÔM SÁT CUỐN SÁCH
   if (hitboxManager) {
@@ -165,13 +212,410 @@ export async function setupGrandLobbyGiantBookCenterpiece(lobbyGroup, {
     audioDirector.attachPositionalSound('lobby', centerpieceGroup);
   }
 
-  // Kết nối hàm update để chạy hiệu ứng lật trang trong animate loop
+  // Kết nối hàm update để chạy hiệu ứng lật trang, cột sáng và bụi sáng trong animate loop
   centerpieceGroup.userData.update = (timeSec, delta) => {
     bookVisualRoot?.userData?.update?.(timeSec, delta);
+    godRays?.userData?.update?.(timeSec);
+    spiralParticles?.userData?.update?.(timeSec);
+    ringMesh.rotation.z = timeSec * 0.12;
+    bookLight.intensity = 3.2 + Math.sin(timeSec * 2.2) * 0.45;
   };
 
   lobbyGroup.add(centerpieceGroup);
   return centerpieceGroup;
+}
+
+/**
+ * DỰNG BỆ ĐÁ TRÒN ĐÔNG SƠN & ĐÀI SEN HOÀNG KIM 16 CÁNH 3 TẦNG (BỆ TRƯNG SÁCH)
+ */
+export function createGrandDongSonLotusPedestal() {
+  const pedestal = new THREE.Group();
+  pedestal.name = 'Grand_Lobby_DongSon_Lotus_Pedestal';
+
+  // Tầng 1: Đế cẩm thạch bát giác viền vàng hoàng kim (R=2.45m, H=0.35m, Y=0.175m)
+  // Thu gọn tỉ lệ chuẩn xác để không che mất Vòng Hào Quang 14 tia sáng & Ma Trận Chữ trên sàn
+  const baseGeo = new THREE.CylinderGeometry(2.35, 2.55, 0.35, 16);
+  baseGeo.computeVertexNormals();
+  baseGeo.computeBoundingBox();
+  baseGeo.computeBoundingSphere();
+  const baseMat = new THREE.MeshStandardMaterial({
+    color: 0x140f1a,
+    roughness: 0.32,
+    metalness: 0.45,
+    side: THREE.FrontSide
+  });
+  const baseMesh = new THREE.Mesh(baseGeo, baseMat);
+  baseMesh.position.y = 0.175;
+  baseMesh.userData.ignoreRaycaster = true;
+  pedestal.add(baseMesh);
+
+  // Vành nẹp vàng Tầng 1
+  const rim1Geo = new THREE.TorusGeometry(2.58, 0.045, 8, 32);
+  rim1Geo.computeVertexNormals();
+  rim1Geo.computeBoundingBox();
+  rim1Geo.computeBoundingSphere();
+  const goldMat = new THREE.MeshStandardMaterial({
+    color: 0xfacc15,
+    roughness: 0.22,
+    metalness: 0.88,
+    side: THREE.FrontSide
+  });
+  const rim1 = new THREE.Mesh(rim1Geo, goldMat);
+  rim1.rotation.x = Math.PI / 2;
+  rim1.position.y = 0.35;
+  rim1.userData.ignoreRaycaster = true;
+  pedestal.add(rim1);
+
+  // Tầng 2: Thân Trống Đồng Đông Sơn chạm khắc hoa văn (R=2.15m, H=0.45m, Y=0.575m)
+  const drumGeo = new THREE.CylinderGeometry(2.05, 2.25, 0.45, 32);
+  drumGeo.computeVertexNormals();
+  drumGeo.computeBoundingBox();
+  drumGeo.computeBoundingSphere();
+  const drumMat = new THREE.MeshStandardMaterial({
+    color: 0x8a6d3b,
+    roughness: 0.35,
+    metalness: 0.65,
+    side: THREE.FrontSide
+  });
+  const drumMesh = new THREE.Mesh(drumGeo, drumMat);
+  drumMesh.position.y = 0.575;
+  drumMesh.userData.ignoreRaycaster = true;
+  pedestal.add(drumMesh);
+
+  // Vành nẹp vàng Tầng 2
+  const rim2Geo = new THREE.TorusGeometry(2.28, 0.04, 8, 32);
+  rim2Geo.computeVertexNormals();
+  rim2Geo.computeBoundingBox();
+  rim2Geo.computeBoundingSphere();
+  const rim2 = new THREE.Mesh(rim2Geo, goldMat);
+  rim2.rotation.x = Math.PI / 2;
+  rim2.position.y = 0.80;
+  rim2.userData.ignoreRaycaster = true;
+  pedestal.add(rim2);
+
+  // Tầng 3: Đài Sen Hoàng Kim 16 cánh chạm nổi nâng đỡ cuốn sách (Y=0.80 đến Y=1.18m)
+  const lotusCoreGeo = new THREE.CylinderGeometry(1.85, 2.05, 0.38, 24);
+  lotusCoreGeo.computeVertexNormals();
+  lotusCoreGeo.computeBoundingBox();
+  lotusCoreGeo.computeBoundingSphere();
+  const lotusCoreMat = new THREE.MeshStandardMaterial({
+    color: 0xb45309,
+    roughness: 0.28,
+    metalness: 0.85,
+    emissive: 0x78350f,
+    emissiveIntensity: 0.25,
+    side: THREE.FrontSide
+  });
+  const lotusCore = new THREE.Mesh(lotusCoreGeo, lotusCoreMat);
+  lotusCore.position.y = 0.99;
+  lotusCore.userData.ignoreRaycaster = true;
+  pedestal.add(lotusCore);
+
+  // 16 Cánh sen vàng vát cong mềm mại
+  const petalCount = 16;
+  const petalR = 1.95;
+  const petalGeo = new THREE.ConeGeometry(0.32, 0.45, 4);
+  petalGeo.computeVertexNormals();
+  petalGeo.computeBoundingBox();
+  petalGeo.computeBoundingSphere();
+  const petalMat = new THREE.MeshStandardMaterial({
+    color: 0xfde047,
+    roughness: 0.22,
+    metalness: 0.85,
+    emissive: 0xd97706,
+    emissiveIntensity: 0.2,
+    side: THREE.FrontSide
+  });
+  const petalsInst = new THREE.InstancedMesh(petalGeo, petalMat, petalCount);
+  petalsInst.userData.ignoreRaycaster = true;
+  const dummy = new THREE.Object3D();
+  for (let i = 0; i < petalCount; i++) {
+    const angle = (i * Math.PI * 2) / petalCount;
+    dummy.position.set(Math.cos(angle) * petalR, 1.05, Math.sin(angle) * petalR);
+    dummy.rotation.set(0.35, -angle, 0);
+    dummy.updateMatrix();
+    petalsInst.setMatrixAt(i, dummy.matrix);
+  }
+  petalsInst.instanceMatrix.needsUpdate = true;
+  pedestal.add(petalsInst);
+
+  return pedestal;
+}
+
+/**
+ * 4 TỦ KÍNH BẢO VẬT HOÀNG GIA QUANH ĐÀI SEN TRUNG TÂM
+ */
+export function createGrandLobbyDisplayCases() {
+  const group = new THREE.Group();
+  group.name = 'Grand_Lobby_Artifact_Display_Cases';
+
+  const caseSpecs = [
+    { x: -5.8, z: 4.2, title: 'BẢN THẢO TRUYỆN KIỀU CỔ', color: 0xf472b6 },
+    { x: 5.8, z: 4.2, title: 'CHIẾU DỜI ĐÔ MỘC BẢN', color: 0x38bdf8 },
+    { x: -5.8, z: -4.2, title: 'NGỌC TỶ HOÀNG ĐẾ CHI BẢO', color: 0xfacc15 },
+    { x: 5.8, z: -4.2, title: 'BỘ BÚT LÔNG NGỌC BÍCH', color: 0x34d399 }
+  ];
+
+  const woodPedestalGeo = new THREE.BoxGeometry(1.2, 0.9, 0.85);
+  woodPedestalGeo.computeVertexNormals();
+  woodPedestalGeo.computeBoundingBox();
+  woodPedestalGeo.computeBoundingSphere();
+  const woodPedestalMat = new THREE.MeshStandardMaterial({
+    color: 0x1f1610,
+    roughness: 0.45,
+    metalness: 0.35
+  });
+
+  const glassGeo = new THREE.BoxGeometry(1.15, 0.75, 0.8);
+  glassGeo.computeVertexNormals();
+  glassGeo.computeBoundingBox();
+  glassGeo.computeBoundingSphere();
+  const glassMat = new THREE.MeshStandardMaterial({
+    color: 0xdbeafe,
+    roughness: 0.05,
+    metalness: 0.1,
+    transparent: true,
+    opacity: 0.28,
+    side: THREE.DoubleSide
+  });
+
+  const goldRimGeo = new THREE.BoxGeometry(1.22, 0.04, 0.87);
+  goldRimGeo.computeVertexNormals();
+  goldRimGeo.computeBoundingBox();
+  goldRimGeo.computeBoundingSphere();
+  const goldRimMat = new THREE.MeshStandardMaterial({
+    color: 0xfacc15,
+    roughness: 0.25,
+    metalness: 0.85
+  });
+
+  caseSpecs.forEach((spec) => {
+    const caseGroup = new THREE.Group();
+    caseGroup.position.set(spec.x, 0, spec.z);
+    caseGroup.rotation.y = Math.atan2(-spec.x, -spec.z);
+
+    const base = new THREE.Mesh(woodPedestalGeo, woodPedestalMat);
+    base.position.y = 0.45;
+    base.userData.ignoreRaycaster = true;
+    caseGroup.add(base);
+
+    const rim = new THREE.Mesh(goldRimGeo, goldRimMat);
+    rim.position.y = 0.90;
+    rim.userData.ignoreRaycaster = true;
+    caseGroup.add(rim);
+
+    const glass = new THREE.Mesh(glassGeo, glassMat);
+    glass.position.y = 1.28;
+    glass.userData.ignoreRaycaster = true;
+    caseGroup.add(glass);
+
+    const relicGeo = new THREE.BoxGeometry(0.45, 0.08, 0.32);
+    relicGeo.computeVertexNormals();
+    relicGeo.computeBoundingBox();
+    relicGeo.computeBoundingSphere();
+    const relicMat = new THREE.MeshStandardMaterial({
+      color: spec.color,
+      roughness: 0.3,
+      metalness: 0.65,
+      emissive: spec.color,
+      emissiveIntensity: 0.35
+    });
+    const relic = new THREE.Mesh(relicGeo, relicMat);
+    relic.position.y = 1.05;
+    relic.rotation.x = 0.2;
+    relic.userData.ignoreRaycaster = true;
+    caseGroup.add(relic);
+
+    const spot = new THREE.PointLight(0xfef08a, 0.85, 4.5, 1.4);
+    spot.position.set(0, 1.55, 0);
+    spot.userData.ignoreRaycaster = true;
+    caseGroup.add(spot);
+
+    group.add(caseGroup);
+  });
+
+  return group;
+}
+
+/**
+ * HỆ THỐNG ĐÈN LỒNG CUNG ĐÌNH TREO TRẦN ĐẠI SẢNH (CEILING PALACE LANTERNS)
+ * Phục hồi toàn bộ dàn Đèn Lồng / Bóng Bay Đa Sắc Hội An lơ lửng giếng trời (Y = 7m đến 16m)
+ * Tối ưu InstancedMesh / Zero dynamic allocations
+ */
+export function createLobbyCeilingHangingLanterns(parent = null) {
+  const group = new THREE.Group();
+  group.name = 'Ceiling_Palace_Hanging_Lanterns_Master';
+  group.userData.ignoreRaycaster = true;
+
+  // Nếu parent hoặc sảnh đã có cụm đèn lồng từ MuseumSpaceEnrichmentSystem, không tạo trùng lặp
+  if (parent && (parent.getObjectByName('Ceiling_HoiAn_Floating_Pastel_Lanterns') || parent.getObjectByName('Ceiling_Revolving_Lanterns_Group'))) {
+    return group;
+  }
+
+  // Khởi tạo dàn đèn lồng Hội An pastel chuẩn xác
+  const floatingLanterns = createFloatingPastelLanterns(28.0);
+  group.add(floatingLanterns);
+  return group;
+}
+
+/**
+ * ============================================================================
+ * CỘT SÁNG VOLUMETRIC GOD RAYS VÀNG KIM TỎA TỪ MẶT SÁCH LÊN GIẾNG TRỜI (18M)
+ * Chuẩn hóa WebGL 60+ FPS: Additive blending, zero-allocation trong update loop
+ * ============================================================================
+ */
+function createMonumentalBookGodRays() {
+  const godRayGroup = new THREE.Group();
+  godRayGroup.name = 'Monumental_Book_Volumetric_GodRays';
+  godRayGroup.userData.ignoreRaycaster = true;
+
+  const rayHeight = 22.0;
+  // 1. Hình nón cụt mở rộng từ mặt sách (Y = 1.3m) lên giếng trời thông tầng (Y = 23.3m)
+  const outerConeGeo = new THREE.CylinderGeometry(5.2, 2.3, rayHeight, 32, 1, true);
+  outerConeGeo.computeVertexNormals();
+  outerConeGeo.computeBoundingBox();
+  outerConeGeo.computeBoundingSphere();
+
+  const outerMat = new THREE.MeshBasicMaterial({
+    color: 0xfef08a,
+    transparent: true,
+    opacity: 0.18,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  });
+
+  const outerMesh = new THREE.Mesh(outerConeGeo, outerMat);
+  outerMesh.position.y = 1.3 + rayHeight * 0.5;
+  outerMesh.userData.ignoreRaycaster = true;
+  godRayGroup.add(outerMesh);
+
+  // 2. Lõi sáng bên trong rực rỡ vàng hổ phách
+  const innerConeGeo = new THREE.CylinderGeometry(2.6, 1.15, rayHeight, 24, 1, true);
+  innerConeGeo.computeVertexNormals();
+  innerConeGeo.computeBoundingBox();
+  innerConeGeo.computeBoundingSphere();
+
+  const innerMat = new THREE.MeshBasicMaterial({
+    color: 0xfacc15,
+    transparent: true,
+    opacity: 0.28,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  });
+
+  const innerMesh = new THREE.Mesh(innerConeGeo, innerMat);
+  innerMesh.position.y = outerMesh.position.y;
+  innerMesh.userData.ignoreRaycaster = true;
+  godRayGroup.add(innerMesh);
+
+  godRayGroup.userData.update = (timeSec) => {
+    outerMesh.rotation.y = timeSec * 0.05;
+    innerMesh.rotation.y = -timeSec * 0.08;
+    outerMat.opacity = 0.16 + Math.sin(timeSec * 1.5) * 0.04;
+    innerMat.opacity = 0.26 + Math.cos(timeSec * 1.9) * 0.05;
+  };
+
+  return godRayGroup;
+}
+
+/**
+ * ============================================================================
+ * HỆ THỐNG BỤI SÁNG HOÀNG KIM & KÝ TỰ DI SẢN BAY XOẮN ỐC TỪ TRANG SÁCH
+ * Zero-allocation trong animate update loop, texture Canvas gradient mềm mại
+ * ============================================================================
+ */
+function createMonumentalBookSpiralParticles() {
+  const particleCount = 380;
+  const geometry = new THREE.BufferGeometry();
+  const positions = new Float32Array(particleCount * 3);
+  const colors = new Float32Array(particleCount * 3);
+  const speeds = new Float32Array(particleCount);
+  const initialAngles = new Float32Array(particleCount);
+  const radii = new Float32Array(particleCount);
+
+  const palette = [
+    new THREE.Color(0xffffff),
+    new THREE.Color(0xfef08a),
+    new THREE.Color(0xfbbf24),
+    new THREE.Color(0xf59e0b)
+  ];
+
+  for (let i = 0; i < particleCount; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const r = 0.7 + Math.random() * 2.2;
+    const y = 1.3 + Math.random() * 21.0;
+
+    positions[i * 3 + 0] = Math.cos(angle) * r;
+    positions[i * 3 + 1] = y;
+    positions[i * 3 + 2] = Math.sin(angle) * r;
+
+    const col = palette[i % palette.length];
+    colors[i * 3 + 0] = col.r;
+    colors[i * 3 + 1] = col.g;
+    colors[i * 3 + 2] = col.b;
+
+    speeds[i] = 0.8 + Math.random() * 1.3;
+    initialAngles[i] = angle;
+    radii[i] = r;
+  }
+
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+
+  // Canvas Texture hạt ánh sáng vàng mềm mại
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  const rad = ctx.createRadialGradient(32, 32, 2, 32, 32, 32);
+  rad.addColorStop(0.0, 'rgba(255, 255, 255, 1.0)');
+  rad.addColorStop(0.35, 'rgba(254, 240, 138, 0.85)');
+  rad.addColorStop(0.7, 'rgba(245, 158, 11, 0.35)');
+  rad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
+  ctx.fillStyle = rad;
+  ctx.fillRect(0, 0, 64, 64);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
+
+  const mat = new THREE.PointsMaterial({
+    size: 0.42,
+    map: tex,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.85,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  });
+
+  const pointsMesh = new THREE.Points(geometry, mat);
+  pointsMesh.name = 'Monumental_Book_Spiral_Particles';
+  pointsMesh.userData.ignoreRaycaster = true;
+
+  const posAttr = geometry.attributes.position;
+  pointsMesh.userData.update = (timeSec) => {
+    for (let i = 0; i < particleCount; i++) {
+      let curY = positions[i * 3 + 1];
+      curY += speeds[i] * 0.042;
+      if (curY > 22.0) {
+        curY = 1.3;
+      }
+      positions[i * 3 + 1] = curY;
+
+      const currentAngle = initialAngles[i] + timeSec * (0.35 * speeds[i]);
+      const currentR = radii[i] + ((curY - 1.3) / 21.0) * 2.2;
+      positions[i * 3 + 0] = Math.cos(currentAngle) * currentR;
+      positions[i * 3 + 2] = Math.sin(currentAngle) * currentR;
+    }
+    posAttr.needsUpdate = true;
+  };
+
+  return pointsMesh;
 }
 
 /**
@@ -298,8 +742,10 @@ export function createProceduralMonumentalOpenBook() {
   );
   const leftPageMat = new THREE.MeshStandardMaterial({
     map: leftPageTex,
-    roughness: 0.55,
-    metalness: 0.08
+    roughness: 0.45,
+    metalness: 0.10,
+    emissive: new THREE.Color(0xb45309),
+    emissiveIntensity: 0.35
   });
 
   const rightPageTex = createHeritagePageCanvasTexture(
@@ -317,8 +763,10 @@ export function createProceduralMonumentalOpenBook() {
   );
   const rightPageMat = new THREE.MeshStandardMaterial({
     map: rightPageTex,
-    roughness: 0.55,
-    metalness: 0.08
+    roughness: 0.45,
+    metalness: 0.10,
+    emissive: new THREE.Color(0xb45309),
+    emissiveIntensity: 0.35
   });
 
   // Chồng trang bên Trái
@@ -421,11 +869,13 @@ export function createProceduralMonumentalOpenBook() {
   );
   const flipFrontMat = new THREE.MeshStandardMaterial({
     map: flipFrontTex,
-    roughness: 0.55,
-    metalness: 0.08,
+    roughness: 0.45,
+    metalness: 0.10,
     side: THREE.FrontSide,
     transparent: true,
-    opacity: 1.0
+    opacity: 1.0,
+    emissive: new THREE.Color(0xb45309),
+    emissiveIntensity: 0.35
   });
   attachPageCurlShader(flipFrontMat);
   const flipFrontMesh = new THREE.Mesh(flipGeo, flipFrontMat);
@@ -451,11 +901,13 @@ export function createProceduralMonumentalOpenBook() {
   );
   const flipBackMat = new THREE.MeshStandardMaterial({
     map: flipBackTex,
-    roughness: 0.55,
-    metalness: 0.08,
+    roughness: 0.45,
+    metalness: 0.10,
     side: THREE.BackSide,
     transparent: true,
-    opacity: 1.0
+    opacity: 1.0,
+    emissive: new THREE.Color(0xb45309),
+    emissiveIntensity: 0.35
   });
   attachPageCurlShader(flipBackMat);
   const flipBackMesh = new THREE.Mesh(flipGeo, flipBackMat);
@@ -467,6 +919,13 @@ export function createProceduralMonumentalOpenBook() {
 
   // VÒNG LẶP HOẠT HỌA TỰ ĐỘNG LẬT TRANG (CHỈ CẬP NHẬT UNIFORMS)
   bookGroup.userData.update = (timeSec) => {
+    // Nhịp thở phát sáng hoàng kim của các trang sách di sản
+    const pageEmissivePulse = 0.30 + Math.sin(timeSec * 2.2) * 0.08;
+    leftPageMat.emissiveIntensity = pageEmissivePulse;
+    rightPageMat.emissiveIntensity = pageEmissivePulse;
+    flipFrontMat.emissiveIntensity = pageEmissivePulse;
+    flipBackMat.emissiveIntensity = pageEmissivePulse;
+
     const cyclePeriod = 6.0;
     const t = timeSec % cyclePeriod;
 
@@ -733,6 +1192,33 @@ export async function applyAll16SkillsToMuseum({
       roomDepth: 32,
       wallHeight: 8.4
     });
+
+    // 2.2. Phục hồi và bổ sung hệ thống đèn lồng cung đình treo trần hoàng cung
+    const hangingLanterns = createLobbyCeilingHangingLanterns(lobbyGroup);
+    if (hangingLanterns && hangingLanterns.children.length > 0) {
+      lobbyGroup.add(hangingLanterns);
+    }
+
+    // 2.3. Đảm bảo Chiêng Đồng và 2 Hoành Phi hiển thị trang nghiêm; gỡ bỏ Tháp Lầu Bát Giác theo yêu cầu
+    if (!lobbyGroup.getObjectByName('Focal_Bronze_Medallion_Wall')) {
+      const focalWall = createFocalBronzeMedallionWall();
+      lobbyGroup.add(focalWall);
+    }
+    const existingTower = lobbyGroup.getObjectByName('Lobby_Octagonal_Wooden_Tower_Pavilion');
+    if (existingTower) {
+      existingTower.traverse((c) => {
+        if (c.isMesh) {
+          c.geometry?.dispose?.();
+          if (Array.isArray(c.material)) c.material.forEach((m) => m?.dispose?.());
+          else c.material?.dispose?.();
+        }
+      });
+      if (existingTower.parent) existingTower.parent.remove(existingTower);
+    }
+    if (!lobbyGroup.getObjectByName('Lobby_Flanking_Horizontal_Lacquered_Banners')) {
+      const horizontalBanners = createLobbyHorizontalLacqueredBanners();
+      lobbyGroup.add(horizontalBanners);
+    }
   }
 
   // 3. ĐIÊU KHẮC TƯỜNG CHO CÁC PHÒNG TRƯNG BÀY (tránh gắn trùng cổng vòm đã có trong TotalOverhaulEngine)

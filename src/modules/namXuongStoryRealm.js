@@ -879,6 +879,7 @@ export function createNamXuongStoryRealm(options = {}) {
   let _tourIdx = 0;
   let _tourPhaseStart = 0;
   const _tourFlightStartPos = new THREE.Vector3();
+  const _tourFlightEndPos = new THREE.Vector3();
   const _tourFlightStartQuat = new THREE.Quaternion();
   const _tourFlightEndQuat = new THREE.Quaternion();
 
@@ -1612,6 +1613,7 @@ export function createNamXuongStoryRealm(options = {}) {
     const wispMat = trackMat(createPhosphorescentPointsMaterial());
     const wispParticles = new THREE.Points(pGeo, wispMat);
     wispParticles.userData.ignoreRaycaster = true;
+    wispParticles.raycast = () => {};
     root.add(wispParticles);
 
     // ẢO ẢNH ĐOÀN KIỆU VÕNG, CỜ QUẠT & DÁNG HÌNH VŨ NƯƠNG THỦY CUNG
@@ -2258,6 +2260,7 @@ export function createNamXuongStoryRealm(options = {}) {
     const targetWLook = interiorGroup ? interiorGroup.localToWorld(stop.lookAt.clone()) : stop.lookAt;
 
     _tourFlightStartPos.copy(cam.position);
+    _tourFlightEndPos.copy(targetWPos);
     _tourFlightStartQuat.copy(cam.quaternion);
 
     const tmp = cam.clone();
@@ -2280,6 +2283,7 @@ export function createNamXuongStoryRealm(options = {}) {
 
     const stop = REALM_TOUR_STOPS[idx];
     _tourFlightStartPos.copy(cam.position);
+    _tourFlightEndPos.copy(stop.camPos);
     _tourFlightStartQuat.copy(cam.quaternion);
 
     const tmp = cam.clone();
@@ -2329,9 +2333,7 @@ export function createNamXuongStoryRealm(options = {}) {
     if (_tourPhase === 'room_flying') {
       const t = Math.min(1.0, (nowMs - _tourPhaseStart) / 2600);
       const e = easeInOutCubic(t);
-      const stop = ROOM_TOUR_STOPS[_tourIdx];
-      const targetWPos = interiorGroup ? interiorGroup.localToWorld(stop.camPos.clone()) : stop.camPos;
-      cam.position.lerpVectors(_tourFlightStartPos, targetWPos, e);
+      cam.position.lerpVectors(_tourFlightStartPos, _tourFlightEndPos, e);
       cam.quaternion.slerpQuaternions(_tourFlightStartQuat, _tourFlightEndQuat, e);
       if (t >= 1.0) {
         _tourPhase = 'room_dwelling';
@@ -2349,8 +2351,7 @@ export function createNamXuongStoryRealm(options = {}) {
     } else if (_tourPhase === 'realm_flying' && _isInsideRealm) {
       const t = Math.min(1.0, (nowMs - _tourPhaseStart) / 2800);
       const e = easeInOutCubic(t);
-      const stop = REALM_TOUR_STOPS[_tourIdx];
-      cam.position.lerpVectors(_tourFlightStartPos, stop.camPos, e);
+      cam.position.lerpVectors(_tourFlightStartPos, _tourFlightEndPos, e);
       cam.quaternion.slerpQuaternions(_tourFlightStartQuat, _tourFlightEndQuat, e);
       if (t >= 1.0) {
         _tourPhase = 'realm_dwelling';

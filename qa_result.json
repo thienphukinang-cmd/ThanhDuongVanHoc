@@ -161,9 +161,9 @@
     "issues": []
   },
   "fpsMeasurement": {
-    "avgFPS": 26.5,
-    "minFPS": 27.6,
+    "avgFPS": 17.4,
+    "minFPS": 8.6,
     "totalFrames": 119,
-    "totalDurationMs": 4497.7
+    "totalDurationMs": 6834.5
   }
 }

@@ -192,6 +192,45 @@ function createBarrenWinterTreeGeo() {
   return prepGeo(merged || trunkGeo);
 }
 
+/**
+ * Tạo vật liệu SkyDome 360 độ cõi mở Vợ Nhặt: Chiều đông đói kém chuyển giao Bình Minh Cách Mạng
+ */
+function createVoNhatSkyDomeMaterial() {
+  return new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    depthWrite: false,
+    fog: false,
+    uniforms: {
+      uZenith: { value: new THREE.Color(0x130d07) },
+      uHorizon: { value: new THREE.Color(0x2d1a0e) },
+      uDawnGlow: { value: new THREE.Color(0xff5722) }
+    },
+    vertexShader: /* glsl */ `
+      varying vec3 vWorldPos;
+      void main() {
+        vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+        gl_Position = projectionMatrix * viewMatrix * vec4(vWorldPos, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uZenith;
+      uniform vec3 uHorizon;
+      uniform vec3 uDawnGlow;
+      varying vec3 vWorldPos;
+
+      void main() {
+        vec3 dir = normalize(vWorldPos);
+        float h = clamp(dir.y, 0.0, 1.0);
+        vec3 col = mix(uHorizon, uZenith, smoothstep(0.0, 0.55, h));
+        // Ánh bình minh cách mạng rực rỡ phía sau đê (Z < 0)
+        float dawn = clamp(-dir.z, 0.0, 1.0) * smoothstep(0.0, 0.25, h) * smoothstep(0.55, 0.05, h);
+        col += uDawnGlow * (dawn * 0.42);
+        gl_FragColor = vec4(col, 1.0);
+      }
+    `
+  });
+}
+
 export class VoNhatWorld {
   constructor(scene, camera, renderer) {
     this.scene = scene;
@@ -212,6 +251,17 @@ export class VoNhatWorld {
     // 1. Bầu trời & Sương mù khí quyển (Chiều đông đói kém chuyển giao bình minh cách mạng)
     this.scene.background = new THREE.Color(0x181008);
     this.scene.fog = new THREE.FogExp2(0x23170e, 0.0022);
+
+    // SKYDOME 360° CÕI MỞ VỢ NHẶT (R = 260m)
+    const skyGeo = prepGeo(new THREE.SphereGeometry(260, 32, 20));
+    const skyMat = createVoNhatSkyDomeMaterial();
+    const skyDome = new THREE.Mesh(skyGeo, skyMat);
+    skyDome.name = 'VoNhat_Realm_SkyDome360';
+    skyDome.userData.ignoreRaycaster = true;
+    skyDome.castShadow = false;
+    skyDome.receiveShadow = false;
+    this.group.add(skyDome);
+    this.disposables.push(skyGeo, skyMat, skyDome);
 
     // 2. Con đường đất Xóm Ngụ Cư uốn lượn lên triền đê
     this.buildTerrainAndPath();
@@ -310,7 +360,8 @@ export class VoNhatWorld {
     }
     instancedTrees.instanceMatrix.needsUpdate = true;
     instancedTrees.userData.ignoreRaycaster = true;
-    instancedTrees.castShadow = true;
+    instancedTrees.castShadow = false;
+    instancedTrees.receiveShadow = false;
     this.group.add(instancedTrees);
     this.disposables.push(instancedTrees);
   }
@@ -363,7 +414,8 @@ export class VoNhatWorld {
     const poleMat = new THREE.MeshStandardMaterial({ color: 0x7c6e4e, roughness: 0.72 });
     const pole = new THREE.Mesh(poleGeo, poleMat);
     pole.position.y = 4.25;
-    pole.castShadow = true;
+    pole.castShadow = false;
+    pole.receiveShadow = false;
     pole.userData.ignoreRaycaster = true;
     flagGroup.add(pole);
 
@@ -382,7 +434,8 @@ export class VoNhatWorld {
     const flagMesh = new THREE.Mesh(flagGeo, flagMat);
     flagMesh.name = 'VN_Revolution_Red_Flag_Mesh';
     flagMesh.position.set(1.90, 6.4, 0);
-    flagMesh.castShadow = true;
+    flagMesh.castShadow = false;
+    flagMesh.receiveShadow = false;
     flagMesh.userData.ignoreRaycaster = true;
     flagGroup.add(flagMesh);
 
@@ -506,10 +559,10 @@ export class VoNhatWorld {
     hemiLight.userData.ignoreRaycaster = true;
     this.group.add(hemiLight);
 
-    // 2. DirectionalLight bình minh cách mạng từ chân trời phía sau đê
+    // 2. DirectionalLight bình minh cách mạng từ chân trời phía sau đê (castShadow = false tối ưu 60+ FPS)
     const dawnLight = new THREE.DirectionalLight(0xff6a3d, 2.2);
     dawnLight.position.set(15, 22, -105);
-    dawnLight.castShadow = true;
+    dawnLight.castShadow = false;
     dawnLight.userData.ignoreRaycaster = true;
     this.group.add(dawnLight);
 

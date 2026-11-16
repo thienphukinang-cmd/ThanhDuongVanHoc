@@ -59,6 +59,33 @@ function getLobbyTex(key, w, h, drawFn, repeatX = 1, repeatY = 1) {
 }
 
 /**
+ * Tự động kiểm tra, chuẩn hóa Geometry & Quét sạch NaN/Infinity (Quy chuẩn AGENTS.md / GEMINI.md)
+ */
+export function prepGeo(geo) {
+  if (!geo) return geo;
+  geo.computeVertexNormals();
+  geo.computeBoundingBox();
+  geo.computeBoundingSphere();
+  const pos = geo.getAttribute('position');
+  if (pos) {
+    for (let i = 0; i < pos.count * pos.itemSize; i++) {
+      if (Number.isNaN(pos.array[i]) || !Number.isFinite(pos.array[i])) {
+        pos.array[i] = 0;
+      }
+    }
+  }
+  const norm = geo.getAttribute('normal');
+  if (norm) {
+    for (let i = 0; i < norm.count * norm.itemSize; i++) {
+      if (Number.isNaN(norm.array[i]) || !Number.isFinite(norm.array[i])) {
+        norm.array[i] = 0;
+      }
+    }
+  }
+  return geo;
+}
+
+/**
  * Chuẩn hóa mô hình .GLB theo chiều cao mục tiêu (fitAxis: 'y') và gắn cờ bỏ qua Raycaster
  */
 export function normalizeLobbyGlb(rootScene, targetHeight = 2.0) {
@@ -185,136 +212,193 @@ export function createImperialMarbleFloorTexture() {
 }
 
 /**
- * 2. ĐẠI MANDALA TRỐNG ĐỒNG ĐÔNG SƠN 14 CÁNH PHÁT SÁNG Ở TÂM SẢNH
+ * 2. ĐẠI MANDALA TRỐNG ĐỒNG ĐÔNG SƠN 14 CÁNH & MA TRẬN CHỮ CỔ PHÁT SÁNG Ở TÂM SẢNH (0, 0.035, 0)
+ * Khôi phục chính xác theo ảnh mẫu 1 của người dùng:
+ * - 14 tia sáng mặt trời Đông Sơn phát sáng vàng kim rực rỡ từ chân bệ sách
+ * - Vòng ma trận ký tự cổ tri thức di sản & hạt ngọc hào quang xếp tròn đều đặn
+ * - Vành răng cưa Đông Sơn và 18 chim Lạc bay ngược chiều kim đồng hồ
  */
 export function createDongSonCenterMandalaTexture() {
-  return getLobbyTex('lobby_dongson_mandala_v3', 512, 512, (ctx) => {
-    ctx.save();
-    ctx.scale(0.5, 0.5);
-    const w = 1024;
-    const h = 1024;
+  return getLobbyTex('lobby_dongson_mandala_v5_ancient_matrix', 1024, 1024, (ctx, w, h) => {
     const cx = w / 2;
     const cy = h / 2;
+    const R = w * 0.49; // Bán kính tối đa 501px
 
-    // Hào quang vàng kim lan tỏa từ tâm ra viền
-    const glow = ctx.createRadialGradient(cx, cy, 10, cx, cy, w * 0.49);
-    glow.addColorStop(0.0, 'rgba(254, 240, 138, 0.75)');
-    glow.addColorStop(0.35, 'rgba(250, 204, 21, 0.45)');
-    glow.addColorStop(0.7, 'rgba(180, 83, 9, 0.25)');
-    glow.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
+    // 1. Hào quang vàng kim lan tỏa từ tâm ra viền (Core to boundary glow)
+    const glow = ctx.createRadialGradient(cx, cy, 15, cx, cy, R);
+    glow.addColorStop(0.00, 'rgba(254, 240, 138, 0.95)'); // Sáng rực rỡ tâm bệ sách
+    glow.addColorStop(0.35, 'rgba(250, 204, 21, 0.65)');  // Vàng hổ phách ấm
+    glow.addColorStop(0.65, 'rgba(217, 119, 6, 0.38)');   // Đồng thau hoàng gia
+    glow.addColorStop(0.88, 'rgba(180, 83, 9, 0.18)');
+    glow.addColorStop(1.00, 'rgba(0, 0, 0, 0.0)');
     ctx.fillStyle = glow;
     ctx.beginPath();
-    ctx.arc(cx, cy, w * 0.49, 0, Math.PI * 2);
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
     ctx.fill();
 
-    // 5 Vòng đồng tâm Trống Đồng Ngọc Lũ / Đông Sơn
-    const rings = [
-      { r: 0.15, lw: 4, col: '#fef08a' },
-      { r: 0.23, lw: 5, col: '#facc15' },
-      { r: 0.32, lw: 6, col: '#eab308' },
-      { r: 0.41, lw: 7, col: '#ca8a04' },
-      { r: 0.47, lw: 10, col: '#fef08a' }
-    ];
-    rings.forEach(({ r, lw, col }) => {
-      ctx.strokeStyle = col;
-      ctx.lineWidth = lw;
+    // 2. 14 TIA SÁNG MẶT TRỜI ĐÔNG SƠN PHÁT SÁNG RỰC RỠ (14 RADIANT SUNBURST RAYS)
+    const rayCount = 14;
+    const rBase = R * 0.36; // Bắt đầu ló ra từ chân bệ sách
+    const rTip = R * 0.58;  // Đâm nhọn vươn xa
+    const halfWidthAngle = (Math.PI / rayCount) * 0.55;
+
+    for (let i = 0; i < rayCount; i++) {
+      const angle = (i * 2 * Math.PI) / rayCount - Math.PI / 2;
+      const tipX = cx + Math.cos(angle) * rTip;
+      const tipY = cy + Math.sin(angle) * rTip;
+      const leftX = cx + Math.cos(angle - halfWidthAngle) * rBase;
+      const leftY = cy + Math.sin(angle - halfWidthAngle) * rBase;
+      const rightX = cx + Math.cos(angle + halfWidthAngle) * rBase;
+      const rightY = cy + Math.sin(angle + halfWidthAngle) * rBase;
+
+      // Tia sáng chính dạng tam giác nhọn phát sáng
+      const rayGrad = ctx.createLinearGradient(
+        cx + Math.cos(angle) * rBase, cy + Math.sin(angle) * rBase,
+        tipX, tipY
+      );
+      rayGrad.addColorStop(0.0, '#fef08a');
+      rayGrad.addColorStop(0.65, '#facc15');
+      rayGrad.addColorStop(1.0, '#ffffff');
+
+      ctx.fillStyle = rayGrad;
       ctx.beginPath();
-      ctx.arc(cx, cy, w * r, 0, Math.PI * 2);
+      ctx.moveTo(leftX, leftY);
+      ctx.lineTo(tipX, tipY);
+      ctx.lineTo(rightX, rightY);
+      ctx.closePath();
+      ctx.fill();
+
+      // Sống lưng tia sáng phát quang trắng rực
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(angle) * (rBase * 1.08), cy + Math.sin(angle) * (rBase * 1.08));
+      ctx.lineTo(tipX, tipY);
       ctx.stroke();
+
+      // Họa tiết lông công / ngọn lửa phụ xen kẽ giữa 2 tia chính
+      const midAngle = angle + Math.PI / rayCount;
+      const midR = R * 0.46;
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.arc(cx + Math.cos(midAngle) * midR, cy + Math.sin(midAngle) * midR, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#fef08a';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(midAngle) * (rBase * 1.05), cy + Math.sin(midAngle) * (rBase * 1.05));
+      ctx.lineTo(cx + Math.cos(midAngle) * (midR + 8), cy + Math.sin(midAngle) * (midR + 8));
+      ctx.stroke();
+    }
+
+    // 3. VÒNG ĐỒNG TÂM PHÁT SÁNG CHÍNH (LUMINOUS CONCENTRIC TRACK)
+    ctx.strokeStyle = '#fef08a';
+    ctx.lineWidth = 7;
+    ctx.shadowColor = '#facc15';
+    ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R * 0.61, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.shadowBlur = 0; // reset
+
+    // 4. VÀNH MA TRẬN KÝ TỰ CỔ & HỌA TIẾT TRI THỨC DI SẢN (ANCIENT SCRIPT MATRIX BAND)
+    const rBandInner = R * 0.66;
+    const rBandOuter = R * 0.81;
+
+    // Hai vòng biên vàng kim
+    ctx.strokeStyle = '#facc15';
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, rBandInner, 0, Math.PI * 2);
+    ctx.arc(cx, cy, rBandOuter, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 28 Ký tự cổ / Biểu tượng Đông Sơn & Chữ Nôm cách điệu xếp vòng tròn
+    const ancientGlyphs = [
+      '𐍈', '⊛', '⟡', '꩜', '≋', '🜂', '🜄', '🜁', '🜃', '⊕',
+      '⊙', '⧇', '𐌏', '𐌙', '𐌁', '𐌎', '𐌐', '𐌀', '𐌄', '𐌉',
+      '𐌍', '𐌔', '𐌖', '𐌕', '𐌂', '𐌇', '𐌊', '𐌋'
+    ];
+    const glyphR = (rBandInner + rBandOuter) * 0.5;
+    ctx.fillStyle = '#fef08a';
+    ctx.font = 'bold 24px "Times New Roman", serif, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    ancientGlyphs.forEach((glyph, idx) => {
+      const gAngle = (idx * 2 * Math.PI) / ancientGlyphs.length;
+      const gx = cx + Math.cos(gAngle) * glyphR;
+      const gy = cy + Math.sin(gAngle) * glyphR;
+
+      ctx.save();
+      ctx.translate(gx, gy);
+      ctx.rotate(gAngle + Math.PI / 2);
+      ctx.shadowColor = '#f59e0b';
+      ctx.shadowBlur = 10;
+      ctx.fillText(glyph, 0, 0);
+      ctx.restore();
     });
 
-    // Ngôi sao Mặt Trời 14 cánh ở trung tâm đài
-    const points = 14;
-    const outerR = w * 0.145;
-    const innerR = w * 0.06;
-    ctx.fillStyle = '#fef08a';
-    ctx.beginPath();
-    for (let i = 0; i < points * 2; i++) {
-      const r = i % 2 === 0 ? outerR : innerR;
-      const angle = (i * Math.PI) / points - Math.PI / 2;
-      const x = cx + Math.cos(angle) * r;
-      const y = cy + Math.sin(angle) * r;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.closePath();
-    ctx.fill();
+    // 56 Hạt ngọc hào quang vàng sáng lấp lánh (Golden pearl dots)
+    const dotCount = 56;
+    const rDot = rBandOuter - 6;
+    for (let d = 0; d < dotCount; d++) {
+      const dAngle = (d * 2 * Math.PI) / dotCount;
+      const dx = cx + Math.cos(dAngle) * rDot;
+      const dy = cy + Math.sin(dAngle) * rDot;
 
-    // Họa tiết 14 cánh lông công xen kẽ giữa các cánh sao
-    ctx.fillStyle = '#f59e0b';
-    for (let i = 0; i < points; i++) {
-      const angle = (i * 2 + 1) * (Math.PI / points) - Math.PI / 2;
-      const x = cx + Math.cos(angle) * (innerR * 1.55);
-      const y = cy + Math.sin(angle) * (innerR * 1.55);
+      ctx.fillStyle = d % 2 === 0 ? '#ffffff' : '#fef08a';
       ctx.beginPath();
-      ctx.arc(x, y, 6, 0, Math.PI * 2);
+      ctx.arc(dx, dy, d % 2 === 0 ? 3.5 : 2.5, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // Vành 1: Họa tiết răng cưa / hình tam giác hồi văn
+    // 5. VÀNH RĂNG CƯA ĐÔNG SƠN NGOÀI CÙNG (SAWTOOTH SUNBURST RIM)
+    const teethCount = 70;
+    const rTeethIn = R * 0.83;
+    const rTeethOut = R * 0.89;
     ctx.fillStyle = '#facc15';
-    const triangleCount = 42;
-    for (let i = 0; i < triangleCount; i++) {
-      const a1 = (i / triangleCount) * Math.PI * 2;
-      const a2 = ((i + 0.5) / triangleCount) * Math.PI * 2;
-      const a3 = ((i + 1) / triangleCount) * Math.PI * 2;
+    for (let t = 0; t < teethCount; t++) {
+      const a1 = (t / teethCount) * Math.PI * 2;
+      const a2 = ((t + 0.5) / teethCount) * Math.PI * 2;
+      const a3 = ((t + 1) / teethCount) * Math.PI * 2;
 
       ctx.beginPath();
-      ctx.moveTo(cx + Math.cos(a1) * (w * 0.16), cy + Math.sin(a1) * (w * 0.16));
-      ctx.lineTo(cx + Math.cos(a2) * (w * 0.22), cy + Math.sin(a2) * (w * 0.22));
-      ctx.lineTo(cx + Math.cos(a3) * (w * 0.16), cy + Math.sin(a3) * (w * 0.16));
+      ctx.moveTo(cx + Math.cos(a1) * rTeethIn, cy + Math.sin(a1) * rTeethIn);
+      ctx.lineTo(cx + Math.cos(a2) * rTeethOut, cy + Math.sin(a2) * rTeethOut);
+      ctx.lineTo(cx + Math.cos(a3) * rTeethIn, cy + Math.sin(a3) * rTeethIn);
       ctx.closePath();
       ctx.fill();
     }
 
-    // Vành 2: 18 con Chim Lạc sải cánh bay ngược chiều kim đồng hồ quanh mặt trời
-    ctx.fillStyle = '#fef08a';
+    // Vòng chỉ ngoài cùng
     ctx.strokeStyle = '#fef08a';
-    ctx.lineWidth = 3;
-    const birds = 18;
-    for (let b = 0; b < birds; b++) {
-      const ba = (b / birds) * Math.PI * 2;
-      const bx = cx + Math.cos(ba) * (w * 0.275);
-      const by = cy + Math.sin(ba) * (w * 0.275);
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R * 0.90, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 6. 18 CON CHIM LẠC BAY NGƯỢC CHIỀU KIM ĐỒNG HỒ Ở VIỀN NGOÀI
+    const birdCount = 18;
+    const rBird = R * 0.94;
+    ctx.fillStyle = '#fde047';
+    for (let b = 0; b < birdCount; b++) {
+      const bAngle = (b * 2 * Math.PI) / birdCount;
+      const bx = cx + Math.cos(bAngle) * rBird;
+      const by = cy + Math.sin(bAngle) * rBird;
 
       ctx.save();
       ctx.translate(bx, by);
-      ctx.rotate(ba + Math.PI / 2);
-
-      // Thân và mỏ chim Lạc dài
+      ctx.rotate(bAngle + Math.PI / 2);
       ctx.beginPath();
-      ctx.moveTo(0, -18);
-      ctx.lineTo(12, 10);
-      ctx.lineTo(0, 6);
-      ctx.lineTo(-12, 10);
+      ctx.moveTo(0, -9);
+      ctx.lineTo(6, 6);
+      ctx.lineTo(0, 3);
+      ctx.lineTo(-6, 6);
       ctx.closePath();
       ctx.fill();
-
-      // Đuôi chim xòe rộng
-      ctx.beginPath();
-      ctx.moveTo(0, 6);
-      ctx.lineTo(-6, 20);
-      ctx.lineTo(6, 20);
-      ctx.closePath();
-      ctx.fill();
-
       ctx.restore();
     }
-
-    // Vành 3: Hồi văn chữ S xoắn kép Đông Sơn lồng nhau
-    ctx.strokeStyle = '#fde047';
-    ctx.lineWidth = 3.5;
-    const sCount = 36;
-    for (let s = 0; s < sCount; s++) {
-      const sa = (s / sCount) * Math.PI * 2;
-      const sx = cx + Math.cos(sa) * (w * 0.365);
-      const sy = cy + Math.sin(sa) * (w * 0.365);
-
-      ctx.beginPath();
-      ctx.arc(sx, sy, 8, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    ctx.restore();
   });
 }
 
@@ -506,7 +590,7 @@ export function createInstancedCorridorPillarsAndLanterns(pillarPositions = [], 
   if (count === 0) return group;
 
   // Thân cột sơn mài đỏ son hoàng cung
-  const shaftGeo = new THREE.CylinderGeometry(0.44, 0.48, pillarHeight, 10);
+  const shaftGeo = prepGeo(new THREE.CylinderGeometry(0.44, 0.48, pillarHeight, 10));
   const shaftMat = new THREE.MeshStandardMaterial({
     color: 0x7f1d1d,
     roughness: 0.32,
@@ -515,7 +599,7 @@ export function createInstancedCorridorPillarsAndLanterns(pillarPositions = [], 
   });
 
   // Chân đế & Đỉnh cột đấu củng thếp vàng
-  const capGeo = new THREE.CylinderGeometry(0.66, 0.66, 0.48, 10);
+  const capGeo = prepGeo(new THREE.CylinderGeometry(0.66, 0.66, 0.48, 10));
   const capMat = new THREE.MeshStandardMaterial({
     color: 0xfacc15,
     roughness: 0.22,
@@ -525,13 +609,16 @@ export function createInstancedCorridorPillarsAndLanterns(pillarPositions = [], 
     side: THREE.FrontSide
   });
 
-  // Đèn lồng hoàng cung phát sáng treo ở độ cao 6.2m
-  const lanternGeo = new THREE.SphereGeometry(0.35, 8, 6);
-  const lanternMat = new THREE.MeshBasicMaterial({
+  // Chao đèn lồng hoàng cung phát sáng trên đỉnh hàng cột
+  const lanternGeo = prepGeo(new THREE.CylinderGeometry(0.38, 0.48, 0.50, 8));
+  const lanternMat = new THREE.MeshStandardMaterial({
     color: 0xfef08a,
+    emissive: 0xf59e0b,
+    emissiveIntensity: 0.85,
+    roughness: 0.32,
+    metalness: 0.20,
     transparent: true,
-    opacity: 0.92,
-    blending: THREE.AdditiveBlending,
+    opacity: 0.95,
     side: THREE.FrontSide
   });
 
@@ -539,6 +626,7 @@ export function createInstancedCorridorPillarsAndLanterns(pillarPositions = [], 
   const baseInst = new THREE.InstancedMesh(capGeo, capMat, count);
   const topInst = new THREE.InstancedMesh(capGeo, capMat, count);
   const lanternInst = new THREE.InstancedMesh(lanternGeo, lanternMat, count);
+  lanternInst.visible = true;
 
   const instBoundingSphere = new THREE.Sphere(new THREE.Vector3(0, pillarHeight * 0.5, 0), 30);
   [shaftInst, baseInst, topInst, lanternInst].forEach((inst) => {
@@ -569,8 +657,8 @@ export function createInstancedCorridorPillarsAndLanterns(pillarPositions = [], 
     dummy.updateMatrix();
     topInst.setMatrixAt(i, dummy.matrix);
 
-    // Đèn lồng phát sáng
-    dummy.position.set(pos.x * 0.88, 6.2, pos.z * 0.88);
+    // Chao đèn lồng phát sáng trên đỉnh Hàng Cột Gỗ Lim
+    dummy.position.set(pos.x, pillarHeight + 0.18, pos.z);
     dummy.updateMatrix();
     lanternInst.setMatrixAt(i, dummy.matrix);
   });
@@ -874,6 +962,421 @@ export function populateLobbyGlbProps(targetGroup) {
 
 /**
  * ============================================================================
+ * 1. CHIÊNG ĐỒNG / TRỐNG ĐỒNG KHỔNG LỒ (FOCAL BRONZE MEDALLION WALL)
+ * Treo ngay trên nhịp chiếu nghỉ Đại Cầu Thang (Z = -16.5m, Y = 5.8m)
+ * Khớp hoàn toàn với ảnh tư liệu kiến trúc (media_1794757282430_84f6e25d.jpg)
+ * ============================================================================
+ */
+export function createFocalBronzeMedallionWall() {
+  const wallGroup = new THREE.Group();
+  wallGroup.name = 'Focal_Bronze_Medallion_Wall';
+  wallGroup.position.set(0, 5.8, -16.5);
+  wallGroup.userData = { ignoreRaycaster: true, isHeritageDecor: true, isFloor: false };
+
+  // Khung bệ đỡ kiến trúc gỗ lim hoàng gia phía sau (Backdrop Architectural Frame)
+  const backdropWoodMat = new THREE.MeshStandardMaterial({
+    color: 0x2b150c,
+    roughness: 0.38,
+    metalness: 0.16,
+    side: THREE.FrontSide
+  });
+  backdropWoodMat.userData = { ignoreRaycaster: true };
+
+  const goldTrimMat = new THREE.MeshStandardMaterial({
+    color: 0xfacc15,
+    roughness: 0.22,
+    metalness: 0.85,
+    emissive: 0x78350f,
+    emissiveIntensity: 0.22,
+    side: THREE.FrontSide
+  });
+  goldTrimMat.userData = { ignoreRaycaster: true };
+
+  const backdrop = new THREE.Mesh(
+    prepGeo(new THREE.BoxGeometry(7.2, 5.6, 0.22)),
+    backdropWoodMat
+  );
+  backdrop.position.set(0, 0, -0.15);
+  backdrop.userData = { ignoreRaycaster: true, isHeritageDecor: true };
+  wallGroup.add(backdrop);
+
+  // Viền chỉ đồng mạ vàng bao quanh tấm vách
+  const frameMesh = new THREE.Mesh(
+    prepGeo(new THREE.BoxGeometry(7.4, 5.8, 0.08)),
+    goldTrimMat
+  );
+  frameMesh.position.set(0, 0, -0.22);
+  frameMesh.userData = { ignoreRaycaster: true, isHeritageDecor: true };
+  wallGroup.add(frameMesh);
+
+  // 2 Trụ đỡ gỗ sơn son thếp vàng hai bên khung chiêng
+  [-3.4, 3.4].forEach((postX) => {
+    const post = new THREE.Mesh(
+      prepGeo(new THREE.CylinderGeometry(0.20, 0.22, 5.8, 12)),
+      new THREE.MeshStandardMaterial({
+        color: 0x7f1d1d,
+        roughness: 0.32,
+        metalness: 0.28,
+        side: THREE.FrontSide
+      })
+    );
+    post.position.set(postX, 0, -0.05);
+    post.userData = { ignoreRaycaster: true, isHeritageDecor: true };
+    wallGroup.add(post);
+
+    // Đế & Đầu trụ mạ vàng
+    [-2.9, 2.9].forEach((capY) => {
+      const cap = new THREE.Mesh(
+        prepGeo(new THREE.CylinderGeometry(0.28, 0.28, 0.18, 12)),
+        goldTrimMat
+      );
+      cap.position.set(postX, capY, -0.05);
+      cap.userData = { ignoreRaycaster: true, isHeritageDecor: true };
+      wallGroup.add(cap);
+    });
+  });
+
+  // Xà ngang sơn son chạm trổ treo chiêng
+  const crossBeam = new THREE.Mesh(
+    prepGeo(new THREE.BoxGeometry(7.2, 0.35, 0.35)),
+    backdropWoodMat
+  );
+  crossBeam.position.set(0, 2.65, 0.05);
+  crossBeam.userData = { ignoreRaycaster: true, isHeritageDecor: true };
+  wallGroup.add(crossBeam);
+
+  // 2. ĐĨA TRỐNG ĐỒNG / CHIÊNG ĐỒNG KHỔNG LỒ (Đường kính ~ 4.9m, Bán kính discRadius = 2.45m)
+  const discRadius = 2.45;
+  const medallionTex = getLobbyTex('focal_bronze_gong_medallion_hd', 1024, 1024, (ctx, w, h) => {
+    const cx = w * 0.5;
+    const cy = h * 0.5;
+    const r = w * 0.48;
+
+    // Nền đồng cổ phay xước hoàng gia đa sắc
+    const grad = ctx.createRadialGradient(cx, cy, 10, cx, cy, r);
+    grad.addColorStop(0.0, '#fef08a');
+    grad.addColorStop(0.18, '#f59e0b');
+    grad.addColorStop(0.45, '#d97706');
+    grad.addColorStop(0.72, '#92400e');
+    grad.addColorStop(0.92, '#451a03');
+    grad.addColorStop(1.0, '#1c0d02');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+
+    // Ngôi sao mặt trời 14 tia ở tâm trống đồng Đông Sơn
+    const sunR = r * 0.28;
+    const numRays = 14;
+    ctx.fillStyle = '#fef9c3';
+    for (let i = 0; i < numRays; i++) {
+      const ang = (i / numRays) * Math.PI * 2;
+      const nextAng = ((i + 0.5) / numRays) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(ang) * sunR, cy + Math.sin(ang) * sunR);
+      ctx.lineTo(cx + Math.cos(nextAng) * (sunR * 0.38), cy + Math.sin(nextAng) * (sunR * 0.38));
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Các vòng tròn đồng tâm hoa văn
+    ctx.strokeStyle = '#fde047';
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(cx, cy, sunR * 0.42, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, sunR * 1.05, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.48, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.72, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.94, 0, Math.PI * 2); ctx.stroke();
+
+    // Vành răng cưa tam giác (Chevron teeth)
+    const teethR = r * 0.38;
+    const numTeeth = 36;
+    ctx.fillStyle = '#fef08a';
+    for (let i = 0; i < numTeeth; i++) {
+      const ang = (i / numTeeth) * Math.PI * 2;
+      const tx = cx + Math.cos(ang) * teethR;
+      const ty = cy + Math.sin(ang) * teethR;
+      ctx.fillRect(tx - 3, ty - 3, 6, 6);
+    }
+
+    // Vành đàn Chim Lạc bay ngược chiều kim đồng hồ
+    const birdRingR = r * 0.60;
+    const numBirds = 8;
+    ctx.fillStyle = '#fef08a';
+    for (let i = 0; i < numBirds; i++) {
+      const ang = (i / numBirds) * Math.PI * 2;
+      const bx = cx + Math.cos(ang) * birdRingR;
+      const by = cy + Math.sin(ang) * birdRingR;
+      ctx.save();
+      ctx.translate(bx, by);
+      ctx.rotate(ang + Math.PI / 2);
+      ctx.beginPath();
+      ctx.moveTo(0, -28);
+      ctx.lineTo(16, 16);
+      ctx.lineTo(0, 8);
+      ctx.lineTo(-16, 16);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Vòng chấm tròn hạt cườm ngoài cùng
+    const dotR = r * 0.84;
+    const numDots = 48;
+    for (let i = 0; i < numDots; i++) {
+      const ang = (i / numDots) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.arc(cx + Math.cos(ang) * dotR, cy + Math.sin(ang) * dotR, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+
+  const medallionMat = new THREE.MeshStandardMaterial({
+    map: medallionTex,
+    roughness: 0.28,
+    metalness: 0.86,
+    bumpScale: 0.05,
+    side: THREE.FrontSide
+  });
+  medallionMat.userData = { ignoreRaycaster: true };
+
+  const bronzeSideMat = new THREE.MeshStandardMaterial({
+    color: 0x78350f,
+    roughness: 0.36,
+    metalness: 0.82,
+    side: THREE.FrontSide
+  });
+  bronzeSideMat.userData = { ignoreRaycaster: true };
+
+  const centralDisc = new THREE.Mesh(
+    prepGeo(new THREE.CylinderGeometry(discRadius, discRadius, 0.22, 64).rotateX(Math.PI / 2)),
+    [bronzeSideMat, medallionMat, bronzeSideMat]
+  );
+  centralDisc.position.set(0, 0, 0.12);
+  centralDisc.userData = { ignoreRaycaster: true, isHeritageDecor: true };
+  wallGroup.add(centralDisc);
+
+  // Vành đai đồng mạ vàng bọc mép ngoài đĩa chiêng
+  const discRim = new THREE.Mesh(
+    prepGeo(new THREE.TorusGeometry(discRadius, 0.08, 16, 64)),
+    goldTrimMat
+  );
+  discRim.position.set(0, 0, 0.24);
+  discRim.userData = { ignoreRaycaster: true, isHeritageDecor: true };
+  wallGroup.add(discRim);
+
+  // Núm chiêng lồi tròn ở tâm (Gong boss) mạ vàng
+  const gongBoss = new THREE.Mesh(
+    prepGeo(new THREE.CylinderGeometry(0.42, 0.52, 0.16, 24).rotateX(Math.PI / 2)),
+    goldTrimMat
+  );
+  gongBoss.position.set(0, 0, 0.28);
+  gongBoss.userData = { ignoreRaycaster: true, isHeritageDecor: true };
+  wallGroup.add(gongBoss);
+
+  // Hai vòng khuyên đồng treo chiêng vào xà ngang
+  [-0.9, 0.9].forEach((ringX) => {
+    const ring = new THREE.Mesh(
+      prepGeo(new THREE.TorusGeometry(0.18, 0.04, 8, 20)),
+      goldTrimMat
+    );
+    ring.position.set(ringX, discRadius + 0.12, 0.12);
+    ring.userData = { ignoreRaycaster: true, isHeritageDecor: true };
+    wallGroup.add(ring);
+
+    // Dây treo đỏ son buộc vào xà ngang
+    const strap = new THREE.Mesh(
+      prepGeo(new THREE.CylinderGeometry(0.03, 0.03, 0.55, 8)),
+      new THREE.MeshStandardMaterial({ color: 0x991b1b, roughness: 0.4 })
+    );
+    strap.position.set(ringX, discRadius + 0.35, 0.08);
+    strap.userData.ignoreRaycaster = true;
+    wallGroup.add(strap);
+  });
+
+  // Ánh sáng hào quang ấm (Halo Warm Light) hắt từ chiêng đồng ra chiếu nghỉ cầu thang
+  const haloLight = new THREE.PointLight(0xf59e0b, 3.2, 18);
+  haloLight.position.set(0, 0, 0.85);
+  wallGroup.add(haloLight);
+
+  return wallGroup;
+}
+
+/**
+ * ============================================================================
+ * 2. ĐÃ BỎ THÁP LẦU BÁT GIÁC GỖ / LỒNG ĐÈN TREO CHIẾU NGHỈ CẦU THANG THEO YÊU CẦU
+ * ============================================================================
+ */
+export function createLobbyOctagonalWoodenTower() {
+  const towerGroup = new THREE.Group();
+  towerGroup.name = 'Lobby_Octagonal_Wooden_Tower_Pavilion';
+  towerGroup.visible = false;
+  towerGroup.userData = { ignoreRaycaster: true, isHeritageDecor: false, isFloor: false };
+  return towerGroup;
+}
+
+/**
+ * ============================================================================
+ * 4. HAI HOÀNH PHI GỖ SƠN SON THẾP VÀNG NGANG HAI BÊN SẢNH
+ * Khớp hoàn toàn với ảnh tư liệu kiến trúc (media_1794757274210_a60752a8.jpg)
+ * Cánh Tây (Trái): "VĂN HIẾN THIÊN THU" (X = -7.2m, Y = 6.4m, Z = -8.2m)
+ * Cánh Đông (Phải): "VẠN CỔ LƯU PHƯƠNG" (X = +7.2m, Y = 6.4m, Z = -8.2m)
+ * ============================================================================
+ */
+export function createLobbyHorizontalLacqueredBanners() {
+  const group = new THREE.Group();
+  group.name = 'Lobby_Flanking_Horizontal_Lacquered_Banners';
+  group.userData = { ignoreRaycaster: true, isHeritageDecor: true, isFloor: false };
+
+  const banners = [
+    {
+      name: 'West_Imperial_Lacquered_Banner',
+      title: 'VĂN HIẾN THIÊN THU',
+      sub: 'Hào Khí Đông A • Tinh Hoa Lạc Hồng',
+      pos: [-7.2, 6.4, -8.2],
+      rotY: 0.08
+    },
+    {
+      name: 'East_Imperial_Lacquered_Banner',
+      title: 'VẠN CỔ LƯU PHƯƠNG',
+      sub: 'Sơn Hà Định Phận • Sử Sách Ngàn Năm',
+      pos: [7.2, 6.4, -8.2],
+      rotY: -0.08
+    }
+  ];
+
+  banners.forEach((cfg) => {
+    const bannerGroup = new THREE.Group();
+    bannerGroup.name = cfg.name;
+    bannerGroup.position.set(...cfg.pos);
+    bannerGroup.rotation.y = cfg.rotY;
+    bannerGroup.userData = { ignoreRaycaster: true, isHeritageDecor: true };
+
+    // Mặt hoành phi sơn son thếp vàng
+    const bannerTex = getLobbyTex(`hoanh_phi_${cfg.title}`, 1024, 384, (ctx, w, h) => {
+      // Nền sơn mài đỏ thắm hoàng cung (Imperial Crimson Lacquer)
+      const g = ctx.createLinearGradient(0, 0, w, h);
+      g.addColorStop(0.0, '#450a0a');
+      g.addColorStop(0.3, '#7f1d1d');
+      g.addColorStop(0.7, '#991b1b');
+      g.addColorStop(1.0, '#450a0a');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+
+      // Viền kép thếp vàng họa tiết mây cuốn cổ
+      ctx.strokeStyle = '#facc15';
+      ctx.lineWidth = 14;
+      ctx.strokeRect(10, 10, w - 20, h - 20);
+
+      ctx.strokeStyle = '#eab308';
+      ctx.lineWidth = 5;
+      ctx.strokeRect(24, 24, w - 48, h - 48);
+
+      // 4 Góc trang trí hoa văn kỷ hà / chữ Vạn vàng
+      const cornerSize = 40;
+      ctx.fillStyle = '#fef08a';
+      [
+        [28, 28],
+        [w - 28 - cornerSize, 28],
+        [28, h - 28 - cornerSize],
+        [w - 28 - cornerSize, h - 28 - cornerSize]
+      ].forEach(([cx, cy]) => {
+        ctx.fillRect(cx, cy, cornerSize, 4);
+        ctx.fillRect(cx, cy, 4, cornerSize);
+      });
+
+      // Chữ Đại Tự Thư Pháp Thếp Vàng
+      ctx.font = 'bold 64px "Times New Roman", serif';
+      ctx.fillStyle = '#fef08a';
+      ctx.textAlign = 'center';
+      ctx.shadowColor = '#713f12';
+      ctx.shadowBlur = 12;
+      ctx.shadowOffsetX = 3;
+      ctx.shadowOffsetY = 3;
+      ctx.fillText(cfg.title, w / 2, h / 2 + 12);
+
+      // Dòng chữ phụ trang nghiêm
+      ctx.shadowColor = 'transparent';
+      ctx.font = 'italic 26px "Times New Roman", serif';
+      ctx.fillStyle = '#fde047';
+      ctx.fillText(cfg.sub, w / 2, h / 2 + 75);
+    });
+
+    const frontMat = new THREE.MeshStandardMaterial({
+      map: bannerTex,
+      roughness: 0.26,
+      metalness: 0.68,
+      side: THREE.FrontSide
+    });
+    frontMat.userData = { ignoreRaycaster: true };
+
+    const woodBackMat = new THREE.MeshStandardMaterial({
+      color: 0x2b150c,
+      roughness: 0.45,
+      metalness: 0.15,
+      side: THREE.FrontSide
+    });
+    woodBackMat.userData = { ignoreRaycaster: true };
+
+    const goldFrameMat = new THREE.MeshStandardMaterial({
+      color: 0xfacc15,
+      roughness: 0.22,
+      metalness: 0.88,
+      emissive: 0x78350f,
+      emissiveIntensity: 0.25,
+      side: THREE.FrontSide
+    });
+    goldFrameMat.userData = { ignoreRaycaster: true };
+
+    const bWidth = 3.6;
+    const bHeight = 1.25;
+    const bDepth = 0.10;
+
+    // Tấm thân hoành phi gỗ
+    const bodyMesh = new THREE.Mesh(
+      prepGeo(new THREE.BoxGeometry(bWidth, bHeight, bDepth)),
+      [goldFrameMat, goldFrameMat, goldFrameMat, goldFrameMat, frontMat, woodBackMat]
+    );
+    bodyMesh.userData = { ignoreRaycaster: true, isHeritageDecor: true };
+    bannerGroup.add(bodyMesh);
+
+    // Khung nẹp gỗ thếp vàng viền ngoài 3D
+    const outerFrame = new THREE.Mesh(
+      prepGeo(new THREE.BoxGeometry(bWidth + 0.12, bHeight + 0.12, 0.05)),
+      goldFrameMat
+    );
+    outerFrame.position.set(0, 0, -0.04);
+    outerFrame.userData = { ignoreRaycaster: true, isHeritageDecor: true };
+    bannerGroup.add(outerFrame);
+
+    // 2 Khuyên đồng treo & Dây thừng lụa đỏ treo lên trần
+    [-1.2, 1.2].forEach((cordX) => {
+      const ring = new THREE.Mesh(
+        prepGeo(new THREE.TorusGeometry(0.09, 0.02, 6, 16)),
+        goldFrameMat
+      );
+      ring.position.set(cordX, bHeight * 0.5 + 0.08, 0);
+      ring.userData = { ignoreRaycaster: true, isHeritageDecor: true };
+      bannerGroup.add(ring);
+
+      // Dây cáp treo đỏ son thếp vàng kéo lên trần (Y = 18.5m)
+      const cordLen = 12.0;
+      const cord = new THREE.Mesh(
+        prepGeo(new THREE.CylinderGeometry(0.016, 0.016, cordLen, 6)),
+        new THREE.MeshStandardMaterial({ color: 0x991b1b, roughness: 0.38, metalness: 0.25 })
+      );
+      cord.position.set(cordX, bHeight * 0.5 + 0.08 + cordLen * 0.5, 0);
+      cord.userData = { ignoreRaycaster: true, isHeritageDecor: true };
+      bannerGroup.add(cord);
+    });
+
+    group.add(bannerGroup);
+  });
+
+  return group;
+}
+
+/**
+ * ============================================================================
  * HÀM CHÍNH ĐƯỢC GỌI TỪ MAIN.JS:
  * decorateMuseumGrandLobbyAndCorridors(container, options)
  * ============================================================================
@@ -892,9 +1395,10 @@ export function decorateMuseumGrandLobbyAndCorridors(container, {
 
   // Đã bỏ sàn 108x108m đè lên Ground_Floor_Marble (126x126m) để tránh 100% overdraw & tốn VRAM 1024x1024.
 
-  // 2. Đại Mandala Trống Đồng Đông Sơn 14 cánh phát sáng giữa đại sảnh
+  // 2. ĐẠI MANDALA TRỐNG ĐỒNG ĐÔNG SƠN 14 CÁNH & MA TRẬN CHỮ CỔ PHÁT SÁNG Ở TÂM SẢNH (0, 0.035, 0)
+  // Khôi phục chính xác theo ảnh 1: 14 tia sáng rực rỡ từ chân bệ, vành ma trận ký tự cổ & hạt ngọc
   const centerMandala = new THREE.Mesh(
-    new THREE.CircleGeometry(10.5, 32),
+    new THREE.CircleGeometry(6.8, 64),
     new THREE.MeshBasicMaterial({
       map: createDongSonCenterMandalaTexture(),
       transparent: true,
@@ -903,12 +1407,40 @@ export function decorateMuseumGrandLobbyAndCorridors(container, {
       side: THREE.FrontSide
     })
   );
+  centerMandala.name = 'Grand_Lobby_DongSon_Matrix_Mandala';
   centerMandala.rotation.x = -Math.PI / 2;
-  centerMandala.position.y = 0.035;
+  centerMandala.position.set(0, 0.035, 0);
   centerMandala.castShadow = false;
   centerMandala.receiveShadow = false;
   centerMandala.userData.ignoreRaycaster = true;
   lobbyGroup.add(centerMandala);
+  lobbyGroup.userData.centerMandala = centerMandala;
+
+  // 2.1. VÒNG CHỈ ĐỊNH TƯƠNG TÁC CYAN / NGỌC BÍCH TRÊN SÀN (Theo đúng ảnh mẫu 1 & 2)
+  // Vòng 1: Ngay trước Cuốn Sách Di Sản giữa 2 bệ Đỉnh Đồng (X = 0, Z = 6.8m)
+  const cyanRingGeo = new THREE.RingGeometry(1.05, 1.35, 32);
+  const cyanRingMat = new THREE.MeshBasicMaterial({
+    color: 0x2dd4bf, // Cyan / ngọc bích sáng rực
+    transparent: true,
+    opacity: 0.65,
+    blending: THREE.AdditiveBlending,
+    side: THREE.FrontSide,
+    depthWrite: false
+  });
+  const cyanAnchorRing = new THREE.Mesh(cyanRingGeo, cyanRingMat);
+  cyanAnchorRing.name = 'Lobby_Cyan_Interactive_Floor_Ring';
+  cyanAnchorRing.rotation.x = -Math.PI / 2;
+  cyanAnchorRing.position.set(0, 0.036, 6.8);
+  cyanAnchorRing.userData.ignoreRaycaster = true;
+  lobbyGroup.add(cyanAnchorRing);
+
+  // Vòng 2: Phía cánh Tây bên ngoài vòng hào quang mandala (X = -5.2m, Z = 0.0m)
+  const cyanWestRing = new THREE.Mesh(cyanRingGeo, cyanRingMat.clone());
+  cyanWestRing.name = 'Lobby_Cyan_West_Floor_Ring';
+  cyanWestRing.rotation.x = -Math.PI / 2;
+  cyanWestRing.position.set(-5.2, 0.036, 0);
+  cyanWestRing.userData.ignoreRaycaster = true;
+  lobbyGroup.add(cyanWestRing);
 
   // 3. HỆ THỐNG THẢM SẢNH & HÀNH LANG LIỀN MẠCH 100% (SEAMLESS CONTINUOUS IMPERIAL CARPET NETWORK)
   // Thảm dọc trục Bắc - Nam (chạy dọc trục Z)
@@ -941,25 +1473,37 @@ export function decorateMuseumGrandLobbyAndCorridors(container, {
     return mesh;
   };
 
-  // 3.1. Thảm Hành Lang Ngang Bắc - Cánh Tây (Z = -17.15m): Chạy từ tâm giao lộ X = 0 thẳng vào cửa phòng Sơn Tinh - Thủy Tinh (X = -35.0m)
+  // 3.1. Thảm Trục Trung Tâm Phía Nam (Lối Đón Sảnh Chính: Z = +28m đến trước Bệ Sách Z = +4.8m)
+  const southEntranceCarpet = makeCarpetNS(4.6, 23.2, 0.026);
+  southEntranceCarpet.name = 'Lobby_Main_South_Entrance_Carpet';
+  southEntranceCarpet.position.set(0, 0.026, 16.4);
+  lobbyGroup.add(southEntranceCarpet);
+
+  // 3.2. Thảm Trục Trung Tâm Phía Bắc (Từ sau Bệ Sách Z = -4.8m đến Đại Cầu Thang Z = -17.5m)
+  const northGrandStairCarpet = makeCarpetNS(4.6, 12.7, 0.026);
+  northGrandStairCarpet.name = 'Lobby_Main_North_GrandStair_Carpet';
+  northGrandStairCarpet.position.set(0, 0.026, -11.15);
+  lobbyGroup.add(northGrandStairCarpet);
+
+  // 3.3. Thảm Hành Lang Ngang Bắc - Cánh Tây (Z = -17.15m): Chạy từ tâm giao lộ X = 0 thẳng vào cửa phòng Sơn Tinh - Thủy Tinh (X = -35.0m)
   const stttCarpet = makeCarpetEW(35.0, 5.0, 0.025);
   stttCarpet.name = 'Lobby_West_North_STTT_Carpet';
   stttCarpet.position.set(-17.5, 0.025, -17.15);
   lobbyGroup.add(stttCarpet);
 
-  // 3.2. Thảm Hành Lang Ngang Bắc - Cánh Đông (Z = -17.15m): Chạy từ tâm giao lộ X = 0 thẳng vào cửa phòng Vợ Nhặt (X = +35.0m)
+  // 3.4. Thảm Hành Lang Ngang Bắc - Cánh Đông (Z = -17.15m): Chạy từ tâm giao lộ X = 0 thẳng vào cửa phòng Vợ Nhặt (X = +35.0m)
   const voNhatCarpet = makeCarpetEW(35.0, 5.0, 0.025);
   voNhatCarpet.name = 'Lobby_East_North_VoNhat_Carpet';
   voNhatCarpet.position.set(17.5, 0.025, -17.15);
   lobbyGroup.add(voNhatCarpet);
 
-  // 3.3. Thảm Hành Lang Ngang Nam - Cánh Tây (Z = +17.15m): Chạy từ tâm giao lộ X = 0 thẳng vào cửa phòng Truyện Kiều / Thánh Gióng (X = -35.0m)
+  // 3.5. Thảm Hành Lang Ngang Nam - Cánh Tây (Z = +17.15m): Chạy từ tâm giao lộ X = 0 thẳng vào cửa phòng Truyện Kiều / Thánh Gióng (X = -35.0m)
   const kieuCarpet = makeCarpetEW(35.0, 5.0, 0.025);
   kieuCarpet.name = 'Lobby_West_South_Kieu_Carpet';
   kieuCarpet.position.set(-17.5, 0.025, 17.15);
   lobbyGroup.add(kieuCarpet);
 
-  // 3.4. Thảm Hành Lang Ngang Nam - Cánh Đông (Z = +17.15m): Chạy từ tâm giao lộ X = 0 thẳng vào cửa phòng Nam Quốc Sơn Hà (X = +35.0m)
+  // 3.6. Thảm Hành Lang Ngang Nam - Cánh Đông (Z = +17.15m): Chạy từ tâm giao lộ X = 0 thẳng vào cửa phòng Nam Quốc Sơn Hà (X = +35.0m)
   const namQuocCarpet = makeCarpetEW(35.0, 5.0, 0.025);
   namQuocCarpet.name = 'Lobby_East_South_NamQuoc_Carpet';
   namQuocCarpet.position.set(17.5, 0.025, 17.15);
@@ -1052,6 +1596,20 @@ export function decorateMuseumGrandLobbyAndCorridors(container, {
     lobbyGroup.add(spaceEnrichment);
   }
 
+  // 13. PHỤC HỒI CHIÊNG ĐỒNG / TRỐNG ĐỒNG KHỔNG LỒ (Focal Bronze Medallion Wall)
+  // Treo ngay trên nhịp chiếu nghỉ Đại Cầu Thang (Z = -16.5m, Y = 5.8m)
+  const focalWall = createFocalBronzeMedallionWall();
+  lobbyGroup.add(focalWall);
+
+  // 14. Đã bỏ Tháp Lầu Bát Giác Gỗ / Lồng đèn lớn treo chiếu nghỉ cầu thang (Z = -16.5m) theo yêu cầu người dùng
+  const octagonalTower = createLobbyOctagonalWoodenTower();
+
+  // 15. TREO 2 HOÀNH PHI GỖ SƠN SON THẾP VÀNG NGANG HAI BÊN SẢNH
+  // Cánh Tây: "VĂN HIẾN THIÊN THU" (X = -7.2m, Y = 6.4m, Z = -8.2m)
+  // Cánh Đông: "VẠN CỔ LƯU PHƯƠNG" (X = +7.2m, Y = 6.4m, Z = -8.2m)
+  const horizontalBanners = createLobbyHorizontalLacqueredBanners();
+  lobbyGroup.add(horizontalBanners);
+
   if (container) {
     container.add(lobbyGroup);
   }
@@ -1081,6 +1639,25 @@ export function decorateMuseumGrandLobbyAndCorridors(container, {
 
     // 5. Cập nhật hệ thống lấp đầy không gian (Living VFX, đom đóm, khói trầm, đèn xoay)
     spaceEnrichment?.userData?.update?.(timeSec);
+
+    // 6. Cập nhật xoay khẽ tháp lầu bát giác nếu có
+    if (octagonalTower?.userData?.update) {
+      octagonalTower.userData.update(timeSec);
+    }
+
+    // 7. Cập nhật Vòng Hào Quang Ma Trận Chữ / Mandala Đông Sơn (xoay nhẹ & thở hào quang)
+    if (centerMandala) {
+      centerMandala.rotation.z = timeSec * 0.035;
+      if (centerMandala.material) {
+        centerMandala.material.opacity = 0.85 + Math.sin(timeSec * 1.8) * 0.15;
+      }
+    }
+    if (cyanAnchorRing?.material) {
+      cyanAnchorRing.material.opacity = 0.55 + Math.sin(timeSec * 2.5) * 0.15;
+    }
+    if (cyanWestRing?.material) {
+      cyanWestRing.material.opacity = 0.50 + Math.sin(timeSec * 2.5 + 1.2) * 0.15;
+    }
   };
 
   const registerHitboxes = (hb) => {
@@ -1094,6 +1671,9 @@ export function decorateMuseumGrandLobbyAndCorridors(container, {
   return {
     group: lobbyGroup,
     lobbyGroup,
+    focalWall,
+    octagonalTower,
+    horizontalBanners,
     updateLobby,
     registerHitboxes
   };

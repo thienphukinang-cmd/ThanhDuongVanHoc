@@ -5,7 +5,8 @@ import {
   CUSTOM_ROOM_IDS,
   getRoomCode,
   getRoomWorldPose,
-  localRoomToWorld
+  localRoomToWorld,
+  isRoomLocked
 } from '../config/literatureRegistry.js';
 import { registerInteractiveBook } from './PortalInteraction.js';
 import {
@@ -13,6 +14,7 @@ import {
   registerPlaqueWithSystems,
   syncPlaqueWorldMetadata
 } from './roomInfoPlaque.js';
+import { setupAllLockedRoomGates } from './museumLockedRoomGateSystem.js';
 import { 
   getFakeShadowMaterial, 
   getFakeGlowSpriteMaterial, 
@@ -386,6 +388,7 @@ export class RoomGenerator {
       this.initAlcovePartitionWalls();
       this.initInstancedPedestals();
       this.initNonCustomAlcovePresentations();
+      this.initLockedRoomGates();
       this.initMagicBooks();
       this.initLocalizedMoodLighting();
       this.initRoomInfoPlaques();
@@ -544,7 +547,7 @@ export class RoomGenerator {
    */
   initNonCustomAlcovePresentations() {
     this.alcoveSolidColliders = [];
-    const nonCustomItems = LITERATURE_REGISTRY.filter((item) => !CUSTOM_ROOM_IDS.has(item.id));
+    const nonCustomItems = LITERATURE_REGISTRY.filter((item) => !CUSTOM_ROOM_IDS.has(item.id) && !isRoomLocked(item));
     if (nonCustomItems.length === 0) return;
 
     const count = nonCustomItems.length;
@@ -736,6 +739,25 @@ export class RoomGenerator {
   }
 
   /**
+   * 3B. KHỞI TẠO CỔNG KHÓA PHONG ẤN CHO CÁC PHÒNG CHƯA HOÀN THIỆN
+   */
+  initLockedRoomGates() {
+    try {
+      const result = setupAllLockedRoomGates(this.group, {
+        hitboxManager: typeof window !== 'undefined' ? window.__museumHitboxManager : null,
+        cameraController: typeof window !== 'undefined' ? window.__museumCameraController : null
+      });
+      if (result?.solidColliders) {
+        result.solidColliders.forEach((box) => {
+          this.alcoveSolidColliders.push(box);
+        });
+      }
+    } catch (err) {
+      console.warn('[RoomGenerator] Lỗi khởi tạo cổng khóa phong ấn:', err);
+    }
+  }
+
+  /**
    * 4. KHỞI TẠO 15 CUỐN SÁCH MA THUẬT VỚI MÀU SẮC THEMECOLOR VÀ NHỊP ĐỘ BAY ĐỘC LẬP
    */
   initMagicBooks() {
@@ -750,9 +772,8 @@ export class RoomGenerator {
     const goldRibMat = this.getMat('royalGold');
 
     LITERATURE_REGISTRY.forEach((item, idx) => {
-      // BỎ HOÀN TOÀN MÔ HÌNH NHÁP (THANH XANH LÁ) CHO PHÒNG 01 TRUYỆN KIỀU
-      // Phòng 01 được quản lý 100% bằng RoomDecorator với model .glb thật 1:1
-      if (CUSTOM_ROOM_IDS.has(item.id)) {
+      // Bỏ qua các phòng Custom hoặc các phòng đang khóa phong ấn
+      if (CUSTOM_ROOM_IDS.has(item.id) || isRoomLocked(item)) {
         return;
       }
 
@@ -842,8 +863,8 @@ export class RoomGenerator {
     this.lightsGroup = lightsGroup;
 
     LITERATURE_REGISTRY.forEach((item) => {
-      // Bỏ qua Phòng 01 vì RoomDecorator đã quản lý hệ sinh thái ánh sáng cô lập Layer 1
-      if (CUSTOM_ROOM_IDS.has(item.id)) return;
+      // Bỏ qua các phòng Custom hoặc phòng đang khóa phong ấn
+      if (CUSTOM_ROOM_IDS.has(item.id) || isRoomLocked(item)) return;
 
       const pos = this.calculateItemPosition(item);
       const atmos = item.atmosphere || {};
@@ -1024,7 +1045,7 @@ export class RoomGenerator {
     ]);
 
     LITERATURE_REGISTRY.forEach((item) => {
-      if (SELF_MOUNTED_DECORATOR_ROOMS.has(item.id)) return;
+      if (SELF_MOUNTED_DECORATOR_ROOMS.has(item.id) || isRoomLocked(item)) return;
 
       const pos = this.calculateItemPosition(item);
       const isCustomRoom = CUSTOM_ROOM_IDS.has(item.id);
@@ -1122,12 +1143,12 @@ export class RoomGenerator {
       if (!Array.isArray(list)) return;
       for (let i = 0; i < list.length; i++) {
         const entry = list[i];
-        const box = entry?.userData?.worldAABB;
+        const box = entry?.userData?.worldAABB || (entry?.isBox3 ? entry : (entry?.min && entry?.max ? entry : null));
         if (!box) continue;
         hbm.registerSolidObjectCollider(null, {
           customBox: box.clone(),
-          tag: entry.name || 'alcove_prop',
-          helperColor: 0x39e58c,
+          tag: entry.name || entry.tag || 'alcove_prop',
+          helperColor: entry.helperColor || 0x39e58c,
           realm: 'museum'
         });
       }

@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "skills": {
+    "canvas-design": {
+      "source": "anthropics/skills",
+      "commit": "1780c5e5a552fd4d1c9d6a7b0cab26b0c2bef064",
+      "sourceType": "github",
+      "skillPath": "skills/canvas-design/SKILL.md",
+      "computedHash": "1866477474e694f562261008bb6a817e53f027b6347b062fbd1e2ee2eb83f20d"
+    },
+    "pptx": {
+      "source": "anthropics/skills",
+      "commit": "1780c5e5a552fd4d1c9d6a7b0cab26b0c2bef064",
+      "sourceType": "github",
+      "skillPath": "skills/pptx/SKILL.md",
+      "computedHash": "793fc7fb09bc02f27c2d3e80d575dcd976bcaba8e7298affdf6573312c0cdf87"
+    }
+  }
+}

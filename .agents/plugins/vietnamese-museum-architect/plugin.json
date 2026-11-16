@@ -1,13 +1,34 @@
 {
   "name": "vietnamese-museum-architect",
-  "displayName": "Vietnamese 3D Museum Architect & Heritage Curator",
-  "version": "1.0.0",
-  "description": "Bộ công cụ và AI Agent chuyên gia Kỹ sư trưởng kiêm Giám đốc nghệ thuật WebGL / Three.js chuyên quy hoạch, dựng hình, viết shader, tích hợp âm thanh và tối ưu 60+ FPS cho Bảo Tàng Văn Học 3D.",
+  "displayName": "Vietnamese 3D Museum & AI Literature Cinema Creator",
+  "version": "2.2.0",
+  "description": "Hệ thống AI Agent Kỹ Sư Trưởng WebGL kiêm Đạo Diễn Điện Ảnh Văn Học AI và Tổng Công Trình Sư 15 Kỹ Năng Cõi Mở (Lead Heritage WebGL Architect, AI Literature Cinema Director & Open Story Realm Master) chuyên kiến tạo không gian bảo tàng ảo 3D 60+ FPS, ánh sáng Chiaroscuro, mô hình PBR Draco, Cõi Thế Giới Mở 360 độ (enterRealm), Shaders, Auto-Tour và sản xuất phim văn học AI đa giác quan.",
   "author": "BaoTang3D DeepMind Architecture Team",
+  "agents": [
+    "agents/vietnamese_heritage_architect.md",
+    "agents/heritage_cinema_architect.md",
+    "agents/grand_lobby_curator.md",
+    "agents/literature_realm_architect.md",
+    "agents/epic_museum_realm_architect.md",
+    "agents/museum_architect.md"
+  ],
+  "skills": [
+    "skills/heritage-room-pipeline/SKILL.md",
+    "skills/museum-architect/SKILL.md",
+    "skills/ai-cinema-director/SKILL.md",
+    "skills/grand-lobby-architect/SKILL.md",
+    "skills/literature-realm-architect/SKILL.md",
+    "skills/epic-museum-realm-pipeline/SKILL.md"
+  ],
   "rules": [
     "rules/AGENTS.md"
   ],
-  "skills": [
-    "skills/museum-architect/SKILL.md"
+  "suggestedPrompts": [
+    "Thực hiện quy trình 6 giai đoạn Hard Purge và Tái thiết kế toàn diện phòng trưng bày & cõi mở 240m",
+    "Quy hoạch và dựng phòng trưng bày 3D mới cho tác phẩm văn học",
+    "Kiến tạo Cõi Thế Giới Mở 360 độ (enterRealm) với đồng bộ 15 kỹ năng chuyên sâu",
+    "Tích hợp mô hình 3D 1:1, bóng đổ Chiaroscuro sống động và đại cảnh Thủy Cung kỳ ảo",
+    "Sản xuất kịch bản phân cảnh phim văn học AI và phối khí cổ phong",
+    "Tích hợp màn chiếu Video 3D Texture và hệ thống Lore học thuật 4 chương"
   ]
 }

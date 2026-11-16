@@ -458,16 +458,21 @@ export class CameraController {
   }
 
   registerHitbox(hitbox) {
-    if (!hitbox || !hitbox.box) return;
-    if (!hitbox.center) {
-      hitbox.center = new THREE.Vector3();
-      hitbox.box.getCenter(hitbox.center);
+    if (!hitbox) return;
+    const box = hitbox.box || (hitbox.isBox3 ? hitbox : null);
+    if (!box) return;
+    const name = hitbox.name || hitbox.tag || (hitbox.isBox3 ? 'Custom_Box3' : 'Unnamed_Hitbox');
+    let center = hitbox.center;
+    if (!center) {
+      center = new THREE.Vector3();
+      box.getCenter(center);
     }
+    const item = { box, center, name };
     this.customHitboxes = this.customHitboxes || [];
-    const exists = this.customHitboxes.some(h => h.name === hitbox.name);
+    const exists = this.customHitboxes.some(h => h.name === name);
     if (!exists) {
-      this.customHitboxes.push(hitbox);
-      this.spatialGrid?.insert(hitbox);
+      this.customHitboxes.push(item);
+      this.spatialGrid?.insert(item);
     }
   }
 
@@ -492,6 +497,22 @@ export class CameraController {
     if (!obj || obj.userData?.excludeFromCollision) return;
     if (Array.isArray(obj)) {
       obj.forEach(item => this.addCollisionObject(item));
+      return;
+    }
+
+    // Direct THREE.Box3 collider support (như từ MuseumHitboxManager.solidBoxes)
+    if (obj.isBox3 || (obj.min && obj.max && typeof obj.intersectsBox === 'function')) {
+      const center = new THREE.Vector3();
+      obj.getCenter(center);
+      this.spatialGrid.insert({ box: obj, center: center, name: obj.name || obj.tag || 'Direct_Box3' });
+      return;
+    }
+
+    // Wrapper object support: { box: Box3, center?: Vector3, name?: string }
+    if (obj.box && (obj.box.isBox3 || (obj.box.min && obj.box.max))) {
+      const center = obj.center || new THREE.Vector3();
+      if (!obj.center) obj.box.getCenter(center);
+      this.spatialGrid.insert({ box: obj.box, center: center, name: obj.name || obj.tag || 'Direct_Box3_Wrapper' });
       return;
     }
 
@@ -819,14 +840,20 @@ export class CameraController {
             this.camera.position.z = resolved.z;
 
             // Chặn đi từ gầm cầu thang chui ngược vào phần gầm thấp (< 1.8m) rồi trồi lên mặt bậc
+            const isOutsideLobby = typeof window !== 'undefined' && (
+              window.__aiCommandHubActive || window.__catVillageActive ||
+              (window.__activeScene && (window.__activeScene === window.__aiCommandHubScene || window.__activeScene === window.__catVillageScene))
+            );
             const currFeetY = this.camera.position.y - this.eyeHeight;
             const inLowT1UnderStair =
+              !isOutsideLobby &&
               currFeetY < 0.35 &&
               Math.abs(this.camera.position.x) < 2.95 &&
               this.camera.position.z >= 16.8 &&
               this.camera.position.z <= 23.2 &&
               (prevZ < 17.0 || Math.abs(prevX) >= 2.95);
             const inLowT2UnderStair =
+              !isOutsideLobby &&
               currFeetY >= 9.4 &&
               currFeetY < 10.35 &&
               Math.abs(this.camera.position.x) < 2.75 &&
@@ -943,8 +970,8 @@ export class CameraController {
     const currY = this.camera.position.y;
     const currZ = this.camera.position.z;
 
-    // Không kẹp biên bảo tàng nếu đang ở Thế Giới Sơn Tinh - Thủy Tinh (tọa độ 5000, 0, 5000)
-    if ((currX >= 4000.0 && currZ >= 4000.0) || (typeof window !== 'undefined' && window.__stttRealmActive)) {
+    // Không kẹp biên bảo tàng nếu đang ở Thế Giới Sơn Tinh - Thủy Tinh (tọa độ 5000, 0, 5000), Căn Cứ AI Command Hub hoặc Đảo Mèo
+    if ((currX >= 4000.0 && currZ >= 4000.0) || (typeof window !== 'undefined' && (window.__stttRealmActive || window.__aiCommandHubActive || window.__catVillageActive || (window.__activeScene && (window.__aiCommandHubScene && window.__activeScene === window.__aiCommandHubScene || window.__catVillageScene && window.__activeScene === window.__catVillageScene))))) {
       return;
     }
 
@@ -1040,6 +1067,42 @@ export class CameraController {
       const minWorldY = 36.0 + this.eyeHeight;
       if (this.camera.position.y < minWorldY) {
         this.camera.position.y = minWorldY;
+        this.velocity.y = 0;
+        this.isOnGround = true;
+      }
+      return;
+    }
+
+    // 0.1 CÕI CĂN CỨ AI COMMAND HUB (TÁCH BIỆT TRONG aiCommandHubScene)
+    const isAiCommandHub = typeof window !== 'undefined' && (window.__aiCommandHubActive || (window.__activeScene && window.__aiCommandHubScene && window.__activeScene === window.__aiCommandHubScene));
+    if (isAiCommandHub) {
+      const maxHubRadius = 40.0; // Bán kính đi bộ an toàn trong quảng trường (R=46m, hàng cột R=38m)
+      const dist = Math.hypot(currX, currZ);
+      if (dist > maxHubRadius && dist > 0.0001) {
+        this.camera.position.x = (currX / dist) * maxHubRadius;
+        this.camera.position.z = (currZ / dist) * maxHubRadius;
+      }
+      const minHubY = this.eyeHeight;
+      if (this.camera.position.y < minHubY) {
+        this.camera.position.y = minHubY;
+        this.velocity.y = 0;
+        this.isOnGround = true;
+      }
+      return;
+    }
+
+    // 0.2 CÕI ĐẢO MÈO DIORAMA THU NHỎ (~22m x 22m, TÁCH BIỆT TRONG catVillageScene)
+    const isCatVillage = typeof window !== 'undefined' && (window.__catVillageActive || (window.__activeScene && window.__catVillageScene && window.__activeScene === window.__catVillageScene));
+    if (isCatVillage) {
+      const maxCatRadius = 10.5; // Bán kính an toàn trên đảo nổi R=11m, chống rơi vực tuyệt đối
+      const dist = Math.hypot(currX, currZ);
+      if (dist > maxCatRadius && dist > 0.0001) {
+        this.camera.position.x = (currX / dist) * maxCatRadius;
+        this.camera.position.z = (currZ / dist) * maxCatRadius;
+      }
+      const minCatY = this.eyeHeight;
+      if (this.camera.position.y < minCatY) {
+        this.camera.position.y = minCatY;
         this.velocity.y = 0;
         this.isOnGround = true;
       }

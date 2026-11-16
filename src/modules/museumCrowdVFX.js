@@ -172,13 +172,69 @@ export function createMuseumCrowdSystem(scene, options = {}) {
   ];
 
   // =========================================================================
-  // 4. PHÂN BỔ NHÓM KHÁCH (1, 3, 5 NGƯỜI) VÀ KHỞI TẠO ĐÁM ĐÔNG INSTANCED
+  // 4. KHỞI TẠO ĐÁM ĐÔNG BÓNG ĐEN:
+  // 4.1. ĐOÀN KHÁCH CHIÊM BÁI CUỐN SÁCH DI SẢN (HERITAGE BOOK REVERENCE ARC)
+  //      Đứng quây quần thành hình vòng cung cung kính chiêm bái như trong ảnh 1.
+  // 4.2. CÁC NHÓM KHÁCH DẠO SẢNH & PHÒNG TRIỂN LÃM (WANDERING EXHIBIT GROUPS)
   // =========================================================================
+  const reverenceVisitors = [];
   const visitorGroups = [];
   let spawnedCount = 0;
   const dummy = new THREE.Object3D();
   const shadowDummy = new THREE.Object3D();
 
+  // 4.1. ĐOÀN KHÁCH CHIÊM BÁI VÒNG CUNG TÂM SẢNH (10 NGƯỜI QUÂY QUẦN BÊN CUỐN SÁCH)
+  const reverenceCount = Math.min(10, totalVisitors);
+  for (let i = 0; i < reverenceCount; i++) {
+    const idx = spawnedCount;
+    // Góc trải đều thành hình vòng cung phía Tây bao quanh cuốn sách (như trong ảnh 1)
+    // Trải từ góc Nam-Tây (+65 độ) sang Tây (0 độ) đến Bắc-Tây (-65 độ)
+    const t = reverenceCount > 1 ? i / (reverenceCount - 1) : 0.5;
+    const alpha = 1.14 - t * 2.28; // radian góc vòng cung
+    const rJitter = Math.sin(i * 3.7) * 0.16; // Độ lệch cự ly tự nhiên, không cứng nhắc
+    const arcR = 5.35 + rJitter;
+
+    const posX = -Math.cos(alpha) * arcR;
+    const posZ = Math.sin(alpha) * arcR;
+    const pos = new THREE.Vector3(posX, 0, posZ);
+
+    // Hướng nhìn tuyệt đối: Cung kính hướng mặt về tâm Cuốn Sách Di Sản (0, 1.2, 0)
+    const angleToBook = Math.atan2(-posX, -posZ);
+
+    // Chiều cao và tỉ lệ người chân thực (từ 1.45m đến 1.88m)
+    const heightScale = 0.82 + ((i * 7) % 11) / 10 * 0.30;
+    const shoulderScale = 0.88 + ((i * 5) % 7) / 6 * 0.22;
+    const depthScale = (shoulderScale + 1.0) * 0.5;
+    const bowPitch = 0.045 + ((i * 3) % 5) * 0.01; // Cung kính hơi cúi đầu về phía sách
+
+    dummy.position.copy(pos);
+    dummy.rotation.set(bowPitch, angleToBook, 0);
+    dummy.scale.set(shoulderScale, heightScale, depthScale);
+    dummy.updateMatrix();
+    bodyInstanced.setMatrixAt(idx, dummy.matrix);
+
+    shadowDummy.position.set(pos.x, pos.y + 0.02, pos.z);
+    shadowDummy.rotation.set(0, angleToBook, 0);
+    shadowDummy.scale.set(shoulderScale, 1.0, shoulderScale);
+    shadowDummy.updateMatrix();
+    shadowInstanced.setMatrixAt(idx, shadowDummy.matrix);
+
+    spawnedCount++;
+
+    reverenceVisitors.push({
+      idx,
+      pos,
+      baseAngle: angleToBook,
+      bowPitch,
+      shoulderScale,
+      heightScale,
+      depthScale,
+      phase: i * 0.75 + Math.PI * 0.25,
+      breathFreq: 1.5 + ((i * 3) % 4) * 0.22
+    });
+  }
+
+  // 4.2. CÁC NHÓM KHÁCH DẠO SẢNH & TRIỂN LÃM (32 KHÁCH CÒN LẠI)
   while (spawnedCount < totalVisitors) {
     const roll = Math.random();
     // 40% đi 1 mình, 35% đi nhóm 3, 25% đi nhóm 5
@@ -320,7 +376,31 @@ export function createMuseumCrowdSystem(scene, options = {}) {
     let movedAny = false;
     const posLerpAlpha = Math.min(1.0, dt * 6.5);
 
-    // 3. CẬP NHẬT TỪNG NHÓM KHÁCH
+    // 2.1. CẬP NHẬT ĐOÀN KHÁCH CHIÊM BÁI VÒNG CUNG TÂM SẢNH (HERITAGE REVERENCE ARC)
+    // Sống động với nhịp thở phập phồng, lắc lư chuyển trọng tâm nhẹ nhàng, hướng mặt về sách
+    if (reverenceVisitors.length > 0) {
+      for (let r = 0; r < reverenceVisitors.length; r++) {
+        const mem = reverenceVisitors[r];
+        const bobY = Math.sin(nowSec * mem.breathFreq + mem.phase) * 0.015;
+        const swayZ = Math.sin(nowSec * 1.15 + mem.phase) * 0.012;
+        const microTurn = Math.sin(nowSec * 0.7 + mem.phase) * 0.035;
+
+        dummy.position.set(mem.pos.x, mem.pos.y + bobY, mem.pos.z);
+        dummy.rotation.set(mem.bowPitch, mem.baseAngle + microTurn, swayZ);
+        dummy.scale.set(mem.shoulderScale, mem.heightScale, mem.depthScale);
+        dummy.updateMatrix();
+        bodyInstanced.setMatrixAt(mem.idx, dummy.matrix);
+
+        shadowDummy.position.set(mem.pos.x, mem.pos.y + 0.02, mem.pos.z);
+        shadowDummy.rotation.set(0, mem.baseAngle, 0);
+        shadowDummy.scale.set(mem.shoulderScale, 1.0, mem.shoulderScale);
+        shadowDummy.updateMatrix();
+        shadowInstanced.setMatrixAt(mem.idx, shadowDummy.matrix);
+      }
+      movedAny = true;
+    }
+
+    // 2.2. CẬP NHẬT TỪNG NHÓM KHÁCH DẠO SẢNH & TRIỂN LÃM
     for (let g = 0; g < visitorGroups.length; g++) {
       const group = visitorGroups[g];
       const waypoints = group.waypointsList;
@@ -441,6 +521,7 @@ export function createMuseumCrowdSystem(scene, options = {}) {
   return {
     crowdGroup,
     waypoints: allWaypoints,
+    reverenceVisitors,
     updateCrowd,
     update: updateCrowd,
     dispose

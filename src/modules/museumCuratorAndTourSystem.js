@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { loadGlbCached } from '../utils/modelLoaderHelper.js';
 import { mergeGroupMeshesByMaterial } from '../utils/geometryMerger.js';
-import { getRoomWorldPose, localRoomToWorld } from '../config/literatureRegistry.js';
+import { getRoomWorldPose, localRoomToWorld, isRoomLocked } from '../config/literatureRegistry.js';
 
 /**
  * ============================================================================
@@ -1050,6 +1050,7 @@ export const DEFAULT_MUSEUM_TOUR_WAYPOINTS = [
   },
   {
     id: 'room_truyen_kieu',
+    roomId: 'truyen_kieu',
     title: 'Điểm 4/8: Phòng Trưng Bày Kiệt Tác Truyện Kiều',
     narration: 'Chiêm ngưỡng Đàn Hồ Cầm và Kim Thoa Đêm Thề Nguyền của nàng Kiều tại Tầng 2.',
     cameraPos: new THREE.Vector3(-42.0, 11.8, 19.0),
@@ -1060,6 +1061,7 @@ export const DEFAULT_MUSEUM_TOUR_WAYPOINTS = [
   },
   {
     id: 'room_son_tinh',
+    roomId: 'son_tinh_thuy_tinh',
     title: 'Điểm 5/8: Không Gian Huyền Sử Sơn Tinh - Thủy Tinh',
     narration: 'Tái hiện cuộc đối đầu trực diện giữa Sơn Tinh non cao và Thủy Tinh cuộn sóng thần.',
     cameraPos: new THREE.Vector3(-42.0, 1.8, -19.0),
@@ -1070,6 +1072,7 @@ export const DEFAULT_MUSEUM_TOUR_WAYPOINTS = [
   },
   {
     id: 'room_an_duong_vuong',
+    roomId: 'an_duong_vuong',
     title: 'Điểm 6/8: Phòng Thành Cổ Loa & Nỏ Thần Liên Châu',
     narration: 'Chiêm ngưỡng Nỏ Thần Kim Quy và Giếng Ngọc Mỵ Châu trong ánh sáng hoàng thành Âu Lạc.',
     cameraPos: new THREE.Vector3(0.0, 1.8, -41.0),
@@ -1104,6 +1107,14 @@ export const DEFAULT_MUSEUM_TOUR_WAYPOINTS = [
   }
 ];
 
+export function getUnlockedTourWaypoints(waypoints = DEFAULT_MUSEUM_TOUR_WAYPOINTS) {
+  return (Array.isArray(waypoints) ? waypoints : []).filter((wp) => {
+    if (!wp || typeof wp !== 'object') return false;
+    if (!wp.roomId) return true;
+    return !isRoomLocked(wp.roomId);
+  });
+}
+
 function normalizeTourWaypoint(wp, fallback = {}) {
   const toVec3 = (v, fb) => {
     if (v?.isVector3) return v.clone();
@@ -1128,8 +1139,8 @@ export class MuseumAutoTourDirector {
     onTourStateChange = null
   } = {}) {
     this.camera = camera;
-    this.waypoints = waypoints;
-    this.activeWaypoints = waypoints;
+    this.waypoints = getUnlockedTourWaypoints(waypoints);
+    this.activeWaypoints = this.waypoints;
     this.roomTours = new Map([
       ['nguoi_con_gai_nam_xuong', NAM_XUONG_TOUR_WAYPOINTS],
       ['day_thon_vi_da', DAY_THON_VI_DA_TOUR_WAYPOINTS],
@@ -1257,19 +1268,25 @@ export class MuseumAutoTourDirector {
   }
 
   _getActiveWaypoints() {
-    return (Array.isArray(this.activeWaypoints) && this.activeWaypoints.length > 0)
+    const raw = (Array.isArray(this.activeWaypoints) && this.activeWaypoints.length > 0)
       ? this.activeWaypoints
       : this.waypoints;
+    return getUnlockedTourWaypoints(raw);
   }
 
   registerRoomTour(roomId, roomWaypoints = []) {
     if (!roomId || !Array.isArray(roomWaypoints) || roomWaypoints.length === 0) return;
+    if (isRoomLocked(roomId)) return;
     const defaults = this.roomTours.get(roomId) || [];
     const normalized = roomWaypoints.map((wp, idx) => normalizeTourWaypoint(wp, defaults[idx] || {}));
     this.roomTours.set(roomId, normalized);
   }
 
   getRoomTourWaypoints(roomId = 'nguoi_con_gai_nam_xuong') {
+    if (isRoomLocked(roomId)) {
+      console.warn(`[MuseumAutoTourDirector] getRoomTourWaypoints: Phòng '${roomId}' đang tạm khóa tu bổ.`);
+      return [];
+    }
     if (roomId === 'nguoi_con_gai_nam_xuong' || roomId === 'nam_xuong' || roomId === '204') {
       const roomObj = typeof window !== 'undefined' ? window.__namXuongRoom : null;
       const roomProvided = roomObj?.getAutoTourWaypoints?.() || roomObj?.autoTourWaypoints;
@@ -1334,8 +1351,16 @@ export class MuseumAutoTourDirector {
   }
 
   startRoomTour(roomIdOrWaypoints = 'nguoi_con_gai_nam_xuong', startIndex = 0) {
+    if (typeof roomIdOrWaypoints === 'string' && isRoomLocked(roomIdOrWaypoints)) {
+      console.warn(`[MuseumAutoTourDirector] Không thể khởi hành tour: Phòng '${roomIdOrWaypoints}' đang tạm khóa tu bổ.`);
+      const statusText = typeof document !== 'undefined' ? document.getElementById('tour-status-text') : null;
+      if (statusText) {
+        statusText.textContent = `Không gian này đang trong quá trình hoàn thiện và sẽ sớm ra mắt!`;
+      }
+      return false;
+    }
     const waypoints = Array.isArray(roomIdOrWaypoints)
-      ? roomIdOrWaypoints
+      ? getUnlockedTourWaypoints(roomIdOrWaypoints)
       : this.getRoomTourWaypoints(roomIdOrWaypoints);
     if (!waypoints.length) return false;
     this.startTour(startIndex, waypoints);

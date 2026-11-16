@@ -570,6 +570,20 @@ export class PortalInteraction {
         const pointerPos = isLocked ? { x: 0, y: 0 } : this.mouse;
         const result = this.performRaycast(pointerPos);
 
+        // Xử lý click vào Cổng Khóa Phong Ấn của các phòng chưa hoàn thiện
+        if (result && (result.hitMesh?.userData?.isLockedDoorProxy || result.rootBook?.userData?.isLockedDoorProxy)) {
+          const proxy = result.hitMesh?.userData?.isLockedDoorProxy ? result.hitMesh : result.rootBook;
+          if (typeof proxy.userData?.onClick === 'function') {
+            proxy.userData.onClick();
+          } else {
+            const msg = `🔒 Phòng ${proxy.userData?.roomCode || ''}: "${proxy.userData?.roomName || ''}" đang trong quá trình tu bổ và hoàn thiện. Tạm thời phong ấn!`;
+            if (typeof window !== 'undefined' && typeof window.__showMuseumToast === 'function') {
+              window.__showMuseumToast(msg);
+            }
+          }
+          return;
+        }
+
         if (result && result.rootBook) {
           const mId = result.rootBook.userData?.portalMetadata?.id || result.hitMesh?.userData?.portalMetadata?.id;
           const targetRealm = result.rootBook.userData?.targetRealm || result.hitMesh?.userData?.targetRealm || result.rootBook.userData?.portalMetadata?.targetRealm || result.hitMesh?.userData?.portalMetadata?.targetRealm;
@@ -738,7 +752,7 @@ export class PortalInteraction {
       // Ưu tiên kiểm tra các hộp Proxy Hitbox cho sách dịch chuyển (Skill: hitbox-collision-architect)
       if (typeof window !== 'undefined' && window.__museumHitboxManager) {
         const proxyHit = window.__museumHitboxManager.raycastInteractiveHitboxes(this.raycaster, maxDist);
-        if (proxyHit && (proxyHit.object?.userData?.isBookPortal || proxyHit.object?.userData?.isTeleportBook)) {
+        if (proxyHit && (proxyHit.object?.userData?.isBookPortal || proxyHit.object?.userData?.isTeleportBook || proxyHit.object?.userData?.isLockedDoorProxy)) {
           const hit = proxyHit.object;
           const root = hit.userData.interactiveBookRoot || hit.userData.linkedVisualObject || hit;
           return {
@@ -865,6 +879,13 @@ export class PortalInteraction {
    */
   onHoverEnter(rootBook) {
     try {
+      if (rootBook?.userData?.isLockedDoorProxy) {
+        if (typeof document !== 'undefined' && document.body && !this.isPointerLocked()) {
+          document.body.style.cursor = 'not-allowed';
+        }
+        return;
+      }
+
       this.audioManager?.playBookHover?.();
 
       const meta = rootBook?.userData?.portalMetadata;

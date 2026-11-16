@@ -326,6 +326,24 @@ export class CameraManager {
     }
   }
 
+  setPosition(pos) {
+    if (pos && this.camera?.position) {
+      this.camera.position.copy(pos);
+    }
+  }
+
+  setTarget(target) {
+    if (target) {
+      if (this.controls?.target) {
+        this.controls.target.copy(target);
+        try { this.controls.update(); } catch (_) {}
+      }
+      if (this.camera?.lookAt) {
+        this.camera.lookAt(target);
+      }
+    }
+  }
+
   startTour() {
     this.isTransitioning = false;
     this.cameraController?.controls?.unlock?.();

@@ -60,6 +60,19 @@ function getVfxTex(key, w, h, drawFn) {
   LOBBY_VFX_TEX_CACHE[key] = tex;
   return tex;
 }
+const getLobbyVfxTex = getVfxTex;
+
+function getLobbyBubbleTexture() {
+  return getLobbyVfxTex('lobby_soft_bubble_particle', 64, 64, (ctx, w, h) => {
+    const grad = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+    grad.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
+    grad.addColorStop(0.4, 'rgba(254, 240, 138, 0.85)');
+    grad.addColorStop(0.75, 'rgba(254, 240, 138, 0.2)');
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+  });
+}
 
 /**
  * ============================================================================
@@ -386,9 +399,11 @@ function createGoldenKoiSchool(pondRadius = 2.2) {
     bubblePos[b * 3 + 2] = Math.sin(ang) * rad;
   }
   bubbleGeo.setAttribute('position', new THREE.BufferAttribute(bubblePos, 3));
+  const bubbleTex = getLobbyBubbleTexture();
   const bubbleMat = new THREE.PointsMaterial({
+    map: bubbleTex,
     color: 0xfef08a,
-    size: 0.14,
+    size: 0.18,
     transparent: true,
     opacity: 0.65,
     blending: THREE.AdditiveBlending,
@@ -396,6 +411,7 @@ function createGoldenKoiSchool(pondRadius = 2.2) {
   });
   const bubblePoints = new THREE.Points(bubbleGeo, bubbleMat);
   bubblePoints.userData.ignoreRaycaster = true;
+  bubblePoints.raycast = () => {};
   koiGroup.add(bubblePoints);
 
   const updateKoi = (timeSec) => {

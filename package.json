@@ -11,6 +11,7 @@
     "fetch-lobby": "node scripts/fetchLobbyModels.mjs"
   },
   "dependencies": {
+    "pptxgenjs": "^4.0.1",
     "three": "^0.186.1",
     "three-mesh-bvh": "^0.9.18",
     "three-stdlib": "^2.36.1"

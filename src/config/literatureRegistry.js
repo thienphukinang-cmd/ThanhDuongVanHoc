@@ -113,7 +113,7 @@ export const LITERATURE_REGISTRY = [
     themeColor: 0x10b981, // Xanh Ngọc Bích Cổ Loa & Vàng Kim Quy
     quote: 'Nỏ thần vô ý trao tay giặc – Bi kịch dựng nước và bài học cảnh giác muôn đời vọng lại từ ngàn xưa nơi Cổ Loa thành.',
     roomCompleted: true,
-    portalReady: true,
+    portalReady: false, // 🔒 Tạm phong ấn để tu bổ – An Dương Vương Story Realm
     atmosphere: {
       primaryColor: 0xd35400,
       secondaryColor: 0x8e44ad,
@@ -637,8 +637,10 @@ export const LITERATURE_REGISTRY = [
     roomIndex: 4, // Cánh Đông-Nam (305)
     themeColor: 0xd35400, // Hoàng hôn nạn đói ấm áp tình người
     quote: 'Sức sống kỳ diệu, tình người cưu mang và niềm tin hướng về sự sống trước thềm nạn đói kinh hoàng 1945.',
-    roomCompleted: true,
-    portalReady: true,
+    roomCompleted: false,
+    portalReady: false,
+    isLocked: true,
+    lockNotice: 'Không gian đang trong quá trình tu bổ và hoàn thiện nghệ thuật.',
     atmosphere: {
       primaryColor: 0xd35400,
       secondaryColor: 0xf39c12,
@@ -742,6 +744,13 @@ export function localRoomToWorld(poseOrId, localX = 0, localY = 0, localZ = 0) {
     y: pose.y + localY,
     z: pose.z - localX * sinR + localZ * cosR
   };
+}
+
+export function isRoomLocked(itemOrId) {
+  const item = getLiteratureItem(itemOrId);
+  if (!item) return false;
+  if (typeof item.isLocked === 'boolean') return item.isLocked;
+  return Boolean(!item.roomCompleted && !CUSTOM_ROOM_IDS.has(item.id));
 }
 
 export { ALCOVE_CENTERS };

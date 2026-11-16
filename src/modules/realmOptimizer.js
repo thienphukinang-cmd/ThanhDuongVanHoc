@@ -74,6 +74,7 @@ export function createOptimizedGodRays(colorHex = '#fde047', height = 20, topRad
   ctx.fillRect(0, 0, 32, 128);
 
   const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
   
   const geometry = new THREE.CylinderGeometry(topRadius, bottomRadius, height, 16, 1, true);
   geometry.translate(0, -height / 2, 0); // Đặt tâm chóp quay lên trên

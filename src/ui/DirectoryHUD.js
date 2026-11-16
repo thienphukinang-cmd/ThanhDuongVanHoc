@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 import {
   LITERATURE_REGISTRY,
+  ALCOVE_CENTERS,
   CUSTOM_ROOM_IDS,
   getRoomCode,
   getRoomWorldPose,
-  localRoomToWorld
+  localRoomToWorld,
+  isRoomLocked
 } from '../config/literatureRegistry.js';
 
 /**
@@ -170,32 +172,38 @@ export class DirectoryHUD {
       if (!container) return;
 
       const roomCode = getRoomCode(item);
-      const isPortalReady = item.portalReady === true;
-      const isRoomCompleted = isPortalReady || item.roomCompleted === true || CUSTOM_ROOM_IDS.has(item.id);
-      if (isRoomCompleted) completedCount++;
+      const isLocked = isRoomLocked(item);
+      const isPortalReady = !isLocked && item.portalReady === true;
+      const isRoomCompleted = !isLocked && (isPortalReady || item.roomCompleted === true || CUSTOM_ROOM_IDS.has(item.id));
+      if (isRoomCompleted && !isLocked) completedCount++;
       if (isPortalReady) portalReadyCount++;
 
-      const statusText = isPortalReady
-        ? '✓ [ĐÃ MỞ CỔNG]'
-        : (isRoomCompleted ? '✓ [ĐÃ HOÀN THÀNH]' : '[SẢNH TRƯNG BÀY]');
+      const statusText = isLocked
+        ? '🔒 Sắp ra mắt'
+        : (isPortalReady ? '✓ [ĐÃ MỞ CỔNG]' : '✓ [ĐÃ HOÀN THÀNH]');
+
+      const badgeClass = isLocked
+        ? 'status-locked'
+        : (isPortalReady ? 'status-open' : 'status-exhibit');
 
       const card = document.createElement('div');
-      card.className = `dir-room-card ${isRoomCompleted ? 'portal-ready-card completed-room-card' : ''}`;
+      card.className = `dir-room-card ${isPortalReady ? 'portal-ready-card' : ''} ${isRoomCompleted && !isLocked ? 'completed-room-card' : ''} ${isLocked ? 'locked-room-card' : ''}`;
       card.dataset.id = item.id;
-      card.dataset.completed = String(isRoomCompleted);
+      card.dataset.completed = String(isRoomCompleted && !isLocked);
+      card.dataset.locked = String(isLocked);
 
       card.innerHTML = `
         <div class="card-top-row">
           <span class="room-code-tag">PHÒNG ${roomCode}</span>
-          <span class="room-status-badge ${isRoomCompleted ? 'status-open' : 'status-exhibit'}">
+          <span class="room-status-badge ${badgeClass}">
             ${statusText}
           </span>
         </div>
         <div class="room-work-title">${item.name}</div>
         <div class="room-work-author">${item.author}</div>
         <div class="card-hover-action">
-          <span class="action-icon">✈</span>
-          <span class="action-text">Lướt camera tới phòng</span>
+          <span class="action-icon">${isLocked ? '🔒' : '✈'}</span>
+          <span class="action-text">${isLocked ? 'Xem khu vực phục dựng' : 'Lướt camera tới phòng'}</span>
         </div>
       `;
 
@@ -217,15 +225,38 @@ export class DirectoryHUD {
   handleCardClick(item) {
     this.close();
 
-    const target = getRoomFastTravelTarget(item);
     const roomCode = getRoomCode(item);
+    const isLocked = isRoomLocked(item);
 
-    this.showToast(`✨ Đang lướt camera tới Phòng ${roomCode}: ${item.name}...`);
+    const target = getRoomFastTravelTarget(item);
+    let targetCamPos = target.cameraPosition;
+    let targetLookAt = target.lookAtTarget;
+
+    if (isLocked) {
+      this.showToast('Không gian nghệ thuật này đang được hoàn thiện và sẽ sớm ra mắt!');
+      const pose = getRoomWorldPose(item);
+      const alcove = ALCOVE_CENTERS[item.roomIndex] || ALCOVE_CENTERS[0];
+      const archPos = alcove.archPos || [pose.x, pose.z];
+      let camX = archPos[0];
+      let camZ = archPos[1];
+      if (alcove.archFacing === 'east') camX += 5.2;
+      else if (alcove.archFacing === 'west') camX -= 5.2;
+      else camZ += 5.2;
+
+      targetCamPos = new THREE.Vector3(camX, pose.y + 1.7, camZ);
+      targetLookAt = new THREE.Vector3(archPos[0], pose.y + 2.5, archPos[1]);
+    } else {
+      this.showToast(`✨ Đang lướt camera tới Phòng ${roomCode}: ${item.name}...`);
+    }
 
     const runFastTravel = () => {
       if (this.cameraManager?.fastTravelTo) {
-        this.cameraManager.fastTravelTo(target.cameraPosition, target.lookAtTarget, () => {
-          this.showToast(`✓ Đã đến sảnh trưng bày: ${item.name}`);
+        this.cameraManager.fastTravelTo(targetCamPos, targetLookAt, () => {
+          if (isLocked) {
+            this.showToast('Không gian nghệ thuật này đang được hoàn thiện và sẽ sớm ra mắt!');
+          } else {
+            this.showToast(`✓ Đã đến sảnh trưng bày: ${item.name}`);
+          }
         });
       }
     };
@@ -642,6 +673,23 @@ export class DirectoryHUD {
         background: rgba(212, 175, 55, 0.12);
         border: 1px solid rgba(212, 175, 55, 0.35);
         color: #ffd269;
+      }
+
+      .status-locked {
+        background: rgba(239, 68, 68, 0.18);
+        border: 1px solid #ef4444;
+        color: #fca5a5;
+        box-shadow: 0 0 8px rgba(239, 68, 68, 0.25);
+      }
+
+      .dir-room-card.locked-room-card {
+        border-color: rgba(239, 68, 68, 0.4);
+        background: linear-gradient(135deg, rgba(32, 14, 18, 0.92) 0%, rgba(18, 9, 13, 0.96) 100%);
+      }
+
+      .dir-room-card.locked-room-card:hover {
+        border-color: #ef4444;
+        box-shadow: 0 6px 18px rgba(239, 68, 68, 0.28);
       }
 
       .room-work-title {

@@ -16,7 +16,8 @@ import { AudioManager, SURFACE_TYPES } from './modules/AudioManager.js';
 import {
   LITERATURE_REGISTRY,
   CUSTOM_ROOM_IDS,
-  getRoomWorldPose
+  getRoomWorldPose,
+  isRoomLocked
 } from './config/literatureRegistry.js';
 import { buildTruyenKieuExhibition } from './modules/truyenKieuRoomDecorator.js';
 import { buildThanhGiongExhibition } from './modules/thanhGiongRoomDecorator.js';
@@ -41,6 +42,9 @@ import {
 } from './modules/museumCuratorAndTourSystem.js';
 import { MuseumTotalOverhaulEngine } from './modules/museumTotalOverhaulEngine.js';
 import { applyAll16SkillsToMuseum } from './modules/museumUltimate16SkillsUpgrade.js';
+import { AICommandHubWorld } from './worlds/aiCommandHub.js';
+import { CatAgentVillageWorld } from './worlds/catAgentVillage.js';
+import { createCatPawAndFireflyAura } from './modules/catPortalVfxAndLighting.js';
 
 /**
  * BẢO TÀNG VĂN HỌC - THE NEW ERA
@@ -197,6 +201,52 @@ class LiteratureCathedralApp {
     this.namXuongScene.fog = new THREE.FogExp2(0x0d1117, 0.0035);
     window.__namXuongScene = this.namXuongScene;
 
+    // 11. Scene Khu Căn Cứ Đội Quân AI ("Khu Chỉ Huy Kiến Tạo Thánh Đường")
+    this.aiCommandHubScene = new THREE.Scene();
+    this.aiCommandHubScene.name = "AICommandHub_Universe";
+    this.aiCommandHubScene.background = new THREE.Color(0x0b0f19);
+    this.aiCommandHubScene.fog = new THREE.FogExp2(0x0b0f19, 0.0016);
+    window.__aiCommandHubScene = this.aiCommandHubScene;
+
+    try {
+      this.aiCommandHubWorld = new AICommandHubWorld(
+        this.aiCommandHubScene,
+        this.camera,
+        this.renderer,
+        this.cameraManager,
+        {
+          onReturnToLobby: () => this.exitAICommandHub()
+        }
+      );
+      this.aiCommandHubWorld.init().catch(err => console.warn('[AICommandHubWorld] init error:', err));
+      window.__aiCommandHubWorld = this.aiCommandHubWorld;
+    } catch (e) {
+      console.warn('[AICommandHubWorld] instantiate error:', e);
+    }
+
+    // 12. Scene Đảo Mèo Thánh Đường 3D Isometric ("Cat Agent Village")
+    this.catVillageScene = new THREE.Scene();
+    this.catVillageScene.name = "CatVillage_Universe";
+    this.catVillageScene.background = new THREE.Color(0x0d111a);
+    this.catVillageScene.fog = new THREE.FogExp2(0x0d111a, 0.0018);
+    window.__catVillageScene = this.catVillageScene;
+
+    try {
+      this.catVillageWorld = new CatAgentVillageWorld(
+        this.catVillageScene,
+        this.camera,
+        this.renderer,
+        this.cameraManager,
+        {
+          onReturnToLobby: () => this.exitCatVillage()
+        }
+      );
+      this.catVillageWorld.init().catch(err => console.warn('[CatAgentVillageWorld] init error:', err));
+      window.__catVillageWorld = this.catVillageWorld;
+    } catch (e) {
+      console.warn('[CatAgentVillageWorld] instantiate error:', e);
+    }
+
     // 5. Biến quản lý Scene đang Active (Mặc định: Sảnh Bảo Tàng)
     this.activeScene = this.mainScene;
     window.__activeScene = this.activeScene;
@@ -252,6 +302,9 @@ class LiteratureCathedralApp {
       roomCenter: getRoomCenterVector('vo_nhat'), // Khớp tuyệt đối với LITERATURE_REGISTRY + ALCOVE_CENTERS (Tầng 3, phòng 305)
       realmScene: this.voNhatScene
     });
+    if (isRoomLocked('vo_nhat')) {
+      voNhatRoom.visible = false;
+    }
     this.scene.add(voNhatRoom);
     this.voNhatRoom = voNhatRoom;
     window.__voNhatRoom = voNhatRoom;
@@ -347,7 +400,7 @@ class LiteratureCathedralApp {
       if (this.sonTinhThuyTinhRoom) this.sonTinhThuyTinhRoom.visible = true;
       if (this.namQuocSonHaRoom) this.namQuocSonHaRoom.visible = true;
       if (this.anDuongVuongRoom) this.anDuongVuongRoom.visible = true;
-      if (this.voNhatRoom) this.voNhatRoom.visible = true;
+      if (this.voNhatRoom) this.voNhatRoom.visible = !isRoomLocked('vo_nhat');
       if (this.tatDenRoom) this.tatDenRoom.visible = true;
       if (this.namXuongRoom) this.namXuongRoom.visible = true;
       if (this.dayThonViDaRoom) this.dayThonViDaRoom.visible = true;
@@ -494,6 +547,36 @@ class LiteratureCathedralApp {
       if (this.namXuongRoom) this.namXuongRoom.visible = false;
       if (this.dayThonViDaRoom) this.dayThonViDaRoom.visible = false;
       if (this.museumCrowd?.crowdGroup) this.museumCrowd.crowdGroup.visible = false;
+    } else if (scene === this.aiCommandHubScene) {
+      const style = this._getCachedSceneStyle('aiCommandHub', 0x0b0f19, 0x0b0f19, 0.0016);
+      this.aiCommandHubScene.background = style.background;
+      this.aiCommandHubScene.fog = style.fog;
+      if (this.exteriorVista?.group) this.exteriorVista.group.visible = false;
+      if (this.truyenKieuRoom) this.truyenKieuRoom.visible = false;
+      if (this.thanhGiongRoom) this.thanhGiongRoom.visible = false;
+      if (this.sonTinhThuyTinhRoom) this.sonTinhThuyTinhRoom.visible = false;
+      if (this.namQuocSonHaRoom) this.namQuocSonHaRoom.visible = false;
+      if (this.anDuongVuongRoom) this.anDuongVuongRoom.visible = false;
+      if (this.voNhatRoom) this.voNhatRoom.visible = false;
+      if (this.tatDenRoom) this.tatDenRoom.visible = false;
+      if (this.namXuongRoom) this.namXuongRoom.visible = false;
+      if (this.dayThonViDaRoom) this.dayThonViDaRoom.visible = false;
+      if (this.museumCrowd?.crowdGroup) this.museumCrowd.crowdGroup.visible = false;
+    } else if (scene === this.catVillageScene) {
+      const style = this._getCachedSceneStyle('catVillage', 0x0d111a, 0x0d111a, 0.0018);
+      this.catVillageScene.background = style.background;
+      this.catVillageScene.fog = style.fog;
+      if (this.exteriorVista?.group) this.exteriorVista.group.visible = false;
+      if (this.truyenKieuRoom) this.truyenKieuRoom.visible = false;
+      if (this.thanhGiongRoom) this.thanhGiongRoom.visible = false;
+      if (this.sonTinhThuyTinhRoom) this.sonTinhThuyTinhRoom.visible = false;
+      if (this.namQuocSonHaRoom) this.namQuocSonHaRoom.visible = false;
+      if (this.anDuongVuongRoom) this.anDuongVuongRoom.visible = false;
+      if (this.voNhatRoom) this.voNhatRoom.visible = false;
+      if (this.tatDenRoom) this.tatDenRoom.visible = false;
+      if (this.namXuongRoom) this.namXuongRoom.visible = false;
+      if (this.dayThonViDaRoom) this.dayThonViDaRoom.visible = false;
+      if (this.museumCrowd?.crowdGroup) this.museumCrowd.crowdGroup.visible = false;
     } else {
       if (this.exteriorVista?.group) this.exteriorVista.group.visible = false;
       if (this.truyenKieuRoom) this.truyenKieuRoom.visible = false;
@@ -508,7 +591,14 @@ class LiteratureCathedralApp {
       if (this.museumCrowd?.crowdGroup) this.museumCrowd.crowdGroup.visible = false;
     }
 
-    if (scene !== this.mainScene && this.renderer && this.camera) {
+    if (this.renderer) {
+      if (this.renderer.shadowMap) {
+        // Luôn giữ shadowMap.enabled = true để tránh lỗi WebGL texture format mismatch khi chuyển Scene
+        this.renderer.shadowMap.autoUpdate = (scene === this.mainScene || scene === this.namXuongScene || scene === this.dayThonViDaScene);
+      }
+    }
+
+    if (scene !== this.mainScene && scene !== this.aiCommandHubScene && scene !== this.catVillageScene && this.renderer && this.camera) {
       try {
         this.renderer.compile(scene, this.camera);
       } catch (e) {}
@@ -528,6 +618,9 @@ class LiteratureCathedralApp {
     try {
       this.audioManager = new AudioManager(this.camera);
       window.audioManager = this.audioManager;
+      if (this.aiCommandHubWorld) {
+        this.aiCommandHubWorld.setAudioManager(this.audioManager);
+      }
     } catch (err) {
       console.error("[SELF-HEALING] Lỗi khởi tạo AudioManager:", err);
       this.audioManager = null;
@@ -707,6 +800,17 @@ class LiteratureCathedralApp {
       }
       if (this.lobbyDecorator?.registerHitboxes) {
         this.lobbyDecorator.registerHitboxes(this.hitboxManager);
+      }
+      // Đồng bộ Camera & Renderer vào Thế Giới Đảo Mèo & Căn Cứ AI
+      if (this.catVillageWorld) {
+        this.catVillageWorld.camera = this.camera;
+        this.catVillageWorld.renderer = this.renderer;
+        this.catVillageWorld.cameraManager = this.cameraManager;
+      }
+      if (this.aiCommandHubWorld) {
+        this.aiCommandHubWorld.camera = this.camera;
+        this.aiCommandHubWorld.renderer = this.renderer;
+        this.aiCommandHubWorld.cameraManager = this.cameraManager;
       }
     } catch (err) {
       console.error("[SELF-HEALING] Lỗi khởi tạo CameraManager:", err);
@@ -965,7 +1069,7 @@ class LiteratureCathedralApp {
             quote: 'Nỏ thần vô ý trao tay giặc – Bi kịch Cổ Loa vang vọng ngàn thu...',
             themeColor: 0x10b981,
             targetRealm: 'AN_DUONG_VUONG_REALM',
-            portalReady: true,
+            portalReady: false, // 🔒 Tạm phong ấn – realm đang tu bổ
             onActivate: () => {
               this.anDuongVuongRoom.enterRealm?.();
             }
@@ -973,8 +1077,8 @@ class LiteratureCathedralApp {
         }
       }
 
-      // Đăng ký Sách Cổ Phòng Vợ Nhặt vào PortalInteraction
-      if (this.voNhatRoom) {
+      // Đăng ký Sách Cổ Phòng Vợ Nhặt vào PortalInteraction (Chỉ khi phòng mở)
+      if (this.voNhatRoom && !isRoomLocked('vo_nhat')) {
         const vnBook = this.voNhatRoom.teleportBook || this.voNhatRoom;
         if (vnBook) {
           this.portalInteraction.registerInteractiveBook(vnBook, new THREE.Vector3(-260, 424.0, -418.0), {
@@ -985,7 +1089,8 @@ class LiteratureCathedralApp {
             quote: 'Trong hoàn cảnh khốn cùng, người ta vẫn khao khát sống và thương yêu nhau...',
             themeColor: 0xd35400,
             targetRealm: 'VO_NHAT_REALM',
-            portalReady: true,
+            portalReady: false, // 🔒 Tạm phong ấn Cõi Mở Xóm Ngụ Cư
+            title: 'VỢ NHẶT (ĐANG PHONG ẤN TU BỔ)',
             onActivate: () => {
               this.voNhatRoom.enterRealm?.();
             }
@@ -1055,6 +1160,32 @@ class LiteratureCathedralApp {
             }
           });
         }
+      }
+
+      // (Đã dọn dẹp Cổng AI cũ để nhường toàn bộ không gian cho Đội Quân Mèo AI & Đảo Mèo Thánh Đường)
+
+      // Đăng ký CỔNG DỊCH CHUYỂN "ĐẢO MÈO THÁNH ĐƯỜNG 3D" tại Đại Sảnh (Grand Lobby)
+      try {
+        const catPortal = this.buildCatVillagePortalInLobby();
+        if (catPortal) {
+          this.portalInteraction.registerInteractiveBook(catPortal, null, {
+            id: 'cat_village',
+            title: 'ĐẢO MÈO THÁNH ĐƯỜNG 3D',
+            author: 'Đội Quân 6 Mèo AI Agent • 15 Skills Di Sản',
+            genre: 'Diorama Đảo Nổi Isometric • Làng Mèo Cổ Phong',
+            quote: '“6 chú mèo chibi lon ton đi dạo qua cầu gỗ, cùng nhau kiến tạo Thánh Đường Văn Học.”',
+            themeColor: 0xffaa33,
+            targetRealm: 'CAT_VILLAGE_REALM',
+            portalReady: true,
+            floor: 1,
+            roomIndex: 98,
+            onActivate: () => {
+              this.enterCatVillage();
+            }
+          });
+        }
+      } catch (errPortal) {
+        console.warn('[CatVillage] Lỗi dựng Cổng tại Đại Sảnh:', errPortal);
       }
 
       // Kết nối Context toàn diện cho Phòng Truyện Kiều (Cõi Thơ Đoạn Trường Tân Thanh)
@@ -1210,8 +1341,20 @@ class LiteratureCathedralApp {
               return true;
             }
           }
+          if (realmName === 'ai_command_hub' || realmName === 'ai_hub' || realmName === 'swarm_hub' || realmName === 'ai') {
+            this.enterAICommandHub();
+            return true;
+          }
+          if (realmName === 'cat_village' || realmName === 'dao_meo' || realmName === 'cat_agent_village' || realmName === 'lang_meo' || realmName === 'cats') {
+            this.enterCatVillage();
+            return true;
+          }
           return false;
         };
+        window.enterAICommandHub = () => this.enterAICommandHub();
+        window.exitAICommandHub = () => this.exitAICommandHub();
+        window.enterCatVillage = () => this.enterCatVillage();
+        window.exitCatVillage = () => this.exitCatVillage();
       }
     } catch (err) {
       console.error("[SELF-HEALING] Lỗi khởi tạo PortalInteraction:", err);
@@ -1806,7 +1949,7 @@ class LiteratureCathedralApp {
           this.truyenKieuRoom?.userData?.registerHitboxes?.(this.hitboxManager);
           this.sonTinhThuyTinhRoom?.userData?.registerHitboxes?.(this.hitboxManager);
           this.anDuongVuongRoom?.userData?.registerHitboxes?.(this.hitboxManager);
-          this.voNhatRoom?.userData?.registerHitboxes?.(this.hitboxManager);
+          if (!isRoomLocked('vo_nhat')) this.voNhatRoom?.userData?.registerHitboxes?.(this.hitboxManager);
           (this.namXuongRoom?.registerHitboxes || this.namXuongRoom?.userData?.registerHitboxes)?.(this.hitboxManager);
           (this.dayThonViDaRoom?.registerHitboxes || this.dayThonViDaRoom?.userData?.registerHitboxes)?.(this.hitboxManager);
           return res;
@@ -2660,6 +2803,22 @@ class LiteratureCathedralApp {
         if (this.ultimate16Skills?.updateAll) {
           this.ultimate16Skills.updateAll(performance.now());
         }
+
+
+        // Tự động kích hoạt Cổng Đảo Mèo Thánh Đường khi người chơi bước lại gần (cự ly <= 2.2m)
+        if (this.catVillageLobbyPortal && this.camera && !this._isTeleportingToCatVillage) {
+          const now = performance.now();
+          if (!this._lastCatVillageTeleportTime || now - this._lastCatVillageTeleportTime > 4500) {
+            this._vTmpCatPortal = this._vTmpCatPortal || new THREE.Vector3();
+            this.catVillageLobbyPortal.getWorldPosition(this._vTmpCatPortal);
+            if (this.camera.position.distanceTo(this._vTmpCatPortal) <= 2.2) {
+              this.enterCatVillage();
+            }
+          }
+          if (this.catVillageLobbyPortal.userData?.updatePortal) {
+            this.catVillageLobbyPortal.userData.updatePortal(now * 0.001);
+          }
+        }
       } else if (this.activeScene === this.truyenKieuScene) {
         // Chỉ hiển thị & cập nhật duy nhất 1 nhánh Truyện Kiều đang vào
         if (this.truyenKieuRoom?.isInsideRealm?.()) {
@@ -2692,6 +2851,10 @@ class LiteratureCathedralApp {
         (this.dayThonViDaRoom?.updateRealm || this.dayThonViDaRoom?.userData?.updateRealm)?.(delta, elapsedTime, this.camera);
       } else if (this.activeScene === this.namXuongScene) {
         (this.namXuongRoom?.updateRealm || this.namXuongRoom?.userData?.updateRealm)?.(delta, elapsedTime, this.camera);
+      } else if (this.activeScene === this.aiCommandHubScene) {
+        this.aiCommandHubWorld?.update(delta, elapsedTime, this.camera);
+      } else if (this.activeScene === this.catVillageScene) {
+        this.catVillageWorld?.update(delta, elapsedTime, this.camera);
       }
 
       this.worldManager?.update(delta, elapsedTime);
@@ -2709,6 +2872,947 @@ class LiteratureCathedralApp {
       }
     }
   };
+
+  /**
+   * DỰNG CỔNG DỊCH CHUYỂN "KHU CHỈ HUY ĐỘI QUÂN AI" TẠI ĐẠI SẢNH (GRAND LOBBY)
+   */
+  buildAICommandHubPortalInLobby() {
+    // Đã xóa bỏ hoàn toàn Cổng AI cũ để nhường toàn bộ không gian cho Đội Quân Mèo AI & Đảo Mèo Thánh Đường
+    this.aiHubLobbyPortal = null;
+    return null;
+  }
+
+  /**
+   * DỊCH CHUYỂN VÀO KHU CĂN CỨ ĐỘI QUÂN AI
+   */
+  enterAICommandHub() {
+    if (this._isTeleportingToAiHub) return;
+    this._isTeleportingToAiHub = true;
+    this._lastAiHubTeleportTime = performance.now();
+    window.__aiCommandHubActive = true;
+    console.log("%c[AI Command Hub] Teleporting into Command Hub...", "color: #00f5d4; font-weight: bold;");
+
+    let overlay = document.getElementById('world-transition-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'world-transition-overlay';
+      overlay.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+        background: #000000; opacity: 0; pointer-events: none; z-index: 99999;
+        transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+      `;
+      document.body.appendChild(overlay);
+    }
+
+    overlay.style.opacity = '1';
+
+    setTimeout(() => {
+      // 1. Lưu lại vị trí camera hiện tại trong sảnh
+      if (this.camera) {
+        this._savedLobbyCamPos = this.camera.position.clone();
+      }
+
+      // 2. Chuyển scene sang Căn Cứ AI
+      this.setActiveScene(this.aiCommandHubScene);
+
+      // 3. Đặt camera ở lối vào Căn Cứ AI, nhìn về đài Trống Đồng trung tâm
+      if (typeof document !== 'undefined' && document.exitPointerLock) {
+        try { document.exitPointerLock(); } catch (_) {}
+      }
+
+      const targetPos = new THREE.Vector3(0, 1.8, 28.0);
+      const targetLookAt = new THREE.Vector3(0, 2.2, 0);
+
+      if (typeof this.cameraManager?.setCustomView === 'function') {
+        this.cameraManager.setCustomView(targetPos, targetLookAt);
+      } else if (typeof this.cameraManager?.setPosition === 'function') {
+        this.cameraManager.setPosition(targetPos);
+        if (typeof this.cameraManager?.setTarget === 'function') {
+          this.cameraManager.setTarget(targetLookAt);
+        }
+      } else if (this.camera) {
+        this.camera.position.copy(targetPos);
+        this.camera.lookAt(targetLookAt);
+      }
+
+      if (this.aiCommandHubWorld) {
+        this.aiCommandHubWorld.group.visible = true;
+        this.aiCommandHubWorld.isInsideHub = true;
+        this.aiCommandHubWorld.onEnterHub?.();
+      }
+
+      setTimeout(() => {
+        overlay.style.opacity = '0';
+        this._isTeleportingToAiHub = false;
+        this._lastAiHubTeleportTime = performance.now();
+      }, 150);
+    }, 850);
+  }
+
+  /**
+   * DỊCH CHUYỂN TRỞ VỀ ĐẠI SẢNH THÁNH ĐƯỜNG
+   */
+  exitAICommandHub() {
+    if (this._isTeleportingToAiHub) return;
+    this._isTeleportingToAiHub = true;
+    this._lastAiHubTeleportTime = performance.now();
+    console.log("%c[AI Command Hub] Returning to Grand Lobby...", "color: #d4af37; font-weight: bold;");
+
+    let overlay = document.getElementById('world-transition-overlay');
+    if (overlay) overlay.style.opacity = '1';
+
+    if (this.aiCommandHubWorld) {
+      this.aiCommandHubWorld.closeDialogUI();
+      this.aiCommandHubWorld.isInsideHub = false;
+      this.aiCommandHubWorld.onExitHub?.();
+    }
+
+    setTimeout(() => {
+      // Chuyển lại về Sảnh Chính
+      window.__aiCommandHubActive = false;
+      this.setActiveScene(this.mainScene);
+
+      // Trả vị trí camera về phía trước cổng tại Đại Sảnh (cách tâm cổng >= 3.5m chống loop)
+      let returnPos = new THREE.Vector3(12.5, 1.8, 6.0);
+      if (this._savedLobbyCamPos) {
+        const distToLobbyPortal = Math.hypot(this._savedLobbyCamPos.x - 16.5, this._savedLobbyCamPos.z - 8.0);
+        if (distToLobbyPortal >= 3.5) {
+          returnPos.copy(this._savedLobbyCamPos);
+        }
+      }
+      const returnLookAt = new THREE.Vector3(0, 2.0, 0);
+
+      if (typeof this.cameraManager?.setCustomView === 'function') {
+        this.cameraManager.setCustomView(returnPos, returnLookAt);
+      } else if (typeof this.cameraManager?.setPosition === 'function') {
+        this.cameraManager.setPosition(returnPos);
+        if (typeof this.cameraManager?.setTarget === 'function') {
+          this.cameraManager.setTarget(returnLookAt);
+        }
+      } else if (this.camera) {
+        this.camera.position.copy(returnPos);
+        this.camera.lookAt(returnLookAt);
+      }
+
+      setTimeout(() => {
+        if (overlay) overlay.style.opacity = '0';
+        this._isTeleportingToAiHub = false;
+        this._lastAiHubTeleportTime = performance.now();
+      }, 150);
+    }, 850);
+  }
+
+  /**
+   * DỰNG CỔNG LINH MIÊU THIÊN THƯ TẠI ĐẠI SẢNH (GRAND LOBBY)
+   * Lối vào Đảo Mèo AI – Xưởng Kiến Tạo Thánh Đường (Diorama Thu Nhỏ ~22m x 22m)
+   * Đầy đủ: Khung gỗ lim sơn son thếp vàng, bậc đá xanh Thanh Hóa chạm mây cuộn & dấu chân mèo phát sáng,
+   * mái đao cong hình đôi tai mèo, 2 đèn lồng cá chép/cá khô & chuông gió đồng đung đưa,
+   * đôi tượng Mèo Đá chầu uy nghi ôm quả cầu ngọc phát sáng tại X = ±2.8m,
+   * biển ngọc "ĐẢO MÈO AI – XƯỞNG KIẾN TẠO THÁNH ĐƯỜNG", vòng xoáy linh khí Xanh Ngọc Lục Bảo (#00f5d4) & Vàng Kim (#ffbe55).
+   * Kích hoạt kép: Click hoặc bước vào lòng cổng (< 2.2m) chuyển cảnh tức thì, không collider chắn lòng cổng.
+   */
+  buildCatVillagePortalInLobby() {
+    if (!this.atriumGroup) return null;
+
+    const prepGeo = (geo) => {
+      if (!geo) return geo;
+      geo.computeVertexNormals();
+      geo.computeBoundingBox();
+      geo.computeBoundingSphere();
+      const pos = geo.getAttribute('position');
+      if (pos) {
+        for (let i = 0; i < pos.count * pos.itemSize; i++) {
+          if (Number.isNaN(pos.array[i]) || !Number.isFinite(pos.array[i])) pos.array[i] = 0;
+        }
+      }
+      const norm = geo.getAttribute('normal');
+      if (norm) {
+        for (let i = 0; i < norm.count * norm.itemSize; i++) {
+          if (Number.isNaN(norm.array[i]) || !Number.isFinite(norm.array[i])) norm.array[i] = 0;
+        }
+      }
+      return geo;
+    };
+
+    const portalGroup = new THREE.Group();
+    portalGroup.name = "CatVillage_Lobby_Portal";
+    // Đặt ở vị trí đối xứng trang trọng bên hành lang Tây Nam Đại Sảnh (-16.5, 0, 8.0)
+    portalGroup.position.set(-16.5, 0, 8.0);
+    portalGroup.rotation.y = Math.PI * 0.65;
+    portalGroup.userData.ignoreRaycaster = true;
+
+    // Vật liệu PBR cao cấp chuẩn Di sản Cung đình
+    const blueStoneMat = new THREE.MeshStandardMaterial({
+      color: 0x334155,
+      roughness: 0.42,
+      metalness: 0.15,
+      side: THREE.FrontSide
+    });
+    blueStoneMat.userData = { ignoreRaycaster: true };
+
+    const redLacquerMat = new THREE.MeshStandardMaterial({
+      color: 0x7f1d1d,
+      roughness: 0.32,
+      metalness: 0.28,
+      side: THREE.FrontSide
+    });
+    redLacquerMat.userData = { ignoreRaycaster: true };
+
+    const darkWoodMat = new THREE.MeshStandardMaterial({
+      color: 0x2b150c,
+      roughness: 0.38,
+      metalness: 0.18,
+      side: THREE.FrontSide
+    });
+    darkWoodMat.userData = { ignoreRaycaster: true };
+
+    const goldLeafMat = new THREE.MeshStandardMaterial({
+      color: 0xfacc15,
+      roughness: 0.20,
+      metalness: 0.88,
+      emissive: 0x78350f,
+      emissiveIntensity: 0.25,
+      side: THREE.FrontSide
+    });
+    goldLeafMat.userData = { ignoreRaycaster: true };
+
+    const terracottaRoofMat = new THREE.MeshStandardMaterial({
+      color: 0x991b1b,
+      roughness: 0.52,
+      metalness: 0.18,
+      side: THREE.FrontSide
+    });
+    terracottaRoofMat.userData = { ignoreRaycaster: true };
+
+    // 1. BẬC ĐÁ XANH THANH HÓA CHẠM MÂY CUỘN ĐÔNG SƠN & DẤU CHÂN MÈO PHÁT SÁNG
+    // CanvasTexture mặt bậc đá chạm khắc hoa văn & chuỗi dấu chân mèo phát sáng
+    let stepTex = null;
+    if (typeof document !== 'undefined') {
+      const stepCanvas = document.createElement('canvas');
+      stepCanvas.width = 512;
+      stepCanvas.height = 512;
+      const sCtx = stepCanvas.getContext('2d');
+      if (sCtx) {
+        // Nền đá xanh Thanh Hóa vân mây
+        const grad = sCtx.createLinearGradient(0, 0, 512, 512);
+        grad.addColorStop(0.0, '#1e293b');
+        grad.addColorStop(0.5, '#334155');
+        grad.addColorStop(1.0, '#1e293b');
+        sCtx.fillStyle = grad;
+        sCtx.fillRect(0, 0, 512, 512);
+
+        // Viền hoa văn mây cuộn Đông Sơn
+        sCtx.strokeStyle = '#64748b';
+        sCtx.lineWidth = 6;
+        sCtx.strokeRect(12, 12, 488, 488);
+
+        sCtx.strokeStyle = '#94a3b8';
+        sCtx.lineWidth = 2;
+        sCtx.strokeRect(20, 20, 472, 472);
+
+        // Chuỗi dấu chân mèo nhỏ (Cat Paw Prints 🐾) phát sáng lân tinh Xanh Ngọc (#00f5d4) và Vàng Kim (#ffbe55)
+        const drawPaw = (cx, cy, color, rot = 0, scale = 1.0) => {
+          sCtx.save();
+          sCtx.translate(cx, cy);
+          sCtx.rotate(rot);
+          sCtx.fillStyle = color;
+          sCtx.shadowColor = color;
+          sCtx.shadowBlur = 12;
+
+          // Đệm bàn chân chính (main pad)
+          sCtx.beginPath();
+          sCtx.ellipse(0, 4 * scale, 14 * scale, 11 * scale, 0, 0, Math.PI * 2);
+          sCtx.fill();
+
+          // 4 ngón chân nhỏ (toes)
+          const toeOffsets = [
+            [-12, -9, 4.5],
+            [-4, -14, 5.0],
+            [4, -14, 5.0],
+            [12, -9, 4.5]
+          ];
+          toeOffsets.forEach(([tx, ty, tr]) => {
+            sCtx.beginPath();
+            sCtx.arc(tx * scale, ty * scale, tr * scale, 0, Math.PI * 2);
+            sCtx.fill();
+          });
+          sCtx.restore();
+        };
+
+        // Chuỗi dấu chân mèo lon ton dẫn thẳng vào lòng cổng
+        const pawSteps = [
+          [256 - 45, 420, '#00f5d4', -0.1, 0.9],
+          [256 + 45, 340, '#ffbe55', 0.1, 0.95],
+          [256 - 40, 260, '#00f5d4', -0.05, 1.0],
+          [256 + 40, 180, '#ffbe55', 0.08, 1.05],
+          [256 - 35, 100, '#00f5d4', -0.02, 1.1],
+          [256 + 35, 35, '#ffbe55', 0.05, 1.15]
+        ];
+        pawSteps.forEach(([px, py, col, rot, sc]) => drawPaw(px, py, col, rot, sc));
+
+        stepTex = new THREE.CanvasTexture(stepCanvas);
+        stepTex.colorSpace = THREE.SRGBColorSpace;
+        stepTex.generateMipmaps = false;
+        stepTex.minFilter = THREE.LinearFilter;
+      }
+    }
+
+    const stepMat = new THREE.MeshStandardMaterial({
+      map: stepTex || null,
+      color: 0x475569,
+      roughness: 0.38,
+      metalness: 0.18,
+      side: THREE.FrontSide
+    });
+    stepMat.userData = { ignoreRaycaster: true };
+
+    // Bậc tam cấp 3 tầng mở rộng
+    const stepConfigs = [
+      { w: 5.2, h: 0.12, d: 1.6, y: 0.06, z: 0.45 },
+      { w: 4.8, h: 0.12, d: 1.3, y: 0.18, z: 0.30 },
+      { w: 4.4, h: 0.12, d: 1.0, y: 0.30, z: 0.15 }
+    ];
+    stepConfigs.forEach((st) => {
+      const stepMesh = new THREE.Mesh(
+        prepGeo(new THREE.BoxGeometry(st.w, st.h, st.d)),
+        [blueStoneMat, blueStoneMat, stepMat, blueStoneMat, blueStoneMat, blueStoneMat]
+      );
+      stepMesh.position.set(0, st.y, st.z);
+      stepMesh.userData.ignoreRaycaster = true;
+      stepMesh.userData.isFloor = true;
+      portalGroup.add(stepMesh);
+    });
+
+    // 2. CHÂN ĐẾ BÁT GIÁC ĐÁ CẨM THẠCH CHẠM HOA SEN (2 TRỤ CỔNG)
+    const baseGeo = prepGeo(new THREE.CylinderGeometry(0.52, 0.65, 0.45, 8));
+    [-1.8, 1.8].forEach((bx) => {
+      const baseMesh = new THREE.Mesh(baseGeo, blueStoneMat);
+      baseMesh.position.set(bx, 0.585, 0);
+      baseMesh.userData.ignoreRaycaster = true;
+      portalGroup.add(baseMesh);
+
+      // Vành hoa sen mạ vàng ở cổ chân cột
+      const lotusRim = new THREE.Mesh(
+        prepGeo(new THREE.TorusGeometry(0.53, 0.035, 8, 24)),
+        goldLeafMat
+      );
+      lotusRim.rotation.x = Math.PI / 2;
+      lotusRim.position.set(bx, 0.81, 0);
+      lotusRim.userData.ignoreRaycaster = true;
+      portalGroup.add(lotusRim);
+    });
+
+    // 3. CỘT TRÒN GỖ LIM SƠN SON THẾP VÀNG (2 CỘT CHÍNH)
+    const colGeo = prepGeo(new THREE.CylinderGeometry(0.26, 0.30, 4.6, 24));
+    [-1.8, 1.8].forEach((cx) => {
+      const colMesh = new THREE.Mesh(colGeo, redLacquerMat);
+      colMesh.position.set(cx, 3.11, 0);
+      colMesh.userData.ignoreRaycaster = true;
+      portalGroup.add(colMesh);
+
+      // Vòng nẹp hoàng kim dát vàng chạm hoa văn
+      [1.6, 4.2].forEach((bandY) => {
+        const ring = new THREE.Mesh(
+          prepGeo(new THREE.TorusGeometry(0.29, 0.035, 12, 24)),
+          goldLeafMat
+        );
+        ring.rotation.x = Math.PI / 2;
+        ring.position.set(cx, bandY, 0);
+        ring.userData.ignoreRaycaster = true;
+        portalGroup.add(ring);
+      });
+    });
+
+    // 4. XÀ NGANG VÌ KÈO GỖ HOÀNG ĐÀN SƠN SON & ĐẤU CỦNG
+    const archGeo = prepGeo(new THREE.BoxGeometry(4.8, 0.42, 0.60));
+    const arch = new THREE.Mesh(archGeo, redLacquerMat);
+    arch.position.set(0, 5.42, 0);
+    arch.userData.ignoreRaycaster = true;
+    portalGroup.add(arch);
+
+    // Nẹp vàng xà ngang
+    const archTrim = new THREE.Mesh(
+      prepGeo(new THREE.BoxGeometry(4.85, 0.08, 0.64)),
+      goldLeafMat
+    );
+    archTrim.position.set(0, 5.20, 0);
+    archTrim.userData.ignoreRaycaster = true;
+    portalGroup.add(archTrim);
+
+    // Đấu củng gỗ sơn mài đỡ mái
+    [-1.8, 0, 1.8].forEach((bx) => {
+      const bracket = new THREE.Mesh(
+        prepGeo(new THREE.BoxGeometry(0.48, 0.28, 0.72)),
+        goldLeafMat
+      );
+      bracket.position.set(bx, 5.65, 0);
+      bracket.userData.ignoreRaycaster = true;
+      portalGroup.add(bracket);
+    });
+
+    // 5. MÁI NGÓI ĐAO CONG HÌNH ĐÔI TAI MÈO 2 TẦNG CHỒNG DIÊM
+    // Mái hạ
+    const lowerRoof = new THREE.Mesh(
+      prepGeo(new THREE.ConeGeometry(3.8, 0.90, 4)),
+      terracottaRoofMat
+    );
+    lowerRoof.rotation.y = Math.PI / 4;
+    lowerRoof.scale.set(1.25, 1.0, 0.68);
+    lowerRoof.position.set(0, 6.05, 0);
+    lowerRoof.userData.ignoreRaycaster = true;
+    portalGroup.add(lowerRoof);
+
+    // Cổ diêm giữa 2 tầng mái
+    const attic = new THREE.Mesh(
+      prepGeo(new THREE.BoxGeometry(3.2, 0.38, 1.2)),
+      redLacquerMat
+    );
+    attic.position.set(0, 6.55, 0);
+    attic.userData.ignoreRaycaster = true;
+    portalGroup.add(attic);
+
+    // Mái thượng
+    const upperRoof = new THREE.Mesh(
+      prepGeo(new THREE.ConeGeometry(2.8, 0.85, 4)),
+      terracottaRoofMat
+    );
+    upperRoof.rotation.y = Math.PI / 4;
+    upperRoof.scale.set(1.22, 1.0, 0.68);
+    upperRoof.position.set(0, 7.05, 0);
+    upperRoof.userData.ignoreRaycaster = true;
+    portalGroup.add(upperRoof);
+
+    // BỜ ĐAO CONG VÚT TẠO HÌNH ĐÔI TAI MÈO HOÀNG KIM (Left Ear & Right Ear)
+    const earGeo = prepGeo(new THREE.ConeGeometry(0.42, 0.90, 4));
+    const leftEar = new THREE.Mesh(earGeo, goldLeafMat);
+    leftEar.position.set(-1.10, 7.78, 0);
+    leftEar.rotation.z = 0.25;
+    leftEar.userData.ignoreRaycaster = true;
+    portalGroup.add(leftEar);
+
+    const rightEar = new THREE.Mesh(earGeo, goldLeafMat);
+    rightEar.position.set(1.10, 7.78, 0);
+    rightEar.rotation.z = -0.25;
+    rightEar.userData.ignoreRaycaster = true;
+    portalGroup.add(rightEar);
+
+    // Viên ngọc linh khí hồ phách phát sáng rực rỡ trên đỉnh mái
+    const gemMat = new THREE.MeshStandardMaterial({
+      color: 0x00f5d4,
+      emissive: 0x00f5d4,
+      emissiveIntensity: 1.2,
+      roughness: 0.1,
+      metalness: 0.9
+    });
+    const gemMesh = new THREE.Mesh(
+      prepGeo(new THREE.SphereGeometry(0.28, 24, 24)),
+      gemMat
+    );
+    gemMesh.position.set(0, 7.65, 0);
+    gemMesh.userData.ignoreRaycaster = true;
+    portalGroup.add(gemMesh);
+
+    // 6. DƯỚI HIÊN TREO 2 ĐÈN LỒNG HÌNH CÁ CHÉP/CÁ KHÔ & CHUÔNG GIÓ ĐỒNG
+    const fishLanterns = [];
+    const windChimes = [];
+
+    [-2.4, 2.4].forEach((lx, idx) => {
+      const fishGroup = new THREE.Group();
+      fishGroup.position.set(lx, 4.2, 0.1);
+      fishGroup.userData.ignoreRaycaster = true;
+
+      // Thân cá gỗ mộc chạm lộng
+      const fishBody = new THREE.Mesh(
+        prepGeo(new THREE.ConeGeometry(0.22, 0.65, 8).rotateZ(Math.PI / 2)),
+        new THREE.MeshStandardMaterial({
+          color: idx === 0 ? 0xffbe55 : 0x00f5d4,
+          emissive: idx === 0 ? 0xd97706 : 0x0d9488,
+          emissiveIntensity: 0.85,
+          roughness: 0.35
+        })
+      );
+      fishBody.userData.ignoreRaycaster = true;
+      fishGroup.add(fishBody);
+
+      // Đuôi cá tam giác
+      const fishTail = new THREE.Mesh(
+        prepGeo(new THREE.ConeGeometry(0.18, 0.35, 3).rotateZ(-Math.PI / 2)),
+        goldLeafMat
+      );
+      fishTail.position.set(0.40, 0, 0);
+      fishTail.userData.ignoreRaycaster = true;
+      fishGroup.add(fishTail);
+
+      // Mắt cá ngọc
+      [-0.06, 0.06].forEach((zEye) => {
+        const eye = new THREE.Mesh(
+          prepGeo(new THREE.SphereGeometry(0.04, 8, 8)),
+          new THREE.MeshBasicMaterial({ color: 0x0f172a })
+        );
+        eye.position.set(-0.20, 0.05, zEye);
+        eye.userData.ignoreRaycaster = true;
+        fishGroup.add(eye);
+      });
+
+      // Dây treo rủ từ mái
+      const cord = new THREE.Mesh(
+        prepGeo(new THREE.CylinderGeometry(0.012, 0.012, 1.1, 4)),
+        goldLeafMat
+      );
+      cord.position.set(0, 0.55, 0);
+      cord.userData.ignoreRaycaster = true;
+      fishGroup.add(cord);
+
+      // Chuông gió đồng nhỏ treo dưới bụng cá
+      const bell = new THREE.Mesh(
+        prepGeo(new THREE.ConeGeometry(0.08, 0.14, 8)),
+        goldLeafMat
+      );
+      bell.position.set(0, -0.25, 0);
+      bell.userData.ignoreRaycaster = true;
+      fishGroup.add(bell);
+
+      // Lá chuông hình chân mèo đung đưa
+      const pawPendant = new THREE.Mesh(
+        prepGeo(new THREE.BoxGeometry(0.06, 0.08, 0.015)),
+        goldLeafMat
+      );
+      pawPendant.position.set(0, -0.38, 0);
+      pawPendant.userData.ignoreRaycaster = true;
+      fishGroup.add(pawPendant);
+
+      // Nguồn sáng ấm hắt từ đèn cá
+      const pLight = new THREE.PointLight(idx === 0 ? 0xffbe55 : 0x00f5d4, 1.2, 7.0);
+      pLight.position.set(0, 0, 0);
+      pLight.userData.ignoreRaycaster = true;
+      fishGroup.add(pLight);
+
+      portalGroup.add(fishGroup);
+      fishLanterns.push(fishGroup);
+    });
+
+    // 7. ĐÔI TƯỢNG MÈO ĐÁ CHẦU UY NGHI TRÊN BỆ SEN ĐÁ ÔM QUẢ CẦU NGỌC PHÁT SÁNG TẠI X = ±2.8m
+    [-2.8, 2.8].forEach((statueX, sIdx) => {
+      const statueGroup = new THREE.Group();
+      statueGroup.position.set(statueX, 0.36, 0.35);
+      statueGroup.rotation.y = statueX < 0 ? 0.35 : -0.35; // Chầu hướng nhẹ vào tâm đường dẫn
+      statueGroup.userData.ignoreRaycaster = true;
+
+      // Bệ sen đá bát giác 2 tầng
+      const pedestalBase = new THREE.Mesh(
+        prepGeo(new THREE.CylinderGeometry(0.48, 0.58, 0.32, 8)),
+        blueStoneMat
+      );
+      pedestalBase.position.set(0, 0.16, 0);
+      pedestalBase.userData.ignoreRaycaster = true;
+      statueGroup.add(pedestalBase);
+
+      const pedestalLotus = new THREE.Mesh(
+        prepGeo(new THREE.CylinderGeometry(0.42, 0.48, 0.20, 8)),
+        blueStoneMat
+      );
+      pedestalLotus.position.set(0, 0.42, 0);
+      pedestalLotus.userData.ignoreRaycaster = true;
+      statueGroup.add(pedestalLotus);
+
+      // Nẹp viền vàng đài sen
+      const lotusRim = new THREE.Mesh(
+        prepGeo(new THREE.TorusGeometry(0.44, 0.025, 6, 16)),
+        goldLeafMat
+      );
+      lotusRim.rotation.x = Math.PI / 2;
+      lotusRim.position.set(0, 0.52, 0);
+      lotusRim.userData.ignoreRaycaster = true;
+      statueGroup.add(lotusRim);
+
+      // Thân Linh Miêu Đá ngồi chầu oai nghiêm (Đá xanh Thanh Hóa bo góc mịn)
+      const catBody = new THREE.Mesh(
+        prepGeo(new THREE.CylinderGeometry(0.24, 0.32, 0.75, 18)),
+        blueStoneMat
+      );
+      catBody.position.set(0, 0.90, 0);
+      catBody.userData.ignoreRaycaster = true;
+      statueGroup.add(catBody);
+
+      // Đầu mèo đá uy nghi tròn trịa
+      const catHead = new THREE.Mesh(
+        prepGeo(new THREE.SphereGeometry(0.24, 20, 18)),
+        blueStoneMat
+      );
+      catHead.position.set(0, 1.40, 0.04);
+      catHead.userData.ignoreRaycaster = true;
+      statueGroup.add(catHead);
+
+      // Mắt ngọc phát sáng linh miêu (almond jade eyes)
+      [-0.08, 0.08].forEach((mx) => {
+        const catEye = new THREE.Mesh(
+          prepGeo(new THREE.SphereGeometry(0.035, 10, 10)),
+          new THREE.MeshStandardMaterial({
+            color: sIdx === 0 ? 0x00f5d4 : 0xfde047,
+            emissive: sIdx === 0 ? 0x00f5d4 : 0xfde047,
+            emissiveIntensity: 1.2,
+            roughness: 0.1
+          })
+        );
+        catEye.position.set(mx, 1.44, 0.24);
+        catEye.scale.set(1.4, 0.9, 0.8);
+        catEye.userData.ignoreRaycaster = true;
+        statueGroup.add(catEye);
+      });
+
+      // Mũi nhỏ thếp vàng
+      const catNose = new THREE.Mesh(
+        prepGeo(new THREE.ConeGeometry(0.025, 0.03, 3)),
+        goldLeafMat
+      );
+      catNose.position.set(0, 1.38, 0.27);
+      catNose.rotation.x = Math.PI;
+      catNose.userData.ignoreRaycaster = true;
+      statueGroup.add(catNose);
+
+      // Đuôi mèo đá cuộn duyên dáng bên chân
+      const catTail = new THREE.Mesh(
+        prepGeo(new THREE.TorusGeometry(0.26, 0.045, 8, 20, Math.PI * 1.2)),
+        blueStoneMat
+      );
+      catTail.position.set(statueX < 0 ? -0.16 : 0.16, 0.62, 0.05);
+      catTail.rotation.x = Math.PI / 2;
+      catTail.rotation.z = statueX < 0 ? 0.3 : -0.3;
+      catTail.userData.ignoreRaycaster = true;
+      statueGroup.add(catTail);
+
+      // Đôi tai mèo đá vểnh
+      [-0.14, 0.14].forEach((ex) => {
+        const ear = new THREE.Mesh(
+          prepGeo(new THREE.ConeGeometry(0.08, 0.20, 6)),
+          blueStoneMat
+        );
+        ear.position.set(ex, 1.62, 0.04);
+        ear.rotation.z = ex < 0 ? 0.25 : -0.25;
+        ear.userData.ignoreRaycaster = true;
+        statueGroup.add(ear);
+      });
+
+      // Vòng lục lạc vàng đeo cổ
+      const collar = new THREE.Mesh(
+        prepGeo(new THREE.TorusGeometry(0.22, 0.03, 8, 16)),
+        goldLeafMat
+      );
+      collar.rotation.x = Math.PI / 2;
+      collar.position.set(0, 1.25, 0.02);
+      collar.userData.ignoreRaycaster = true;
+      statueGroup.add(collar);
+
+      const bellPendant = new THREE.Mesh(
+        prepGeo(new THREE.SphereGeometry(0.05, 8, 8)),
+        goldLeafMat
+      );
+      bellPendant.position.set(0, 1.18, 0.24);
+      bellPendant.userData.ignoreRaycaster = true;
+      statueGroup.add(bellPendant);
+
+      // Quả Cầu Ngọc phát sáng linh khí ôm trước hai chân
+      const orbColor = sIdx === 0 ? 0x00f5d4 : 0xffbe55;
+      const orbMat = new THREE.MeshStandardMaterial({
+        color: orbColor,
+        emissive: orbColor,
+        emissiveIntensity: 1.4,
+        roughness: 0.1,
+        metalness: 0.8
+      });
+      const orbMesh = new THREE.Mesh(
+        prepGeo(new THREE.SphereGeometry(0.18, 16, 16)),
+        orbMat
+      );
+      orbMesh.position.set(0, 0.82, 0.26);
+      orbMesh.userData.ignoreRaycaster = true;
+      statueGroup.add(orbMesh);
+
+      const orbLight = new THREE.PointLight(orbColor, 1.1, 5.0);
+      orbLight.position.set(0, 0.82, 0.26);
+      orbLight.userData.ignoreRaycaster = true;
+      statueGroup.add(orbLight);
+
+      portalGroup.add(statueGroup);
+    });
+
+    // 8. BIỂN HOÀNH PHI SƠN MÀI THẾP VÀNG: "CỔNG LINH MIÊU • ĐẢO MÈO AI"
+    if (typeof document !== 'undefined') {
+      const canvas = document.createElement('canvas');
+      canvas.width = 720;
+      canvas.height = 200;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        // Nền sơn mài đỏ then son cung đình quý phái
+        const g = ctx.createLinearGradient(0, 0, 720, 200);
+        g.addColorStop(0.0, '#1c0707');
+        g.addColorStop(0.3, '#3b0a0a');
+        g.addColorStop(0.7, '#240606');
+        g.addColorStop(1.0, '#120303');
+        ctx.fillStyle = g;
+        ctx.roundRect(8, 8, 704, 184, 14);
+        ctx.fill();
+
+        // Khung gỗ mun thếp vàng chạm hoa văn Đông Sơn
+        ctx.strokeStyle = '#facc15';
+        ctx.lineWidth = 6;
+        ctx.roundRect(12, 12, 696, 176, 12);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 2;
+        ctx.roundRect(22, 22, 676, 156, 8);
+        ctx.stroke();
+
+        // Chữ Hoành Phi thếp vàng cung đình
+        ctx.font = 'bold 22px "Times New Roman", serif';
+        ctx.fillStyle = '#fde047';
+        ctx.textAlign = 'center';
+        ctx.fillText('❖ CỔNG LINH MIÊU THIÊN THƯ ❖', 360, 52);
+
+        ctx.font = 'bold 28px "Times New Roman", serif';
+        ctx.fillStyle = '#fef08a';
+        ctx.shadowColor = '#d97706';
+        ctx.shadowBlur = 10;
+        ctx.fillText('🐾 ĐẢO MÈO AI – THÁNH ĐƯỜNG 🐾', 360, 102);
+
+        ctx.shadowColor = 'transparent';
+        ctx.font = 'italic 18px "Times New Roman", serif';
+        ctx.fillStyle = '#6ee7b7';
+        ctx.fillText('Xưởng Sáng Tạo Của 6 Chiến Binh Mèo AI Swarm', 360, 148);
+
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.minFilter = THREE.LinearFilter;
+        tex.generateMipmaps = false;
+
+        const signGeo = prepGeo(new THREE.PlaneGeometry(2.35, 0.68));
+        const signMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
+        const sign = new THREE.Mesh(signGeo, signMat);
+        sign.position.set(0, 4.45, 0.32);
+        sign.userData.ignoreRaycaster = true;
+        portalGroup.add(sign);
+      }
+    }
+
+    // 9. VÒNG XOÁY LINH KHÍ XANH NGỌC LỤC BẢO PHA VÀNG KIM (#00f5d4 & #ffbe55)
+    let vortexTex = null;
+    if (typeof document !== 'undefined') {
+      const vCanvas = document.createElement('canvas');
+      vCanvas.width = 512;
+      vCanvas.height = 512;
+      const vCtx = vCanvas.getContext('2d');
+      if (vCtx) {
+        const cx = 256;
+        const cy = 256;
+        // Gradient tâm phát quang
+        const radG = vCtx.createRadialGradient(cx, cy, 20, cx, cy, 250);
+        radG.addColorStop(0.0, '#ffffff');
+        radG.addColorStop(0.2, '#00f5d4');
+        radG.addColorStop(0.5, '#0d9488');
+        radG.addColorStop(0.8, '#ffbe55');
+        radG.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
+        vCtx.fillStyle = radG;
+        vCtx.fillRect(0, 0, 512, 512);
+
+        // 8 Dải xoắn ốc linh khí giao hòa
+        const numArms = 8;
+        for (let a = 0; a < numArms; a++) {
+          const baseAng = (a / numArms) * Math.PI * 2;
+          vCtx.beginPath();
+          for (let r = 20; r < 240; r += 4) {
+            const ang = baseAng + r * 0.025;
+            const x = cx + Math.cos(ang) * r;
+            const y = cy + Math.sin(ang) * r;
+            if (r === 20) vCtx.moveTo(x, y);
+            else vCtx.lineTo(x, y);
+          }
+          vCtx.strokeStyle = a % 2 === 0 ? 'rgba(0, 245, 212, 0.75)' : 'rgba(255, 190, 85, 0.75)';
+          vCtx.lineWidth = 10;
+          vCtx.stroke();
+        }
+
+        vortexTex = new THREE.CanvasTexture(vCanvas);
+        vortexTex.colorSpace = THREE.SRGBColorSpace;
+        vortexTex.minFilter = THREE.LinearFilter;
+        vortexTex.generateMipmaps = false;
+      }
+    }
+
+    const vortexGeo = prepGeo(new THREE.CircleGeometry(1.65, 32));
+    const vortexMat = new THREE.MeshBasicMaterial({
+      map: vortexTex || null,
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.88,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const vortexMesh = new THREE.Mesh(vortexGeo, vortexMat);
+    vortexMesh.position.set(0, 2.75, 0);
+    vortexMesh.userData.ignoreRaycaster = true;
+    portalGroup.add(vortexMesh);
+
+    // Hào quang linh khí rọi sáng tâm cổng
+    const portalGlow = new THREE.PointLight(0x00f5d4, 2.5, 9.0);
+    portalGlow.position.set(0, 2.75, 0.4);
+    portalGlow.userData.ignoreRaycaster = true;
+    portalGroup.add(portalGlow);
+
+    // 9.2. HẠT DẤU CHÂN MÈO PHÁT SÁNG & ĐOM ĐÓM LƠ LỬNG QUANH CỔNG (MUNTHAPDEN)
+    const pawAuraRes = createCatPawAndFireflyAura({ radius: 2.2, count: 32 });
+    pawAuraRes.auraGroup.position.set(0, 2.75, 0);
+    portalGroup.add(pawAuraRes.auraGroup);
+
+    // 10. INVISIBLE PROXY HITBOX CHO CỔNG ĐẢO MÈO (KÍCH HOẠT KÉP: CLICK & BƯỚC VÀO)
+    // Không cản trở người chơi bước qua (isSolid = false, không collider cản)
+    const hitboxGeo = prepGeo(new THREE.BoxGeometry(3.6, 5.0, 2.4));
+    const hitboxMat = new THREE.MeshBasicMaterial({
+      color: 0x00f5d4,
+      transparent: true,
+      opacity: 0.0,
+      depthWrite: false
+    });
+    const hitbox = new THREE.Mesh(hitboxGeo, hitboxMat);
+    hitbox.position.set(0, 2.75, 0);
+    hitbox.userData = {
+      isInteractiveBook: true,
+      id: 'cat_village',
+      title: 'ĐẢO MÈO AI – XƯỞNG KIẾN TẠO THÁNH ĐƯỜNG',
+      onActivate: () => this.enterCatVillage(),
+      updatePortal: (timeSec) => {
+        // Xoay nhẹ nhàng vòng xoáy linh khí
+        vortexMesh.rotation.z = timeSec * 0.45;
+        pawAuraRes.updateAura(timeSec);
+        // Đèn cá & chuông gió đung đưa theo gió
+        fishLanterns.forEach((fg, idx) => {
+          fg.rotation.z = Math.sin(timeSec * 1.8 + idx * Math.PI) * 0.06;
+          fg.rotation.x = Math.cos(timeSec * 1.4 + idx * Math.PI) * 0.04;
+        });
+      }
+    };
+    portalGroup.add(hitbox);
+
+    this.atriumGroup.add(portalGroup);
+    this.catVillageLobbyPortal = hitbox;
+    return hitbox;
+  }
+
+  /**
+   * DỊCH CHUYỂN VÀO ĐẢO MÈO THÁNH ĐƯỜNG 3D
+   */
+  enterCatVillage() {
+    if (this._isTeleportingToCatVillage) return;
+    this._isTeleportingToCatVillage = true;
+    this._lastCatVillageTeleportTime = performance.now();
+    window.__catVillageActive = true;
+    console.log("%c[Cat Village] Teleporting into Cat Agent Village...", "color: #ffaa33; font-weight: bold;");
+
+    let overlay = document.getElementById('world-transition-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'world-transition-overlay';
+      overlay.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+        background: #000000; opacity: 0; pointer-events: none; z-index: 99999;
+        transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+      `;
+      document.body.appendChild(overlay);
+    }
+
+    overlay.style.opacity = '1';
+
+    setTimeout(() => {
+      // 1. Lưu lại vị trí camera hiện tại trong sảnh
+      if (this.camera) {
+        this._savedLobbyCamPosCat = this.camera.position.clone();
+      }
+
+      // 2. Chuyển scene sang Đảo Mèo
+      this.setActiveScene(this.catVillageScene);
+
+      // 3. Đặt camera ở góc Isometric nhìn toàn cảnh đảo nổi
+      if (typeof document !== 'undefined' && document.exitPointerLock) {
+        try { document.exitPointerLock(); } catch (_) {}
+      }
+
+      const targetPos = new THREE.Vector3(26.0, 24.0, 26.0);
+      const targetLookAt = new THREE.Vector3(0, 1.5, 0);
+
+      if (typeof this.cameraManager?.setCustomView === 'function') {
+        this.cameraManager.setCustomView(targetPos, targetLookAt);
+      } else if (typeof this.cameraManager?.setPosition === 'function') {
+        this.cameraManager.setPosition(targetPos);
+        if (typeof this.cameraManager?.setTarget === 'function') {
+          this.cameraManager.setTarget(targetLookAt);
+        }
+      } else if (this.camera) {
+        this.camera.position.copy(targetPos);
+        this.camera.lookAt(targetLookAt);
+      }
+
+      if (this.catVillageWorld) {
+        this.catVillageWorld._isReturning = false;
+        this.catVillageWorld._lastEnterTime = performance.now();
+        this.catVillageWorld.group.visible = true;
+        this.catVillageWorld.isInsideVillage = true;
+        this.catVillageWorld.showUI?.();
+      }
+
+      setTimeout(() => {
+        overlay.style.opacity = '0';
+        this._isTeleportingToCatVillage = false;
+        this._lastCatVillageTeleportTime = performance.now();
+      }, 150);
+    }, 850);
+  }
+
+  /**
+   * DỊCH CHUYỂN TRỞ VỀ ĐẠI SẢNH THÁNH ĐƯỜNG TỪ ĐẢO MÈO
+   */
+  exitCatVillage() {
+    if (this._isTeleportingToCatVillage) return;
+    this._isTeleportingToCatVillage = true;
+    this._lastCatVillageTeleportTime = performance.now();
+    console.log("%c[Cat Village] Returning to Grand Lobby...", "color: #ffaa33; font-weight: bold;");
+
+    let overlay = document.getElementById('world-transition-overlay');
+    if (overlay) overlay.style.opacity = '1';
+
+    if (this.catVillageWorld) {
+      this.catVillageWorld.hideUI?.();
+      this.catVillageWorld.isInsideVillage = false;
+    }
+
+    setTimeout(() => {
+      // Chuyển lại về Sảnh Chính
+      window.__catVillageActive = false;
+      this.setActiveScene(this.mainScene);
+
+      // Trả vị trí camera về sảnh chính ở vị trí an toàn tuyệt đối (X = -9.5, Y = 1.8, Z = 3.5), cách cổng (-16.5, 8.0) > 8.3m để chống loop 100%
+      const returnPos = new THREE.Vector3(-9.5, 1.8, 3.5);
+      const returnLookAt = new THREE.Vector3(0, 2.0, 0);
+
+      if (typeof this.cameraManager?.setCustomView === 'function') {
+        this.cameraManager.setCustomView(returnPos, returnLookAt);
+      } else if (typeof this.cameraManager?.setPosition === 'function') {
+        this.cameraManager.setPosition(returnPos);
+        if (typeof this.cameraManager?.setTarget === 'function') {
+          this.cameraManager.setTarget(returnLookAt);
+        }
+      } else if (this.camera) {
+        this.camera.position.copy(returnPos);
+        this.camera.lookAt(returnLookAt);
+      }
+
+      setTimeout(() => {
+        if (overlay) overlay.style.opacity = '0';
+        this._isTeleportingToCatVillage = false;
+        this._lastCatVillageTeleportTime = performance.now();
+      }, 150);
+    }, 850);
+  }
 }
 
 window.addEventListener('DOMContentLoaded', () => {

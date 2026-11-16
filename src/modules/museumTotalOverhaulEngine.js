@@ -174,6 +174,12 @@ export function purgeLegacyPrimitiveDecorations(container) {
       return;
     }
 
+    // Dọn sạch tàn dư các căn cứ AI cũ nếu còn vương lại trong sảnh
+    if (child.name && (child.name.startsWith('AI_Command_Hub') || child.name.startsWith('AI_Hub') || child.name.includes('ai_agent_station') || child.name.includes('AICommandHub_Lobby_Portal'))) {
+      toRemove.push(child);
+      return;
+    }
+
     if (!child.isMesh) return;
 
     const ud = child.userData || {};

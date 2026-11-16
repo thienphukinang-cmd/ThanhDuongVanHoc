@@ -69,6 +69,26 @@ function makeCanvasTex(canvas, { rx = 1, ry = 1, srgb = true, disposables = [] }
   return tex;
 }
 
+let _vidaSoftParticleTex = null;
+function getViDaSoftParticleTexture(disposables = []) {
+  if (_vidaSoftParticleTex) return _vidaSoftParticleTex;
+  if (typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
+  grad.addColorStop(0.35, 'rgba(167, 243, 208, 0.85)');
+  grad.addColorStop(0.7, 'rgba(167, 243, 208, 0.25)');
+  grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 64, 64);
+  _vidaSoftParticleTex = makeCanvasTex(canvas, { srgb: true, disposables });
+  return _vidaSoftParticleTex;
+}
+
 function buildNormalFromHeightCanvas(heightCanvas, strength = 2.1, rx = 1, ry = 1, disposables = []) {
   const w = heightCanvas.width;
   const h = heightCanvas.height;
@@ -519,15 +539,19 @@ function buildJadeBambooPortalVisual(disposables) {
   }
   const moteGeo = prepGeo(new THREE.BufferGeometry());
   moteGeo.setAttribute('position', new THREE.BufferAttribute(motePos, 3));
+  const moteTex = getViDaSoftParticleTexture(disposables);
   const moteMat = new THREE.PointsMaterial({
+    map: moteTex,
     color: 0xa7f3d0,
-    size: 0.085,
+    size: 0.14,
     transparent: true,
     opacity: 0.85,
     blending: THREE.AdditiveBlending,
     depthWrite: false
   });
   const motes = new THREE.Points(moteGeo, moteMat);
+  motes.userData.ignoreRaycaster = true;
+  motes.raycast = () => {};
   group.add(motes);
 
   // Biển chữ "CỔNG NHẬP CẢNH: ĐÂY THÔN VĨ DẠ"

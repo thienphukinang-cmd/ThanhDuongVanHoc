@@ -1,4 +1,10 @@
 import * as THREE from 'three';
+import {
+  LITERATURE_REGISTRY,
+  isRoomLocked,
+  ALCOVE_CENTERS,
+  getRoomCode
+} from '../config/literatureRegistry.js';
 
 /**
  * ============================================================================
@@ -382,12 +388,19 @@ export class MuseumHitboxManager {
     // - Tầng 1: Chừa ô đại môn đón khách rộng 12m tại X in [-6.0, 6.0]
     addWallBox(-62.5, 0.0, 62.0, -6.0, 10.0, 63.0, 'Perimeter_Wall_South_West_L1');
     addWallBox(6.0, 0.0, 62.0, 62.5, 10.0, 63.0, 'Perimeter_Wall_South_East_L1');
+    // Vòm trên đại môn Nam (Tầng 1)
+    addWallBox(-6.0, 7.5, 61.9, 6.0, 10.0, 63.1, 'MainEntrance_DoorLintel_South', 0x06b6d4);
+    // Trụ khung đại môn Nam 2 bên
+    addWallBox(-6.5, 0.0, 61.8, -5.7, 8.0, 63.2, 'MainEntrance_DoorJamb_West', 0x06b6d4);
+    addWallBox(5.7, 0.0, 61.8, 6.5, 8.0, 63.2, 'MainEntrance_DoorJamb_East', 0x06b6d4);
     // - Tầng 2 & 3: Lan can và tường kín từ X = -62.5 đến +62.5
     addWallBox(-62.5, 10.0, 62.0, 62.5, 32.0, 63.0, 'Perimeter_Wall_South_L2_L3');
 
     // =========================================================================
-    // 2. HỆ THỐNG 15 PHÒNG TRIỂN LÃM (5 PHÒNG / TẦNG x 3 TẦNG)
+    // 2. HỆ THỐNG 15 PHÒNG TRIỂN LÃM & CỬA VÒM (5 PHÒNG / TẦNG x 3 TẦNG)
     // Khớp 100% kiến trúc ProceduralArchitecture và LiteratureRegistry
+    // Đầy đủ Hitbox: Vách tường, Vòm trán cửa (Lintel), Trụ khung cửa (Door Jambs)
+    // và Hộp va chạm phong ấn (Solid Barrier) + Click Proxy cho các phòng bị khóa.
     // =========================================================================
     const floors = [
       { id: 1, elevation: 0.0,  height: 9.8,  name: 'T1' },
@@ -402,12 +415,25 @@ export class MuseumHitboxManager {
 
       // -----------------------------------------------------------------------
       // PHÒNG 0: CÁNH TÂY - NAM (idx 0, Tâm X = -48.0, Z = 19.0)
-      // T1: Thánh Gióng | T2: Truyện Kiều | T3: Chí Phèo
+      // T1: Thánh Gióng | T2: Nam Quốc Sơn Hà | T3: Số Đỏ
       // Cửa vòm nhìn ra sảnh ở vách Đông tại X = -34.0, khe mở Z in [15.9, 22.1] (rộng 6.2m)
       // -----------------------------------------------------------------------
       // Vách Đông (Mặt tiền có cửa vòm)
       addWallBox(-34.25, y, 6.0, -33.75, y + h, 15.9, `${pfx}_WestSouth_Front_North`, 0x06b6d4);
       addWallBox(-34.25, y, 22.1, -33.75, y + h, 32.0, `${pfx}_WestSouth_Front_South`, 0x06b6d4);
+      // Vòm trên cửa (Door Lintel)
+      addWallBox(-34.35, y + 7.5, 15.9, -33.65, y + h, 22.1, `${pfx}_WestSouth_DoorLintel`, 0x06b6d4);
+      // Trụ khung cửa 2 bên (Door Jambs)
+      addWallBox(-34.5, y, 15.7, -33.5, y + 8.0, 16.2, `${pfx}_WestSouth_DoorJamb_North`, 0x06b6d4);
+      addWallBox(-34.5, y, 21.8, -33.5, y + 8.0, 22.3, `${pfx}_WestSouth_DoorJamb_South`, 0x06b6d4);
+
+      // Kiểm tra trạng thái khóa của phòng
+      const roomItem0 = LITERATURE_REGISTRY.find(r => r.floor === fl.id && r.roomIndex === 0);
+      if (roomItem0 && isRoomLocked(roomItem0)) {
+        addWallBox(-34.7, y, 15.8, -33.3, y + 8.5, 22.2, `DoorBarrier_Locked_${roomItem0.id}`, 0xef4444);
+        this._createLockedDoorClickProxy(roomItem0, [-34.0, y + 3.0, 19.0], 1.4, 6.0, 6.4);
+      }
+
       // Vách ngăn Bắc (Z = 6.0m)
       addWallBox(-62.0, y, 5.75, -34.0, y + h, 6.25, `${pfx}_WestSouth_Partition_North`);
       // Vách ngăn Nam (Z = 32.0m)
@@ -422,23 +448,47 @@ export class MuseumHitboxManager {
 
       // -----------------------------------------------------------------------
       // PHÒNG 1: CÁNH TÂY - BẮC (idx 1, Tâm X = -48.0, Z = -19.0)
-      // T1: Sơn Tinh - Thủy Tinh | T2: Nam Quốc Sơn Hà | T3: Tắt Đèn
+      // T1: Sơn Tinh - Thủy Tinh | T2: Hịch Tướng Sĩ | T3: Đây Thôn Vĩ Dạ
       // Cửa vòm nhìn ra sảnh ở vách Đông tại X = -34.0, khe mở Z in [-22.1, -15.9] (rộng 6.2m)
       // -----------------------------------------------------------------------
       addWallBox(-34.25, y, -32.0, -33.75, y + h, -22.1, `${pfx}_WestNorth_Front_North`, 0x06b6d4);
       addWallBox(-34.25, y, -15.9, -33.75, y + h, -6.0, `${pfx}_WestNorth_Front_South`, 0x06b6d4);
+      // Vòm trên cửa (Door Lintel)
+      addWallBox(-34.35, y + 7.5, -22.1, -33.65, y + h, -15.9, `${pfx}_WestNorth_DoorLintel`, 0x06b6d4);
+      // Trụ khung cửa 2 bên (Door Jambs)
+      addWallBox(-34.5, y, -22.3, -33.5, y + 8.0, -21.8, `${pfx}_WestNorth_DoorJamb_North`, 0x06b6d4);
+      addWallBox(-34.5, y, -16.2, -33.5, y + 8.0, -15.7, `${pfx}_WestNorth_DoorJamb_South`, 0x06b6d4);
+
+      const roomItem1 = LITERATURE_REGISTRY.find(r => r.floor === fl.id && r.roomIndex === 1);
+      if (roomItem1 && isRoomLocked(roomItem1)) {
+        addWallBox(-34.7, y, -22.2, -33.3, y + 8.5, -15.8, `DoorBarrier_Locked_${roomItem1.id}`, 0xef4444);
+        this._createLockedDoorClickProxy(roomItem1, [-34.0, y + 3.0, -19.0], 1.4, 6.0, 6.4);
+      }
+
       addWallBox(-62.0, y, -6.25, -34.0, y + h, -5.75, `${pfx}_WestNorth_Partition_South`);
       addWallBox(-62.0, y, -32.25, -34.0, y + h, -31.75, `${pfx}_WestNorth_Partition_North`);
       addWallBox(-62.25, y, -32.0, -61.75, y + h, -6.0, `${pfx}_WestNorth_Back_West`);
 
       // -----------------------------------------------------------------------
       // PHÒNG 2: CÁNH BẮC - ĐẠI GIAN (idx 2, Tâm X = 0.0, Z = -48.0)
-      // T1: An Dương Vương | T2: Hịch Tướng Sĩ | T3: Số Đỏ
+      // T1: An Dương Vương | T2: Bình Ngô Đại Cáo | T3: Tắt Đèn
       // Đại môn hướng Nam tại Z = -34.0, khe mở X in [-4.0, 4.0] (rộng 8.0m)
       // -----------------------------------------------------------------------
       // Vách Nam (Mặt tiền có cửa vòm lớn 8m)
       addWallBox(-22.0, y, -34.25, -4.0, y + h, -33.75, `${pfx}_NorthHall_Front_West`, 0x06b6d4);
       addWallBox(4.0, y, -34.25, 22.0, y + h, -33.75, `${pfx}_NorthHall_Front_East`, 0x06b6d4);
+      // Vòm trên cửa (Door Lintel)
+      addWallBox(-4.0, y + 7.5, -34.35, 4.0, y + h, -33.65, `${pfx}_NorthHall_DoorLintel`, 0x06b6d4);
+      // Trụ khung cửa 2 bên (Door Jambs)
+      addWallBox(-4.3, y, -34.5, -3.8, y + 8.0, -33.5, `${pfx}_NorthHall_DoorJamb_West`, 0x06b6d4);
+      addWallBox(3.8, y, -34.5, 4.3, y + 8.0, -33.5, `${pfx}_NorthHall_DoorJamb_East`, 0x06b6d4);
+
+      const roomItem2 = LITERATURE_REGISTRY.find(r => r.floor === fl.id && r.roomIndex === 2);
+      if (roomItem2 && isRoomLocked(roomItem2)) {
+        addWallBox(-4.2, y, -34.7, 4.2, y + 8.5, -33.3, `DoorBarrier_Locked_${roomItem2.id}`, 0xef4444);
+        this._createLockedDoorClickProxy(roomItem2, [0.0, y + 3.0, -34.0], 8.4, 6.0, 1.4);
+      }
+
       // Vách ngăn Tây (X = -22.0m)
       addWallBox(-22.25, y, -62.0, -21.75, y + h, -34.0, `${pfx}_NorthHall_Partition_West`);
       // Vách ngăn Đông (X = +22.0m)
@@ -448,11 +498,23 @@ export class MuseumHitboxManager {
 
       // -----------------------------------------------------------------------
       // PHÒNG 3: CÁNH ĐÔNG - BẮC (idx 3, Tâm X = 48.0, Z = -19.0)
-      // T1: Sự Tích Trầu Cau | T2: Bình Ngô Đại Cáo | T3: Vợ Nhặt
+      // T1: Sự Tích Trầu Cau | T2: Chuyện Người Con Gái Nam Xương | T3: Chí Phèo
       // Cửa vòm nhìn ra sảnh ở vách Tây tại X = 34.0, khe mở Z in [-22.1, -15.9] (rộng 6.2m)
       // -----------------------------------------------------------------------
       addWallBox(33.75, y, -32.0, 34.25, y + h, -22.1, `${pfx}_EastNorth_Front_North`, 0x06b6d4);
       addWallBox(33.75, y, -15.9, 34.25, y + h, -6.0, `${pfx}_EastNorth_Front_South`, 0x06b6d4);
+      // Vòm trên cửa (Door Lintel)
+      addWallBox(33.65, y + 7.5, -22.1, 34.35, y + h, -15.9, `${pfx}_EastNorth_DoorLintel`, 0x06b6d4);
+      // Trụ khung cửa 2 bên (Door Jambs)
+      addWallBox(33.5, y, -22.3, 34.5, y + 8.0, -21.8, `${pfx}_EastNorth_DoorJamb_North`, 0x06b6d4);
+      addWallBox(33.5, y, -16.2, 34.5, y + 8.0, -15.7, `${pfx}_EastNorth_DoorJamb_South`, 0x06b6d4);
+
+      const roomItem3 = LITERATURE_REGISTRY.find(r => r.floor === fl.id && r.roomIndex === 3);
+      if (roomItem3 && isRoomLocked(roomItem3)) {
+        addWallBox(33.3, y, -22.2, 34.7, y + 8.5, -15.8, `DoorBarrier_Locked_${roomItem3.id}`, 0xef4444);
+        this._createLockedDoorClickProxy(roomItem3, [34.0, y + 3.0, -19.0], 1.4, 6.0, 6.4);
+      }
+
       addWallBox(34.0, y, -6.25, 62.0, y + h, -5.75, `${pfx}_EastNorth_Partition_South`);
       addWallBox(34.0, y, -32.25, 62.0, y + h, -31.75, `${pfx}_EastNorth_Partition_North`);
       addWallBox(61.75, y, -32.0, 62.25, y + h, -6.0, `${pfx}_EastNorth_Back_East`);
@@ -464,11 +526,23 @@ export class MuseumHitboxManager {
 
       // -----------------------------------------------------------------------
       // PHÒNG 4: CÁNH ĐÔNG - NAM (idx 4, Tâm X = 48.0, Z = 19.0)
-      // T1: Đẻ Đất Đẻ Nước | T2: Chuyện Người Con Gái Nam Xương | T3: Đây Thôn Vĩ Dạ
+      // T1: Đẻ Đất Đẻ Nước | T2: Truyện Kiều | T3: Vợ Nhặt
       // Cửa vòm nhìn ra sảnh ở vách Tây tại X = 34.0, khe mở Z in [15.9, 22.1] (rộng 6.2m)
       // -----------------------------------------------------------------------
       addWallBox(33.75, y, 6.0, 34.25, y + h, 15.9, `${pfx}_EastSouth_Front_North`, 0x06b6d4);
       addWallBox(33.75, y, 22.1, 34.25, y + h, 32.0, `${pfx}_EastSouth_Front_South`, 0x06b6d4);
+      // Vòm trên cửa (Door Lintel)
+      addWallBox(33.65, y + 7.5, 15.9, 34.35, y + h, 22.1, `${pfx}_EastSouth_DoorLintel`, 0x06b6d4);
+      // Trụ khung cửa 2 bên (Door Jambs)
+      addWallBox(33.5, y, 15.7, 34.5, y + 8.0, 16.2, `${pfx}_EastSouth_DoorJamb_North`, 0x06b6d4);
+      addWallBox(33.5, y, 21.8, 34.5, y + 8.0, 22.3, `${pfx}_EastSouth_DoorJamb_South`, 0x06b6d4);
+
+      const roomItem4 = LITERATURE_REGISTRY.find(r => r.floor === fl.id && r.roomIndex === 4);
+      if (roomItem4 && isRoomLocked(roomItem4)) {
+        addWallBox(33.3, y, 15.8, 34.7, y + 8.5, 22.2, `DoorBarrier_Locked_${roomItem4.id}`, 0xef4444);
+        this._createLockedDoorClickProxy(roomItem4, [34.0, y + 3.0, 19.0], 1.4, 6.0, 6.4);
+      }
+
       addWallBox(34.0, y, 5.75, 62.0, y + h, 6.25, `${pfx}_EastSouth_Partition_North`);
       addWallBox(34.0, y, 31.75, 62.0, y + h, 32.25, `${pfx}_EastSouth_Partition_South`);
       addWallBox(61.75, y, 6.0, 62.25, y + h, 32.0, `${pfx}_EastSouth_Back_East`);
@@ -533,6 +607,33 @@ export class MuseumHitboxManager {
       new THREE.Vector3(1.8, 1.8, 1.8)
     );
     this.registerSolidObjectCollider(null, { customBox: centerBookBox, tag: 'Center_Heritage_Book_Platform' });
+
+    // =========================================================================
+    // 7. 2 BỆ TRÒN CẨM THẠCH ĐEN ĐỈNH ĐỒNG & HẠC THỜ (X = ±5.5m, Z = 7.2m)
+    // Đảm bảo trục đường đi trung tâm |X| <= 2.3m luôn thông thoáng 100% (|X| >= 3.3m)
+    // =========================================================================
+    const pedestalWestBox = new THREE.Box3(
+      new THREE.Vector3(-5.5 - 2.2, 0.0, 7.2 - 2.2),
+      new THREE.Vector3(-5.5 + 2.2, 2.5, 7.2 + 2.2)
+    );
+    const pedestalEastBox = new THREE.Box3(
+      new THREE.Vector3(5.5 - 2.2, 0.0, 7.2 - 2.2),
+      new THREE.Vector3(5.5 + 2.2, 2.5, 7.2 + 2.2)
+    );
+    this.registerSolidObjectCollider(null, { customBox: pedestalWestBox, tag: 'GrandBronzePedestalWest_SolidHitbox' });
+    this.registerSolidObjectCollider(null, { customBox: pedestalEastBox, tag: 'GrandBronzePedestalEast_SolidHitbox' });
+
+    // 2 Cụm bàn tròn cánh gà trưng bày gốm cổ hoàng triều & cây thế (X = ±14m, Z = 0m)
+    const wingWestBox = new THREE.Box3(
+      new THREE.Vector3(-14.0 - 1.4, 0.0, -1.4),
+      new THREE.Vector3(-14.0 + 1.4, 2.0, 1.4)
+    );
+    const wingEastBox = new THREE.Box3(
+      new THREE.Vector3(14.0 - 1.4, 0.0, -1.4),
+      new THREE.Vector3(14.0 + 1.4, 2.0, 1.4)
+    );
+    this.registerSolidObjectCollider(null, { customBox: wingWestBox, tag: 'WingTableWest_SolidHitbox' });
+    this.registerSolidObjectCollider(null, { customBox: wingEastBox, tag: 'WingTableEast_SolidHitbox' });
 
     console.log(
       `%c[Hitbox Architect] Hoàn tất: Đã kích hoạt ${this.solidBoxes.length} vật cản không gian chuẩn hóa O(1).`,
@@ -756,6 +857,61 @@ export class MuseumHitboxManager {
   }
 
   /**
+   * ĐĂNG KÝ PROXY MESH VÔ HÌNH VÀO DANH SÁCH TƯƠNG TÁC RAYCASTER
+   */
+  registerClickProxy(proxyMesh) {
+    if (!proxyMesh) return;
+    if (!this.clickProxies.includes(proxyMesh)) {
+      this.clickProxies.push(proxyMesh);
+      if (proxyMesh.parent !== this.scene) {
+        this.scene.add(proxyMesh);
+      }
+      proxyMesh.updateMatrixWorld?.(true);
+      const helperBox = new THREE.Box3().setFromObject(proxyMesh);
+      this._setDebugHelperSpec(`Helper_${proxyMesh.name}`, helperBox, 0xfde047, proxyMesh.userData?.realm || 'museum');
+    }
+  }
+
+  /**
+   * TẠO PROXY MESH CHO CỔNG PHÒNG ĐANG KHÓA PHONG ẤN
+   */
+  _createLockedDoorClickProxy(roomItem, pos, sizeX, sizeY, sizeZ) {
+    if (!roomItem) return;
+    const roomCode = getRoomCode(roomItem);
+    const proxyGeo = new THREE.BoxGeometry(sizeX, sizeY, sizeZ);
+    proxyGeo.computeVertexNormals();
+    const proxyMat = new THREE.MeshBasicMaterial({
+      visible: false,
+      transparent: true,
+      opacity: 0.0,
+      depthWrite: false
+    });
+    const proxyMesh = new THREE.Mesh(proxyGeo, proxyMat);
+    proxyMesh.name = `Door_Locked_ClickProxy_${roomItem.id}`;
+    proxyMesh.position.set(pos[0], pos[1], pos[2]);
+    proxyMesh.userData = {
+      isLockedDoorProxy: true,
+      isBookPortal: false,
+      portalReady: false,
+      excludeFromCollision: true,
+      roomId: roomItem.id,
+      roomCode: roomCode,
+      roomName: roomItem.name,
+      lockNotice: roomItem.lockNotice || 'Không gian nghệ thuật này đang được hoàn thiện và sẽ sớm ra mắt!',
+      onClick: () => {
+        if (typeof window !== 'undefined') {
+          if (typeof window.__showMuseumToast === 'function') {
+            window.__showMuseumToast(`🔒 Không gian nghệ thuật này đang được hoàn thiện và sẽ sớm ra mắt! (Phòng ${roomCode}: ${roomItem.name})`);
+          } else {
+            console.log(`[Locked Door] Phòng ${roomCode}: ${roomItem.name} đang phong ấn phục dựng.`);
+          }
+        }
+      }
+    };
+    this.registerClickProxy(proxyMesh);
+  }
+
+  /**
    * BỌC PROXY HITBOX CHO SÁCH DỊCH CHUYỂN & HIỆN VẬT .GLB
    * - Tự động tính toán Bounding Box ôm sát mô hình thực tế, loại trừ hoàn toàn tia sáng & hào quang
    * - Tạo một khối hộp vô hình (opacity: 0, depthWrite: false) với padding nhẹ
@@ -897,6 +1053,15 @@ export class MuseumHitboxManager {
       if (oldIdx !== -1) this.solidBoxes.splice(oldIdx, 1);
       this._unindexSolidEntry(oldEntry);
       this._removeDebugHelper(`SolidHelper_${tag}`);
+    } else if (tag) {
+      // Dọn dẹp collider cũ nếu đã có tag trùng (đảm bảo tính idempotent)
+      const existingIdx = this.solidBoxes.findIndex(e => e.tag === tag);
+      if (existingIdx !== -1) {
+        const oldEntry = this.solidBoxes[existingIdx];
+        this.solidBoxes.splice(existingIdx, 1);
+        this._unindexSolidEntry(oldEntry);
+        this._removeDebugHelper(`SolidHelper_${tag}`);
+      }
     }
 
     const entry = { box: box3, tag, sourceObject: object3D, realm, _stamp: 0, _bucketKeys: null };
@@ -1008,6 +1173,10 @@ export class MuseumHitboxManager {
         activeRealm = 'nam_quoc_son_ha';
       } else if (window.__thanhGiongRealmActive || (window.__activeScene && window.__thanhGiongScene && window.__activeScene === window.__thanhGiongScene)) {
         activeRealm = 'thanh_giong';
+      } else if (window.__aiCommandHubActive || (window.__activeScene && window.__aiCommandHubScene && window.__activeScene === window.__aiCommandHubScene)) {
+        activeRealm = 'ai_command_hub';
+      } else if (window.__catVillageActive || (window.__activeScene && window.__catVillageScene && window.__activeScene === window.__catVillageScene)) {
+        activeRealm = 'cat_village';
       } else if (targetPos.y > 35.0) {
         activeRealm = 'aerial_realm';
       }

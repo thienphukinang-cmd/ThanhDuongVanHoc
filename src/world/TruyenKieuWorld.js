@@ -429,6 +429,30 @@ function createReturnMuseumPortalStele() {
   return group;
 }
 
+let _kieuParticleTex = null;
+function getKieuParticleTexture() {
+  if (_kieuParticleTex) return _kieuParticleTex;
+  if (typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
+  grad.addColorStop(0.35, 'rgba(255, 255, 255, 0.8)');
+  grad.addColorStop(0.7, 'rgba(255, 255, 255, 0.25)');
+  grad.addColorStop(1, 'rgba(255, 255, 255, 0.0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 64, 64);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  _kieuParticleTex = tex;
+  return tex;
+}
+
 export class TruyenKieuStoryWorld {
   constructor(scene, camera, cameraController, atriumGroup = null, options = {}) {
     // KIẾN TRÚC ĐA VŨ TRỤ (MULTI-SCENE ARCHITECTURE):
@@ -825,17 +849,21 @@ export class TruyenKieuStoryWorld {
       pPos[i * 3 + 2] = (Math.random() - 0.5) * 55;
     }
     pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+    const pTex = getKieuParticleTexture();
     this.particlesZone1 = new THREE.Points(
       pGeo,
       new THREE.PointsMaterial({
+        map: pTex,
         color: 0xffeef5,
-        size: 0.16,
+        size: 0.28,
         transparent: true,
         opacity: 0.90,
         blending: THREE.AdditiveBlending,
         depthWrite: false
       })
     );
+    this.particlesZone1.userData.ignoreRaycaster = true;
+    this.particlesZone1.raycast = () => {};
     this.zone1Group.add(this.particlesZone1);
 
     const sCount = 10; // PERFORMANCE: Giảm 50% hạt khói (20 -> 10)
@@ -852,8 +880,17 @@ export class TruyenKieuStoryWorld {
     sGeo.setAttribute('position', new THREE.BufferAttribute(sPos, 3));
     this.smokeZone1 = new THREE.Points(
       sGeo,
-      new THREE.PointsMaterial({ color: 0xd6c4b2, size: 0.22, transparent: true, opacity: 0.5, depthWrite: false })
+      new THREE.PointsMaterial({
+        map: pTex,
+        color: 0xd6c4b2,
+        size: 0.35,
+        transparent: true,
+        opacity: 0.5,
+        depthWrite: false
+      })
     );
+    this.smokeZone1.userData.ignoreRaycaster = true;
+    this.smokeZone1.raycast = () => {};
     this.zone1Group.add(this.smokeZone1);
 
     // BỔ SUNG 4 BẢNG THÔNG TIN HOLOGRAM KHỔNG LỒ (1536x900) TRÊN ĐÀI QUAN SÁT VƯỜN THÚY
@@ -1336,16 +1373,20 @@ export class TruyenKieuStoryWorld {
       sandPPos[i * 3 + 2] = (Math.random() - 0.5) * 45;
     }
     sandPGeo.setAttribute('position', new THREE.BufferAttribute(sandPPos, 3));
+    const pTex2 = getKieuParticleTexture();
     this.particlesZone2 = new THREE.Points(
       sandPGeo,
       new THREE.PointsMaterial({
+        map: pTex2,
         color: 0xd6b77c,
-        size: 0.14,
+        size: 0.25,
         transparent: true,
         opacity: 0.75,
         depthWrite: false
       })
     );
+    this.particlesZone2.userData.ignoreRaycaster = true;
+    this.particlesZone2.raycast = () => {};
     this.zone2Group.add(this.particlesZone2);
 
     const sign2 = createPoeticSignboard(
@@ -1704,17 +1745,21 @@ export class TruyenKieuStoryWorld {
       });
     }
     sparkGeo.setAttribute('position', new THREE.BufferAttribute(sparkPos, 3));
+    const pTex3 = getKieuParticleTexture();
     this.particlesZone3 = new THREE.Points(
       sparkGeo,
       new THREE.PointsMaterial({
+        map: pTex3,
         color: 0xff8822,
-        size: 0.18,
+        size: 0.30,
         transparent: true,
         opacity: 0.95,
         blending: THREE.AdditiveBlending,
         depthWrite: false
       })
     );
+    this.particlesZone3.userData.ignoreRaycaster = true;
+    this.particlesZone3.raycast = () => {};
     this.zone3Group.add(this.particlesZone3);
 
     const sign3 = createPoeticSignboard(
